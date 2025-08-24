@@ -1,0 +1,49 @@
+graph LR
+    %% Commands
+    CMD1["RegistrarColetaSensor"]
+    CMD2["RegistrarEventoNatural"]
+    CMD3["CalcularScoreRisco"]
+    CMD4["DispararAlerta"]
+    CMD5["ConfirmarRecebimentoAlerta"]
+
+    %% Events
+    EVT1["EventoClimaticoDetectado"]
+    EVT2["EventoNormalizado"]
+    EVT3["RegiaoIntersectada"]
+    EVT4["RiscoAtualizado"]
+    EVT5["JanelaAlertaAberta"]
+    EVT6["AlertaDisparado"]
+    EVT7["AlertaEntregue"]
+    EVT8["AlertaConfirmado"]
+
+    %% Serviços
+    IS["ingestion-service"]
+    GS["geospatial-service"]
+    RSS["risk-scoring-service"]
+    AO["alert-orchestrator"]
+    CS["channels-service"]
+    CAS["compliance-audit-service"]
+
+    %% Fluxo de Commands
+    CMD1 --> IS
+    CMD2 --> IS
+    CMD3 --> RSS
+    CMD4 --> AO
+    CMD5 --> CS
+
+    %% Fluxo de Events
+    IS --> EVT1
+    IS --> EVT2
+    EVT1 --> GS
+    EVT2 --> GS
+    GS --> EVT3
+    EVT3 --> RSS
+    RSS --> EVT4
+    EVT4 --> AO
+    AO --> EVT5
+    EVT5 --> AO
+    AO --> EVT6
+    EVT6 --> CS
+    CS --> EVT7
+    CS --> EVT8
+    EVT6 --> CAS

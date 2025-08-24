@@ -1,0 +1,37 @@
+sequenceDiagram
+    autonumber
+    participant Sensor
+    participant Ingestion as Ingestion Service
+    participant Geospatial as Geospatial Service
+    participant RiskScoring as Risk Scoring Service
+    participant Orchestrator as Alert Orchestrator
+    participant Channels as Channels Service
+    participant Audit as Compliance Audit Service
+    participant Reporting as Reporting Readmodel Service
+
+    %% 1. Sensor envia dados
+    Sensor->>Ingestion: RegistrarColetaSensor / RegistrarEventoNatural
+    Note right of Ingestion: Normaliza, valida e deduplica dados
+    Ingestion->>Geospatial: EventoClimaticoDetectado
+    Ingestion->>Reporting: EventoClimaticoDetectado
+       
+    %% 2. Geospatial calcula zonas de risco
+    Geospatial->>RiskScoring: RegiaoIntersectada
+    Geospatial->>Reporting: RegiaoIntersectada
+    
+    %% 3. Risk Scoring calcula score
+    RiskScoring->>Orchestrator: RiscoAtualizado
+    RiskScoring->>Reporting: RiscoAtualizado
+    
+    %% 4. Orquestrador avalia políticas e dispara alertas
+    Orchestrator->>Channels: DispararAlerta
+    Orchestrator->>Audit: AlertaDisparado
+    Orchestrator->>Reporting: JanelaAlertaAberta / AlertaDisparado
+    
+    %% 5. Channels envia alertas
+    Channels->>Populacao: SMS / Push / WhatsApp / Sirenes
+    Channels->>Orchestrator: AlertaConfirmado
+    Channels->>Reporting: AlertaEntregue / AlertaConfirmado
+    
+    %% 6. Audit registra eventos críticos
+    Audit->>Reporting: Eventos armazenados para dashboards e KPIs

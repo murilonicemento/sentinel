@@ -1,0 +1,161 @@
+classDiagram
+%% =====================
+%% Namespace: Ingestion
+%% =====================
+namespace Ingestion {
+  class FonteDeDados {
+    +id: Guid
+    +nome: string
+    +tipo: string
+    +coletar(): void
+  }
+  class Coleta {
+    +id: Guid
+    +dataHora: DateTime
+    +payload: string
+  }
+  class AmostraSensor {
+    +id: Guid
+    +valor: double
+    +unidade: string
+    +timestamp: DateTime
+  }
+  class EventoClimaticoDTO {
+    +eventoId: Guid
+    +tipoEvento: string
+    +latitude: double
+    +longitude: double
+    +intensidade: double
+    +coletadoEm: DateTime
+  }
+}
+
+Coleta --> FonteDeDados
+AmostraSensor --> Coleta
+
+%% =====================
+%% Namespace: Geospatial
+%% =====================
+namespace Geospatial {
+  class Regiao {
+    +id: Guid
+    +nome: string
+    +poligonoGeoJSON: string
+  }
+  class ZonaRisco {
+    +id: Guid
+    +regiaoId: Guid
+    +nivel: string
+  }
+  class EventoNormalizadoDTO {
+    +eventoId: Guid
+    +tipoEvento: string
+    +regiaoId: Guid
+    +payloadNormalizado: string
+  }
+  class RegiaoIntersectadaDTO {
+    +eventoId: Guid
+    +regiaoId: Guid
+    +nomeRegiao: string
+    +nivelSuscetibilidade: string
+  }
+}
+
+ZonaRisco --> Regiao
+
+%% =====================
+%% Namespace: Risk
+%% =====================
+namespace Risk {
+  class TipoEvento {
+    +id: Guid
+    +nome: string
+    +descricao: string
+  }
+  class MatrizRisco {
+    +id: Guid
+    +tipoEventoId: Guid
+    +nivelSeveridade: string
+    +curvaIDF: string
+  }
+}
+
+MatrizRisco --> TipoEvento
+
+%% =====================
+%% Namespace: RiskScoring
+%% =====================
+namespace RiskScoring {
+  class AvaliacaoRisco {
+    +id: Guid
+    +regiaoId: Guid
+    +score: int
+    +nivel: string
+    +justificativa: string
+  }
+  class RiscoAtualizadoDTO {
+    +regiaoId: Guid
+    +tipoEvento: string
+    +score: int
+    +nivel: string
+    +justificativa: string
+  }
+}
+
+AvaliacaoRisco --> RiscoAtualizadoDTO
+
+%% =====================
+%% Namespace: Alerting
+%% =====================
+namespace Alerting {
+  class Alerta {
+    +id: Guid
+    +regiaoId: Guid
+    +tipoEvento: string
+    +nivel: string
+    +emitidoEm: DateTime
+  }
+  class Destinatario {
+    +id: Guid
+    +nome: string
+    +canalPreferido: string
+  }
+  class AlertaDTO {
+    +alertaId: Guid
+    +regiaoId: Guid
+    +tipoEvento: string
+    +nivel: string
+    +canais: string[]
+  }
+  class ConfirmacaoAlertaDTO {
+    +alertaId: Guid
+    +destinatarioId: Guid
+    +canal: string
+    +confirmadoEm: DateTime
+  }
+
+}
+
+Alerta --> Destinatario
+
+%% =====================
+%% Namespace: Compliance
+%% =====================
+namespace Compliance {
+  class EventoAuditoria {
+    +id: Guid
+    +tipoEvento: string
+    +payload: string
+    +criadoEm: DateTime
+  }
+}
+
+%% =====================
+%% Dependências / Fluxo de Eventos
+%% =====================
+EventoClimaticoDTO --> EventoNormalizadoDTO : publicacao
+EventoNormalizadoDTO --> RegiaoIntersectadaDTO : interseção
+RegiaoIntersectadaDTO --> RiscoAtualizadoDTO : scoring
+RiscoAtualizadoDTO --> AlertaDTO : orquestração
+AlertaDTO --> ConfirmacaoAlertaDTO : confirmação
+AlertaDTO --> EventoAuditoria : auditoria

@@ -1,0 +1,149 @@
+flowchart TD
+%% =====================
+%% External Systems
+%% =====================
+subgraph External
+    WeatherAPI[APIs Meteorológicas]
+    IoT[IoT Sensors]
+    Satellite[Satélites]
+    WhatsApp[WhatsApp Business API]
+    Sirene[Sirenes IoT]
+    Dashboards[Defesas Civis / Dashboards]
+end
+
+%% =====================
+%% API Gateway
+%% =====================
+subgraph API
+    APIGateway[API Gateway / BFF]
+end
+
+%% =====================
+%% Ingestion Service
+%% =====================
+subgraph IngestionService
+    IS_Server[Ingestion Server]
+    IS_DB[MinIO / S3]
+    IS_Queue[Kafka / RabbitMQ]
+    IS_Cache[Redis]
+end
+
+%% =====================
+%% Geospatial Service
+%% =====================
+subgraph GeospatialService
+    Geo_Server[Geospatial Server]
+    Geo_DB[PostGIS / Elasticsearch]
+end
+
+%% =====================
+%% Risk Catalog Service
+%% =====================
+subgraph RiskCatalogService
+    RiskCatalog_DB[PostgreSQL]
+end
+
+%% =====================
+%% Risk Scoring Service
+%% =====================
+subgraph RiskScoringService
+    RS_Server[Risk Scoring Server]
+    RS_DB[TimescaleDB / PostgreSQL]
+    RS_ML[Optional ML Model ONNX]
+end
+
+%% =====================
+%% Alert Orchestrator
+%% =====================
+subgraph AlertOrchestrator
+    AO_Server[Alert Orchestrator Server]
+    AO_DB[PostgreSQL / MongoDB Sagas]
+end
+
+%% =====================
+%% Channels Service
+%% =====================
+subgraph ChannelsService
+    Channels_Server[Channels Server]
+    Channels_Queue[Kafka Topics por Canal]
+    Channels_Store[MongoDB / Redis]
+end
+
+%% =====================
+%% Tenants & Billing
+%% =====================
+subgraph TenantsBilling
+    TB_DB[PostgreSQL]
+end
+
+%% =====================
+%% Compliance / Audit
+%% =====================
+subgraph ComplianceService
+    Compliance_DB[PostgreSQL / EventStoreDB]
+    WORM[WORM Bucket MinIO]
+end
+
+%% =====================
+%% Reporting / Read Models
+%% =====================
+subgraph ReportingService
+    Reporting_ES[Elasticsearch]
+    Reporting_Cache[Redis]
+end
+
+%% =====================
+%% Observability & Security
+%% =====================
+subgraph Observability
+    OTEL[OpenTelemetry Collector]
+    Prometheus[Prometheus]
+    Grafana[Grafana]
+    Loki[Loki]
+    Tempo[Tempo / Jaeger]
+    Keycloak[Keycloak / OAuth2]
+end
+
+%% =====================
+%% Event Flow
+%% =====================
+WeatherAPI -->|Evento Climático| IS_Server
+IoT -->|Sensores| IS_Server
+Satellite -->|Dados| IS_Server
+
+IS_Server -->|EventoClimaticoDetectado| Geo_Server
+Geo_Server -->|RegiaoIntersectada| RS_Server
+RS_Server -->|RiscoAtualizado| AO_Server
+AO_Server -->|DispararAlerta| Channels_Server
+Channels_Server --> WhatsApp
+Channels_Server --> Sirene
+AO_Server -->|Auditoria| Compliance_DB
+Channels_Server --> Reporting_ES
+
+RiskCatalog_DB --> RS_Server
+TB_DB --> AO_Server
+
+APIGateway --> IS_Server
+APIGateway --> Geo_Server
+APIGateway --> RiskCatalog_DB
+APIGateway --> RS_Server
+APIGateway --> AO_Server
+APIGateway --> Channels_Server
+APIGateway --> Reporting_ES
+APIGateway --> TB_DB
+
+%% Observability Connections
+IS_Server --> OTEL
+Geo_Server --> OTEL
+RS_Server --> OTEL
+AO_Server --> OTEL
+Channels_Server --> OTEL
+Compliance_DB --> OTEL
+Reporting_ES --> OTEL
+
+OTEL --> Prometheus
+OTEL --> Grafana
+OTEL --> Loki
+OTEL --> Tempo
+APIGateway --> Keycloak
+AO_Server --> Keycloak

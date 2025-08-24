@@ -1,0 +1,45 @@
+graph TD
+    %% Domínio principal
+    A[Domínio: Monitoramento e Alertas de Eventos Naturais]
+
+    %% Subdomínios
+    A --> B[Subdomínio: Detecção e Ingestão]
+    A --> C[Subdomínio: Catálogo de Riscos]
+    A --> D[Subdomínio: Geoespacial e Infraestrutura Local]
+    A --> E[Subdomínio: Avaliação e Score de Risco]
+    A --> F[Subdomínio: Orquestração de Alertas]
+    A --> G[Subdomínio: Tenancy e Governança]
+    A --> H[Subdomínio: Auditoria e Conformidade]
+    A --> I[Subdomínio: Observabilidade Operacional]
+
+    %% Bounded Contexts Detecção e Ingestão
+    B --> B1[Contexto: Ingestão de fontes externas]
+    B --> B2[Contexto: Normalização e validação de dados]
+
+    %% Bounded Contexts Catálogo de Riscos
+    C --> C1[Contexto: Tipos de Evento e Severidade]
+    C --> C2[Contexto: Matrizes de Risco e Curvas IDF]
+
+    %% Bounded Contexts Geoespacial
+    D --> D1[Contexto: Zonas de Risco e Rotas de Evacuação]
+    D --> D2[Contexto: Dispositivos de Alerta]
+
+    %% Bounded Contexts Avaliação e Score
+    E --> E1[Contexto: Cálculo de Risco]
+    E --> E2[Contexto: Modelos de Predição]
+
+    %% Bounded Contexts Orquestração de Alertas
+    F --> F1[Contexto: Regras de Disparo]
+    F --> F2[Contexto: Escalonamento e Quorum]
+
+    %% Bounded Contexts Tenancy
+    G --> G1[Contexto: Gestão de Tenants e Planos]
+    G --> G2[Contexto: Limites e Billing]
+
+    %% Bounded Contexts Auditoria
+    H --> H1[Contexto: Trilha de Auditoria]
+    H --> H2[Contexto: Retenção e Conformidade]
+
+    %% Bounded Contexts Observabilidade
+    I --> I1[Contexto: Telemetria e SLIs/SLOs]
+    I --> I2[Contexto: Saúde das Integrações]
