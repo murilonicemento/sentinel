@@ -1,4 +1,15 @@
 ﻿services:
+  api-gateway:
+    image: api-gateway
+    build:
+      context: ../services/api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "6000:8080"
+    restart: unless-stopped
   ingestion:
     image: ingestion
     build:
