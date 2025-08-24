@@ -1,0 +1,15 @@
+﻿services:
+  ingestion:
+    image: ingestion
+    build:
+      context: ../services/ingestion
+      dockerfile: Dockerfile
+    container_name: ingestion
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "7000:8080"
+    restart: unless-stopped
+volumes:
+networks:
+  
