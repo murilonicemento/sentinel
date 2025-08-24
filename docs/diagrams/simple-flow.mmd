@@ -1,0 +1,37 @@
+flowchart TD
+    %% =====================
+    %% Coleta e Detecção
+    %% =====================
+    A[Sensor / Fonte de Dados] -->|Envia leitura| B[Coleta de Evento]
+    B -->|Valida e normaliza| C[Evento Natural]
+
+    %% =====================
+    %% Avaliação de Risco
+    %% =====================
+    C --> D[Avaliação de Risco por Região]
+    D --> E[Nível de Risco Calculado]
+
+    %% =====================
+    %% Orquestração de Alertas
+    %% =====================
+    E --> F[Regra de Notificação]
+    F -->|Seleciona canais e destinatários| G[Alerta Multicanal]
+
+    %% =====================
+    %% Confirmação e Auditoria
+    %% =====================
+    G --> H[Confirmação de Recebimento]
+    G --> I[Registro de Auditoria]
+
+    %% =====================
+    %% Observabilidade e Relatórios
+    %% =====================
+    D --> J[Dashboard de Riscos]
+    H --> J
+    I --> J
+
+    %% Legenda
+    classDef process fill:#E8F0FE,stroke:#333,stroke-width:1px;
+    classDef data fill:#FEF3E8,stroke:#333,stroke-width:1px;
+
+    class A,B,C,D,E,F,G,H,I,J process
