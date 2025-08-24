@@ -18,6 +18,12 @@ O sistema processa dados em tempo real de múltiplas fontes (APIs, IoT, satélit
 sentinel/
 │
 ├─ services/
+|   ├─ api-gateway/
+|   │   ├─ ApiGateway.Api/
+|   │   │   ├─ Program.cs
+|   │   │   ├─ appsettings.json
+|   │   └─ Dockerfile
+|   |
 │   ├─ ingestion/
 │   │   ├─ src/
 │   │   │   ├─ Ingestion.Domain/
