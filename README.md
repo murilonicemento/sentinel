@@ -1,8 +1,8 @@
 # 🌍 Natural Events Risk & Alerting Platform
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Docker](https://img.shields.io/badge/docker-passing-blue)]()
-[![Kubernetes](https://img.shields.io/badge/k8s-passing-lightblue)]()
+[![Status](https://img.shields.io/badge/status-in%20development-yellow)]()
+[![Docs](https://img.shields.io/badge/docs-ready-blue)]()
+[![Tech](https://img.shields.io/badge/tech-.NET%20%7C%20Docker%20%7C%20K8s-lightgrey)]()
 
 Plataforma distribuída para **detecção, análise e alerta de eventos naturais** (chuvas extremas, enchentes, deslizamentos, incêndios, sismos), com arquitetura baseada em **microsserviços, CQRS, DDD e Clean Architecture**.
 
