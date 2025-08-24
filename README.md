@@ -15,35 +15,81 @@ O sistema processa dados em tempo real de múltiplas fontes (APIs, IoT, satélit
 ## 📂 Estrutura do Repositório
 
 ```
-src/
-  ingestion/
-    Domain/
-    Application/
-    Infrastructure/
-    Api/
-  geospatial/
-  risk-scoring/
-  alert-orchestrator/
-  channels/
-  reporting/
-  platform/
-  helm/
-  k8s/
-  otel/
-  grafana/
-  prometheus/
-  keda/
-  libs/
-  BuildingBlocks/
-  Messaging/
-  Outbox/
-  Observability/
-  tests/
-  contract/
-  e2e/
-  docs/
-README.md
-
+sentinel/
+│
+├─ services/
+│   ├─ ingestion/
+│   │   ├─ src/
+│   │   │   ├─ Ingestion.Domain/
+│   │   │   ├─ Ingestion.Application/
+│   │   │   ├─ Ingestion.Infrastructure/
+│   │   │   └─ Ingestion.Api/
+│   │   ├─ tests/
+│   │   │   ├─ Ingestion.UnitTests/
+│   │   │   └─ Ingestion.IntegrationTests/
+│   │   └─ Dockerfile
+│   │
+│   ├─ geospatial/
+│   │   ├─ src/
+│   │   │   ├─ Geospatial.Domain/
+│   │   │   ├─ Geospatial.Application/
+│   │   │   ├─ Geospatial.Infrastructure/
+│   │   │   └─ Geospatial.Api/
+│   │   ├─ tests/
+│   │   └─ Dockerfile
+│   │
+│   ├─ risk-scoring/
+│   │   ├─ src/
+│   │   │   ├─ RiskScoring.Domain/
+│   │   │   ├─ RiskScoring.Application/
+│   │   │   ├─ RiskScoring.Infrastructure/
+│   │   │   └─ RiskScoring.Api/
+│   │   ├─ tests/
+│   │   └─ Dockerfile
+│   │
+│   ├─ alert-orchestrator/
+│   │   └─ ...
+│   │
+│   ├─ channels/
+│   │   └─ ...
+│   │
+│   ├─ reporting/
+│   │   └─ ...
+│   │
+│   ├─ tenants-billing/
+│   │   └─ ...
+│   │
+│   └─ compliance-audit/
+│       └─ ...
+│
+├─ platform/
+│   ├─ docker-compose.yml
+│   ├─ k8s/
+│   │   ├─ ingress.yaml
+│   │   ├─ deployments/
+│   │   ├─ services/
+│   │   └─ hpa/
+│   ├─ helm/
+│   └─ observability/
+│       ├─ grafana/
+│       ├─ prometheus/
+│       ├─ loki/
+│       └─ otel-collector/
+│
+├─ libs/
+│   ├─ BuildingBlocks/
+│   │   ├─ Messaging/
+│   │   ├─ Outbox/
+│   │   └─ Observability/
+│   └─ SharedKernel/
+│
+├─ docs/
+│   ├─ RFC-Arquitetura.md
+│   └─ diagrams/
+│       ├─ architecture.mmd
+│       └─ classDiagram.mmd
+│
+└─ README.md
 ```
 
 ## ▶️ Como rodar localmente
