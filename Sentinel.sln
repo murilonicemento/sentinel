@@ -6,6 +6,10 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "services", "services", "{5854FF58-B8C5-05C6-5BF2-ACE42193F22B}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ingestion", "ingestion", "{31FA815E-F168-7AB5-A26E-1E1772BBBCDE}"
+	ProjectSection(SolutionItems) = preProject
+		services\ingestion\Dockerfile = services\ingestion\Dockerfile
+		services\ingestion\.dockerignore = services\ingestion\.dockerignore
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{9E5B6E38-FB60-7272-AE1E-CC970DFE2B18}"
 EndProject
@@ -24,6 +28,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingestion.IntegrationTests", "services\ingestion\tests\Ingestion.IntegrationTests\Ingestion.IntegrationTests.csproj", "{7A75F30E-7CCD-492B-B96F-47781B5AF082}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "api-gateway", "api-gateway", "{9627E87E-F5B7-00AC-2F43-5E65E23A8312}"
+	ProjectSection(SolutionItems) = preProject
+		services\api-gateway\Dockerfile = services\api-gateway\Dockerfile
+		services\api-gateway\.dockerignore = services\api-gateway\.dockerignore
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ApiGateway.Api", "services\api-gateway\ApiGateway.Api\ApiGateway.Api.csproj", "{491C005D-0F5B-43D8-B686-1B833E1DBAD6}"
 EndProject

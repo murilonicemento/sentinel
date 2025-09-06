@@ -1,0 +1,36 @@
+﻿{
+  "Routes": [
+    {
+      "UpstreamPathTemplate": "/gateway/ingestion/sensor-collection",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "UpstreamScheme": "https",
+      "DownstreamPathTemplate": "/api/ingestion/sensor-collection",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api-gateway",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/ingestion/natural-event",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "UpstreamScheme": "https",
+      "DownstreamPathTemplate": "/api/ingestion/natural-event",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api-gateway",
+          "Port": 8080
+        }
+      ]
+    }
+  ]
+}
