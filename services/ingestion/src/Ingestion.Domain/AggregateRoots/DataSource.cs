@@ -1,14 +1,20 @@
 ﻿using Ingestion.Domain.Aggregates;
-using Ingestion.Domain.Enums;
 
 namespace Ingestion.Domain.AggregateRoots;
 
-public class DataSource
+public class DataSource(
+    Guid id,
+    string name,
+    string endpoint,
+    string dataSourceType,
+    string measurementType,
+    string collectionFrequency)
 {
-    public Guid Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public int Type { get; set; }
-    public string Endpoint { get; set; } = string.Empty;
-    public int CollectionFrequency { get; set; }
-    public ICollection<DataCollection> DataCollections { get; set; } = [];
+    public Guid Id { get; } = id;
+    public string Name { get; } = name;
+    public string Endpoint { get; } = endpoint;
+    public string DataSourceType { get; } = dataSourceType;
+    public string MeasurementType { get; } = measurementType;
+    public string CollectionFrequency { get; } = collectionFrequency;
+    public IEnumerable<DataCollection> DataCollections { get; set; } = [];
 }
