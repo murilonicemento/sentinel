@@ -23,8 +23,9 @@ public class IngestionController : ControllerBase
     }
 
     [HttpPost("sensor-collection")]
-    public ActionResult<Guid> RegisterSensorCollection([FromBody] RegisterSensorCollectionCommand command)
+    public async Task<ActionResult<Guid>> RegisterSensorCollection([FromBody] RegisterSensorCollectionCommand command)
     {
-        return Created();
+        var sensorCollectionId = await _mediator.Send(command);
+        return Created("api/ingestion/sensor-collection", new { id = sensorCollectionId });
     }
 }
