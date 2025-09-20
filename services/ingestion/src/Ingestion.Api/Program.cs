@@ -10,7 +10,7 @@ builder.Services.AddControllers();
 builder.Services
     .AddOpenApi()
     .AddApplicationServiceCollection()
-    .AddInfrastructureServiceCollection()
+    .AddInfrastructureServiceCollection(builder.Configuration)
     .Configure<ApiBehaviorOptions>(options =>
     {
         options.InvalidModelStateResponseFactory = context =>
