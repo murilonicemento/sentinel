@@ -5,6 +5,6 @@ namespace Ingestion.Domain.Repositories;
 
 public interface IDataSourceRepository
 {
-    public DataSource? GetById(Guid id);
+    public DataSource? GetByIdAndTenantId(Guid id, Guid tenantId);
     public Task<Guid> RegisterAsync(DataSource dataSource);
 }
