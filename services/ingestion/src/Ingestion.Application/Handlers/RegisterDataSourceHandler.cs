@@ -23,7 +23,8 @@ public class RegisterDataSourceHandler : IRequestHandler<RegisterDataSourceComma
             DataSourceType.From(request.DataSourceType).Value,
             MeasurementType.From(request.MeasurementType).Value,
             request.Endpoint,
-            CollectionFrequencyType.From(request.CollectionFrequency).Value
+            CollectionFrequencyType.From(request.CollectionFrequency).Value,
+            Guid.NewGuid()
         );
 
         return await _dataSourceRepository.RegisterAsync(dataSource);
