@@ -8,7 +8,9 @@ public class DataSource(
     string endpoint,
     string dataSourceType,
     string measurementType,
-    string collectionFrequency)
+    string collectionFrequency,
+    Guid tenantId
+)
 {
     public Guid Id { get; } = id;
     public string Name { get; } = name;
@@ -16,5 +18,7 @@ public class DataSource(
     public string DataSourceType { get; } = dataSourceType;
     public string MeasurementType { get; } = measurementType;
     public string CollectionFrequency { get; } = collectionFrequency;
+    public Guid TenantId { get; } = tenantId;
+    public DateTime CreatedAt { get; } = DateTime.Now;
     public IEnumerable<DataCollection> DataCollections { get; set; } = [];
 }
