@@ -1,8 +1,13 @@
-﻿using Ingestion.Application.Commands;
+﻿using System.Text.Json;
+using Ingestion.Application.Commands;
+using Ingestion.Application.DTO;
+using Ingestion.Application.Events;
+using Ingestion.Application.Providers;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Repositories;
 using Ingestion.Domain.ValueObjects;
 using MediatR;
+using Microsoft.Extensions.Configuration;
 
 namespace Ingestion.Application.Handlers;
 
@@ -11,16 +16,25 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
     private readonly IDataSourceRepository _dataSourceRepository;
     private readonly IDataCollectionRepository _dataCollectionRepository;
     private readonly ISampleSensorRepository _sampleSensorRepository;
+    private readonly IEventDeduplicator _eventDeduplicator;
+    private readonly IObjectStorageProvider _objectStorageProvider;
+    private readonly IConfiguration _configuration;
 
     public RegisterSensorCollectionHandler(
         IDataSourceRepository dataSourceRepository,
         IDataCollectionRepository dataCollectionRepository,
-        ISampleSensorRepository sampleSensorRepository
+        ISampleSensorRepository sampleSensorRepository,
+        IEventDeduplicator eventDeduplicator,
+        IObjectStorageProvider objectStorageProvider,
+        IConfiguration configuration
     )
     {
         _dataSourceRepository = dataSourceRepository;
         _dataCollectionRepository = dataCollectionRepository;
         _sampleSensorRepository = sampleSensorRepository;
+        _eventDeduplicator = eventDeduplicator;
+        _objectStorageProvider = objectStorageProvider;
+        _configuration = configuration;
     }
 
     public async Task<Guid> Handle(RegisterSensorCollectionCommand request, CancellationToken cancellationToken)
@@ -30,8 +44,9 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         if (request.SampleSensors.Any(sampleSensorDto => string.IsNullOrEmpty(sampleSensorDto.Unit)))
             throw new ArgumentException("Samples unit can't be blank.");
 
-        var dataSource = _dataSourceRepository.GetById(request.DatasourceId) ??
-                         throw new KeyNotFoundException($"Data source with id {request.DatasourceId} not exist.");
+        var dataSource = _dataSourceRepository.GetByIdAndTenantId(request.DatasourceId, request.TenantId) ??
+                         throw new KeyNotFoundException(
+                             $"Data source or tenant not exist. Data source Id: {request.DatasourceId}; Tenant Id: {request.TenantId}");
         var isSamplesUnitValid = request.SampleSensors
             .Select(sample => MeasurementType.From(dataSource.MeasurementType).IsValidUnit(sample.Unit))
             .Any(isValidUnit => isValidUnit);
@@ -48,11 +63,27 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
             throw new ArgumentException(
                 $"Unable to collect data. The collection frequency to data source is {dataSource.CollectionFrequency}");
 
+        var deduplicateKey = $"ing:{request.TenantId}:{request.DatasourceId}:{request.CollectedAt:yyyyMMddHHmmss}";
+        var isDuplicate = await _eventDeduplicator.IsDuplicateAsync(deduplicateKey);
+
+        if (isDuplicate)
+            throw new InvalidOperationException("Duplicate collection detected.");
+
+        var collectionId = Guid.NewGuid();
+        var objectName = $"raw/{collectionId}.json";
+
+        var putObjectResponse = await _objectStorageProvider.UploadJsonAsync(
+            _configuration["MinIO:BucketName"]!,
+            objectName,
+            request.Payload
+        );
+
         var dataCollection = new DataCollection(
-            Guid.NewGuid(),
+            collectionId,
             request.DatasourceId,
             request.CollectedAt,
-            request.Payload
+            JsonSerializer.Serialize(putObjectResponse),
+            Guid.NewGuid()
         );
 
         await _dataCollectionRepository.RegisterAsync(dataCollection);
@@ -61,7 +92,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         {
             var sampleSensor = new SampleSensor(
                 Guid.NewGuid(),
-                dataCollection.Id,
+                collectionId,
                 sampleSensorDto.SensorValue,
                 sampleSensorDto.Unit,
                 sampleSensorDto.RecordedAt
@@ -70,6 +101,14 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
             await _sampleSensorRepository.RegisterAsync(sampleSensor);
         }
 
-        return dataCollection.Id;
+        var climaticEventDto = new ClimaticEventDTO
+        {
+            EventId = collectionId,
+            EventType = dataSource.DataSourceType,
+            CollectedAt = request.CollectedAt
+        };
+        var climaticEventJson = JsonSerializer.Serialize(climaticEventDto);
+
+        return collectionId;
     }
 }
