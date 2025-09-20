@@ -10,10 +10,13 @@
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.8" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.8" />
+    <PackageReference Include="Minio" Version="6.0.5" />
     <PackageReference Include="Npgsql" Version="9.0.3" />
+    <PackageReference Include="StackExchange.Redis" Version="2.9.17" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Ingestion.Application\Ingestion.Application.csproj" />
     <ProjectReference Include="..\Ingestion.Domain\Ingestion.Domain.csproj" />
   </ItemGroup>
 
