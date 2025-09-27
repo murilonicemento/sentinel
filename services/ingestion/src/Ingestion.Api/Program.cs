@@ -1,3 +1,4 @@
+using System.Net;
 using Ingestion.Api.Middlewares;
 using Ingestion.Application;
 using Ingestion.Infrastructure;
@@ -24,7 +25,7 @@ builder.Services
             var responseObj = new
             {
                 title = "One or more validation errors occurred.",
-                statusCode = 400,
+                statusCode = HttpStatusCode.BadRequest,
                 errors = new
                 {
                     messages = errors

@@ -1,6 +1,6 @@
 ﻿using Minio.DataModel.Response;
 
-namespace Ingestion.Application.Providers;
+namespace Ingestion.Application.Interfaces.Providers;
 
 public interface IObjectStorageProvider
 {

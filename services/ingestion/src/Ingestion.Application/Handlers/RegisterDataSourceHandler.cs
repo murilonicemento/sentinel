@@ -1,5 +1,6 @@
 ﻿using Ingestion.Application.Commands;
 using Ingestion.Domain.AggregateRoots;
+using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Repositories;
 using Ingestion.Domain.ValueObjects;
 using MediatR;

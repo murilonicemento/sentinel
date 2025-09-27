@@ -1,5 +1,4 @@
-﻿using System.Runtime.InteropServices;
-using Ingestion.Domain.AggregateRoots;
+﻿using Ingestion.Domain.AggregateRoots;
 
 namespace Ingestion.Domain.Aggregates;
 
@@ -19,17 +18,4 @@ public class DataCollection(
     public DateTime CreatedAt { get; } = DateTime.Now;
     public DataSource? DataSource { get; set; }
     public IEnumerable<SampleSensor> SampleSensors { get; set; } = [];
-
-    // TODO: Calcular intensidade com base no tipo de sensor e no tipo de medidas
-    public double CalculateIntensity(string dataSourceType)
-    {
-        return dataSourceType switch
-        {
-            "Sensor" => SampleSensors.Average(sampleSensor => sampleSensor.SensorValue),
-            "Api" => SampleSensors.First().SensorValue,
-            "File" => SampleSensors.Max(sampleSensor => sampleSensor.SensorValue),
-            _ => throw new NotSupportedException(
-                $"Tipo de fonte {DataSource?.DataSourceType} não suportado para cálculo de intensidade.")
-        };
-    }
 }

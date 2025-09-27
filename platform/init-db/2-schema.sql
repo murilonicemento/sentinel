@@ -27,6 +27,8 @@ CREATE TABLE sensor_sample
     data_collection_id uuid             NOT NULL REFERENCES data_collection (id),
     sensor_value       double precision NOT NULL,
     unit               varchar(20)      NOT NULL,
+    latitude           double precision NOT NULL,
+    longitude          double precision NOT NULL,
     recorded_at        timestamptz      NOT NULL
 );
 
@@ -39,4 +41,5 @@ CREATE TABLE outbox
     processed    boolean not null default false,
     processed_at timestamptz NULL
 );
+
 CREATE INDEX idx_outbox_processed ON outbox (processed) WHERE processed = false;

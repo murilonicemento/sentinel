@@ -16,4 +16,8 @@
     <ProjectReference Include="..\Ingestion.Domain\Ingestion.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Interfaces\" />
+  </ItemGroup>
+
 </Project>

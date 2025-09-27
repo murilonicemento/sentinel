@@ -1,9 +1,11 @@
 ﻿using System.Text.Json;
 using Ingestion.Application.Commands;
 using Ingestion.Application.DTO;
-using Ingestion.Application.Events;
-using Ingestion.Application.Providers;
+using Ingestion.Application.Interfaces.Events;
+using Ingestion.Application.Interfaces.Providers;
 using Ingestion.Domain.Aggregates;
+using Ingestion.Domain.Interfaces.Repositories;
+using Ingestion.Domain.Outbox;
 using Ingestion.Domain.Repositories;
 using Ingestion.Domain.ValueObjects;
 using MediatR;
@@ -17,7 +19,8 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
     private readonly IDataCollectionRepository _dataCollectionRepository;
     private readonly ISampleSensorRepository _sampleSensorRepository;
     private readonly IEventDeduplicator _eventDeduplicator;
-    private readonly IObjectStorageProvider _objectStorageProvider;
+    private readonly IObjectStorageProvider _minioProvider;
+    private readonly IOutboxRepository _outboxRepository;
     private readonly IConfiguration _configuration;
 
     public RegisterSensorCollectionHandler(
@@ -25,7 +28,8 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         IDataCollectionRepository dataCollectionRepository,
         ISampleSensorRepository sampleSensorRepository,
         IEventDeduplicator eventDeduplicator,
-        IObjectStorageProvider objectStorageProvider,
+        IObjectStorageProvider minioProvider,
+        IOutboxRepository outboxRepository,
         IConfiguration configuration
     )
     {
@@ -33,7 +37,8 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         _dataCollectionRepository = dataCollectionRepository;
         _sampleSensorRepository = sampleSensorRepository;
         _eventDeduplicator = eventDeduplicator;
-        _objectStorageProvider = objectStorageProvider;
+        _minioProvider = minioProvider;
+        _outboxRepository = outboxRepository;
         _configuration = configuration;
     }
 
@@ -71,13 +76,11 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
 
         var collectionId = Guid.NewGuid();
         var objectName = $"raw/{collectionId}.json";
-
-        var putObjectResponse = await _objectStorageProvider.UploadJsonAsync(
+        var putObjectResponse = await _minioProvider.UploadJsonAsync(
             _configuration["MinIO:BucketName"]!,
             objectName,
             request.Payload
         );
-
         var dataCollection = new DataCollection(
             collectionId,
             request.DatasourceId,
@@ -95,19 +98,36 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
                 collectionId,
                 sampleSensorDto.SensorValue,
                 sampleSensorDto.Unit,
+                sampleSensorDto.Latitude,
+                sampleSensorDto.Longitude,
                 sampleSensorDto.RecordedAt
             );
 
             await _sampleSensorRepository.RegisterAsync(sampleSensor);
+
+            var intensity = MeasurementType
+                .From(dataSource.MeasurementType)
+                .CalculateIntensity(sampleSensorDto.SensorValue);
+            var climaticEventDto = new ClimaticEventDTO(
+                collectionId,
+                dataSource.DataSourceType,
+                intensity,
+                sampleSensorDto.Latitude,
+                sampleSensorDto.Longitude,
+                request.CollectedAt
+            );
+            var climaticEventDtoJson = JsonSerializer.Serialize(climaticEventDto);
+            var outboxMessage = new OutboxMessage(
+                Guid.NewGuid(),
+                collectionId,
+                "ClimaticEventDTO",
+                climaticEventDtoJson
+            );
+
+            await _outboxRepository.RegisterAsync(outboxMessage);
         }
 
-        var climaticEventDto = new ClimaticEventDTO
-        {
-            EventId = collectionId,
-            EventType = dataSource.DataSourceType,
-            CollectedAt = request.CollectedAt
-        };
-        var climaticEventJson = JsonSerializer.Serialize(climaticEventDto);
+        await _eventDeduplicator.MarkAsProcessedAsync(deduplicateKey, TimeSpan.FromMinutes(5));
 
         return collectionId;
     }

@@ -1,17 +1,17 @@
 ﻿using Dapper;
 using Ingestion.Domain.Aggregates;
-using Ingestion.Domain.Repositories;
+using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Infrastructure.DbContext;
 
 namespace Ingestion.Infrastructure.Repositories;
 
 public class DataCollectionRepository : IDataCollectionRepository
 {
-    private readonly IngestionDbContext _context;
+    private readonly IngestionDbContext _ingestionDbContext;
 
-    public DataCollectionRepository(IngestionDbContext context)
+    public DataCollectionRepository(IngestionDbContext ingestionDbContext)
     {
-        _context = context;
+        _ingestionDbContext = ingestionDbContext;
     }
 
     public async Task<Guid> RegisterAsync(DataCollection dataCollection)
@@ -23,7 +23,7 @@ public class DataCollectionRepository : IDataCollectionRepository
                 VALUES 
                     (@Id, @DataSourceId, @CollectedAt, @Payload)";
 
-        await _context.Connection.ExecuteAsync(query, dataCollection);
+        await _ingestionDbContext.Connection.ExecuteAsync(query, dataCollection);
 
         return dataCollection.Id;
     }

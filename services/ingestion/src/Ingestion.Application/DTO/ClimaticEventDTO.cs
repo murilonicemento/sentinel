@@ -1,11 +1,18 @@
 ﻿namespace Ingestion.Application.DTO;
 
-public record ClimaticEventDTO
+public record ClimaticEventDTO(
+    Guid EventId,
+    string EventType,
+    double Latitude,
+    double Longitude,
+    double Intensity,
+    DateTime CollectedAt
+)
 {
-    public Guid EventId { get; set; }
-    public string EventType { get; set; } = string.Empty;
-    public double Latitude { get; set; }
-    public double Longitude { get; set; }
-    public double Intensity { get; set; }
-    public DateTime CollectedAt { get; set; }
+    public Guid EventId { get; } = EventId;
+    public string EventType { get; } = EventType;
+    public double Latitude { get; } = Latitude;
+    public double Longitude { get; } = Longitude;
+    public double Intensity { get; } = Intensity;
+    public DateTime CollectedAt { get; } = CollectedAt;
 }

@@ -7,22 +7,22 @@ namespace Ingestion.Infrastructure.Repositories;
 
 public class SampleSensorRepository : ISampleSensorRepository
 {
-    private readonly IngestionDbContext _context;
+    private readonly IngestionDbContext _ingestionDbContext;
 
-    public SampleSensorRepository(IngestionDbContext context)
+    public SampleSensorRepository(IngestionDbContext ingestionDbContext)
     {
-        _context = context;
+        _ingestionDbContext = ingestionDbContext;
     }
 
     public async Task<Guid> RegisterAsync(SampleSensor sampleSensor)
     {
         var query = @"INSERT INTO 
                         sample_sensor 
-                            (id, data_collection_id, sensor_value, unit, recorded_at) 
+                            (id, data_collection_id, sensor_value, unit, latitude, longitude, recorded_at) 
                         VALUES 
-                            (@Id, @DataCollectionId, @SensorValue, @Unit, @RecordedAt)";
+                            (@Id, @DataCollectionId, @SensorValue, @Unit, @Latitude, @Longitude, @RecordedAt)";
 
-        await _context.Connection.ExecuteAsync(query, sampleSensor);
+        await _ingestionDbContext.Connection.ExecuteAsync(query, sampleSensor);
 
         return sampleSensor.Id;
     }

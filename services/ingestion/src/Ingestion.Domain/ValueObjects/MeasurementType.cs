@@ -44,12 +44,21 @@ public class MeasurementType : ValueObject
 
         return Value switch
         {
-            "Temperature" => measurementUnits[Value].Contains(unit),
+            "Temperature" or "WindSpeed" or "Pressure" => measurementUnits[Value].Contains(unit),
             "Humidity" => unit == "%",
-            "WindSpeed" => measurementUnits[Value].Contains(unit),
             "Rainfall" => unit == "mm",
-            "Pressure" => measurementUnits[Value].Contains(unit),
             _ => false
+        };
+    }
+
+    public double CalculateIntensity(double intensityValue, double baseline = 0)
+    {
+        return Value switch
+        {
+            "Temperature" or "Humidity" => intensityValue - baseline,
+            "WindSpeed" or "Rainfall" => intensityValue,
+            "Pressure" => baseline > 0 ? intensityValue - baseline : intensityValue - 1013,
+            _ => throw new ArgumentException($"Invalid measurement type: {intensityValue}")
         };
     }
 

@@ -7,9 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" Version="2.11.1" />
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.8" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
     <PackageReference Include="Minio" Version="6.0.5" />
     <PackageReference Include="Npgsql" Version="9.0.3" />
     <PackageReference Include="StackExchange.Redis" Version="2.9.17" />
