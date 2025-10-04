@@ -1,4 +1,5 @@
 using Ingestion.Application.Commands;
+using Ingestion.Application.DTO;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -16,16 +17,21 @@ public class IngestionController : ControllerBase
     }
 
     [HttpPost("data-source")]
-    public async Task<ActionResult<Guid>> RegisterDatasource(RegisterDataSourceCommand command)
+    public async Task<ActionResult<RegisterDatasourceResponseDTO>> RegisterDatasource(RegisterDataSourceCommand command)
     {
-        var dataSourceId = await _mediator.Send(command);
-        return Created("api/ingestion/data-source", new { id = dataSourceId });
+        var response = await _mediator.Send(command);
+
+        return Created(
+            "api/ingestion/data-source",
+            new { response.dataSourceId, response.tenantId }
+        );
     }
 
     [HttpPost("sensor-collection")]
     public async Task<ActionResult<Guid>> RegisterSensorCollection([FromBody] RegisterSensorCollectionCommand command)
     {
         var sensorCollectionId = await _mediator.Send(command);
-        return Created("api/ingestion/sensor-collection", new { id = sensorCollectionId });
+
+        return Created("api/ingestion/sensor-collection", new { sensorCollectionId });
     }
 }
