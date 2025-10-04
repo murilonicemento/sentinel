@@ -61,7 +61,7 @@ public class MeasurementType : ValueObject
             _ => throw new ArgumentException($"Invalid measurement type: {intensityValue}")
         };
     }
-
+    
     protected override IEnumerable<object> GetEqualityComponents()
     {
         yield return Value;

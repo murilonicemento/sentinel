@@ -2,20 +2,32 @@
 
 namespace Ingestion.Domain.Aggregates;
 
-public class DataCollection(
-    Guid id,
-    Guid dataSourceId,
-    DateTime collectedAt,
-    string payload,
-    Guid tenantId
-)
+public class DataCollection
 {
-    public Guid Id { get; } = id;
-    public Guid DataSourceId { get; } = dataSourceId;
-    public DateTime CollectedAt { get; } = collectedAt;
-    public string Payload { get; } = payload;
-    public Guid TenantId { get; } = tenantId;
+    public Guid Id { get; }
+    public Guid DataSourceId { get; }
+    public DateTime CollectedAt { get; }
+    public string Payload { get; }
+    public Guid TenantId { get; }
     public DateTime CreatedAt { get; } = DateTime.Now;
-    public DataSource? DataSource { get; set; }
     public IEnumerable<SampleSensor> SampleSensors { get; set; } = [];
+
+    public DataCollection()
+    {
+    }
+
+    public DataCollection(
+        Guid id,
+        Guid dataSourceId,
+        DateTime collectedAt,
+        string payload,
+        Guid tenantId
+    )
+    {
+        Id = id;
+        DataSourceId = dataSourceId;
+        CollectedAt = collectedAt;
+        Payload = payload;
+        TenantId = tenantId;
+    }
 }

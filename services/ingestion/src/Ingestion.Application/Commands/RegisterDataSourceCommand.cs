@@ -4,7 +4,7 @@ using MediatR;
 
 namespace Ingestion.Application.Commands;
 
-public record RegisterDataSourceCommand : IRequest<Guid>
+public record RegisterDataSourceCommand : IRequest<(Guid dataSourceId, Guid tenantId)>
 {
     [Required] public string Name { get; set; } = string.Empty;
     [Required] public string DataSourceType { get; set; } = string.Empty;

@@ -19,7 +19,7 @@ public class OutboxRepository : IOutboxRepository
     {
         var query = @"INSERT INTO outbox 
                         (id, aggregate_id, outbox_type, payload)
-                    VALUES (@Id, @AggregateId, @OutboxType, @Payload)";
+                    VALUES (@Id, @AggregateId, @OutboxType, @Payload::jsonb)";
 
         await _ingestionDbContext.Connection.ExecuteAsync(query, outboxMessage);
 

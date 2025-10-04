@@ -7,7 +7,7 @@ using MediatR;
 
 namespace Ingestion.Application.Handlers;
 
-public class RegisterDataSourceHandler : IRequestHandler<RegisterDataSourceCommand, Guid>
+public class RegisterDataSourceHandler : IRequestHandler<RegisterDataSourceCommand, (Guid dataSourceId, Guid tenantId)>
 {
     private readonly IDataSourceRepository _dataSourceRepository;
 
@@ -16,14 +16,14 @@ public class RegisterDataSourceHandler : IRequestHandler<RegisterDataSourceComma
         _dataSourceRepository = dataSourceRepository;
     }
 
-    public async Task<Guid> Handle(RegisterDataSourceCommand request, CancellationToken cancellationToken)
+    public async Task<(Guid dataSourceId, Guid tenantId)> Handle(RegisterDataSourceCommand request, CancellationToken cancellationToken)
     {
         var dataSource = new DataSource(
             Guid.NewGuid(),
             request.Name,
+            request.Endpoint,
             DataSourceType.From(request.DataSourceType).Value,
             MeasurementType.From(request.MeasurementType).Value,
-            request.Endpoint,
             CollectionFrequencyType.From(request.CollectionFrequency).Value,
             Guid.NewGuid()
         );

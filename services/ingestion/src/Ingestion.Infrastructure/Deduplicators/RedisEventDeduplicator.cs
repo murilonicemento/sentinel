@@ -1,8 +1,8 @@
-﻿using Ingestion.Application.Interfaces.Events;
+﻿using Ingestion.Application.Interfaces.Deduplicators;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
-namespace Ingestion.Infrastructure.Events;
+namespace Ingestion.Infrastructure.Deduplicators;
 
 public class RedisEventDeduplicator : IEventDeduplicator
 {

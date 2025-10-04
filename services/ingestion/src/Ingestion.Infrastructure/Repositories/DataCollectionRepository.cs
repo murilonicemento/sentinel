@@ -19,9 +19,9 @@ public class DataCollectionRepository : IDataCollectionRepository
         var query =
             @"INSERT INTO 
                 data_collection 
-                    (id, data_source_id, collected_at, payload) 
+                    (id, data_source_id, collected_at, payload, tenant_id, created_at) 
                 VALUES 
-                    (@Id, @DataSourceId, @CollectedAt, @Payload)";
+                    (@Id, @DataSourceId, @CollectedAt, @Payload::jsonb, @TenantId, @CreatedAt)";
 
         await _ingestionDbContext.Connection.ExecuteAsync(query, dataCollection);
 

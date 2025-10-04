@@ -32,7 +32,8 @@ public class DataSourceRepository : IDataSourceRepository
                     WHERE 
                         id = @Id AND tenant_id = @TenantId";
 
-        var dataSource = _ingestionDbContext.Connection.QueryFirstOrDefault<DataSource>(query, new { Id = id, TenantId = tenantId });
+        var dataSource =
+            _ingestionDbContext.Connection.QueryFirstOrDefault<DataSource>(query, new { Id = id, TenantId = tenantId });
 
         if (dataSource is not null)
             dataSource.DataCollections = GetDataCollectionByDataSourceId(id);
@@ -40,7 +41,7 @@ public class DataSourceRepository : IDataSourceRepository
         return dataSource;
     }
 
-    public async Task<Guid> RegisterAsync(DataSource dataSource)
+    public async Task<(Guid dataSourceId, Guid tenantId)> RegisterAsync(DataSource dataSource)
     {
         var query = @"INSERT INTO
                         data_source (id, name, data_source_type, measurement_type, endpoint, collection_frequency, tenant_id, created_at) 
@@ -48,7 +49,7 @@ public class DataSourceRepository : IDataSourceRepository
 
         await _ingestionDbContext.Connection.ExecuteAsync(query, dataSource);
 
-        return dataSource.Id;
+        return (dataSource.Id, dataSource.TenantId);
     }
 
     private IEnumerable<DataCollection> GetDataCollectionByDataSourceId(Guid dataSourceId)

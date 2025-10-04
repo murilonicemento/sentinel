@@ -1,8 +1,10 @@
 ﻿using System.Text.Json;
 using Ingestion.Application.Commands;
 using Ingestion.Application.DTO;
-using Ingestion.Application.Interfaces.Events;
+using Ingestion.Application.Events;
+using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.Providers;
+using Ingestion.Domain.AggregateRoots;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Outbox;
@@ -59,20 +61,24 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         if (!isSamplesUnitValid)
             throw new ArgumentException($"Invalid unit type to measurement type: {dataSource.MeasurementType}");
 
-        var lastDataCollected = dataSource.DataCollections.OrderByDescending(x => x.CollectedAt).First();
-        var isValidFrequency = CollectionFrequencyType
-            .From(dataSource.CollectionFrequency)
-            .IsValidFrequency(lastDataCollected.CollectedAt);
+        var lastDataCollected = dataSource.DataCollections.OrderByDescending(x => x.CollectedAt).FirstOrDefault();
 
-        if (!isValidFrequency)
-            throw new ArgumentException(
-                $"Unable to collect data. The collection frequency to data source is {dataSource.CollectionFrequency}");
+        if (lastDataCollected is not null)
+        {
+            var isValidFrequency = CollectionFrequencyType
+                .From(dataSource.CollectionFrequency)
+                .IsValidFrequency(lastDataCollected.CollectedAt);
+        
+            if (!isValidFrequency)
+                throw new ArgumentException(
+                    $"Unable to collect data. The collection frequency to data source is {dataSource.CollectionFrequency}");
+        }
 
         var deduplicateKey = $"ing:{request.TenantId}:{request.DatasourceId}:{request.CollectedAt:yyyyMMddHHmmss}";
         var isDuplicate = await _eventDeduplicator.IsDuplicateAsync(deduplicateKey);
 
         if (isDuplicate)
-            throw new InvalidOperationException("Duplicate collection detected.");
+            return dataSource.Id;
 
         var collectionId = Guid.NewGuid();
         var objectName = $"raw/{collectionId}.json";
@@ -86,7 +92,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
             request.DatasourceId,
             request.CollectedAt,
             JsonSerializer.Serialize(putObjectResponse),
-            Guid.NewGuid()
+            dataSource.TenantId
         );
 
         await _dataCollectionRepository.RegisterAsync(dataCollection);
@@ -104,24 +110,26 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
             );
 
             await _sampleSensorRepository.RegisterAsync(sampleSensor);
-
+            
+            // TODO: testar kafka
             var intensity = MeasurementType
                 .From(dataSource.MeasurementType)
                 .CalculateIntensity(sampleSensorDto.SensorValue);
-            var climaticEventDto = new ClimaticEventDTO(
+            var eventType = dataSource.MapValueToEventType(sampleSensorDto.SensorValue);
+            var climaticEventDetectedEvent = new ClimaticEventDetectedEvent(
                 collectionId,
-                dataSource.DataSourceType,
+                eventType,
                 intensity,
                 sampleSensorDto.Latitude,
                 sampleSensorDto.Longitude,
                 request.CollectedAt
             );
-            var climaticEventDtoJson = JsonSerializer.Serialize(climaticEventDto);
+            var climaticEventDetectedEventJson = JsonSerializer.Serialize(climaticEventDetectedEvent);
             var outboxMessage = new OutboxMessage(
                 Guid.NewGuid(),
                 collectionId,
-                "ClimaticEventDTO",
-                climaticEventDtoJson
+                "climatic-event-detected",
+                climaticEventDetectedEventJson
             );
 
             await _outboxRepository.RegisterAsync(outboxMessage);
@@ -129,6 +137,6 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
 
         await _eventDeduplicator.MarkAsProcessedAsync(deduplicateKey, TimeSpan.FromMinutes(5));
 
-        return collectionId;
+        return dataSource.Id;
     }
 }
