@@ -17,20 +17,28 @@ public class ExceptionHandlingMiddleware
         {
             await _next(httpContext);
         }
+        catch (ArgumentException exception)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await httpContext.Response.WriteAsJsonAsync(new
+            {
+                title = "One or more validation errors occurred.",
+                type = exception.GetType().Name,
+                statusCode = StatusCodes.Status400BadRequest,
+                errors = new { messages = new List<string> { exception.Message } }
+            });
+        }
         catch (Exception exception)
         {
             _logger.LogError(exception, "Unhandled exception occurred.");
-            await HandleException(httpContext, exception);
+            httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await httpContext.Response.WriteAsJsonAsync(new
+            {
+                title = "An error occurred.",
+                type = exception.GetType().Name,
+                statusCode = StatusCodes.Status500InternalServerError,
+                error = exception.Message
+            });
         }
-    }
-
-    private static async Task HandleException(HttpContext httpContext, Exception exception)
-    {
-        httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await httpContext.Response.WriteAsJsonAsync(new
-        {
-            error = exception.Message,
-            type = exception.GetType().Name
-        });
     }
 }
