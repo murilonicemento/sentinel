@@ -7,6 +7,8 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+
 builder.Services.AddControllers();
 builder.Services
     .AddOpenApi()
