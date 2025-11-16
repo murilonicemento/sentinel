@@ -20,7 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ingestion.Application\Ingestion.Application.csproj" />
-    <ProjectReference Include="..\Ingestion.Infrastructure\Ingestion.Infrastructure.csproj" />
+    <ProjectReference Include="..\Ingestion.Infrastructure.Write\Ingestion.Infrastructure.Write.csproj" />
   </ItemGroup>
 
 </Project>

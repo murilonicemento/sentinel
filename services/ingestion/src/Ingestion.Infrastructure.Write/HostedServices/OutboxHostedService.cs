@@ -1,10 +1,9 @@
 ﻿using Ingestion.Application.Interfaces.Publishers;
 using Ingestion.Domain.Interfaces.Repositories;
-using Ingestion.Domain.Repositories;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Ingestion.Infrastructure.HostedServices;
+namespace Ingestion.Infrastructure.Write.HostedServices;
 
 public class OutboxHostedService : BackgroundService
 {

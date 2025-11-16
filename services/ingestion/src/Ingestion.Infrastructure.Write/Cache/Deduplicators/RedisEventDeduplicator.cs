@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
-namespace Ingestion.Infrastructure.Deduplicators;
+namespace Ingestion.Infrastructure.Write.Cache.Deduplicators;
 
 public class RedisEventDeduplicator : IEventDeduplicator
 {

@@ -1,18 +1,17 @@
 ﻿using Dapper;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Outbox;
-using Ingestion.Domain.Repositories;
-using Ingestion.Infrastructure.DbContext;
+using Ingestion.Infrastructure.Write.Persistence.Postgres.DbContext;
 
-namespace Ingestion.Infrastructure.Repositories;
+namespace Ingestion.Infrastructure.Write.Persistence.Postgres.Repositories;
 
 public class OutboxRepository : IOutboxRepository
 {
-    private readonly IngestionDbContext _ingestionDbContext;
+    private readonly WriteDbContext _writeDbContext;
 
-    public OutboxRepository(IngestionDbContext ingestionDbContext)
+    public OutboxRepository(WriteDbContext writeDbContext)
     {
-        _ingestionDbContext = ingestionDbContext;
+        _writeDbContext = writeDbContext;
     }
 
     public async Task<Guid> RegisterAsync(OutboxMessage outboxMessage)
@@ -21,18 +20,18 @@ public class OutboxRepository : IOutboxRepository
                         (id, aggregate_id, outbox_type, payload)
                     VALUES (@Id, @AggregateId, @OutboxType, @Payload::jsonb)";
 
-        await _ingestionDbContext.Connection.ExecuteAsync(query, outboxMessage);
+        await _writeDbContext.Connection.ExecuteAsync(query, outboxMessage);
 
         return outboxMessage.Id;
     }
 
     public async Task<IEnumerable<OutboxRow>> GetPending() =>
-        await _ingestionDbContext.Connection.QueryAsync<OutboxRow>(
+        await _writeDbContext.Connection.QueryAsync<OutboxRow>(
             "SELECT id, outbox_type, payload FROM outbox WHERE processed = false LIMIT 50 FOR UPDATE SKIP LOCKED");
 
     public async Task<bool> UpdateProcessed(Guid id)
     {
-        var affectedRows = await _ingestionDbContext.Connection.ExecuteAsync(
+        var affectedRows = await _writeDbContext.Connection.ExecuteAsync(
             "UPDATE outbox SET processed = true, processed_at = now() WHERE id = @Id", new { id });
 
         return affectedRows > 0;

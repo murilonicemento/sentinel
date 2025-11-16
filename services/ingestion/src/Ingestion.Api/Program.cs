@@ -1,7 +1,7 @@
 using System.Net;
 using Ingestion.Api.Middlewares;
 using Ingestion.Application;
-using Ingestion.Infrastructure;
+using Ingestion.Infrastructure.Write;
 using Microsoft.AspNetCore.Mvc;
 using Scalar.AspNetCore;
 

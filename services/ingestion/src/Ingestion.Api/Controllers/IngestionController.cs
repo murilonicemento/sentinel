@@ -1,5 +1,7 @@
 using Ingestion.Application.Commands;
 using Ingestion.Application.DTO;
+using Ingestion.Application.Events;
+using Ingestion.Application.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,6 +16,24 @@ public class IngestionController : ControllerBase
     public IngestionController(IMediator mediator)
     {
         _mediator = mediator;
+    }
+
+    [HttpGet("last-detected-events")]
+    public async Task<ActionResult<ClimaticEventDetectedEvent>> GetLastDetectedEvents([FromQuery] int limit = 50)
+    {
+        var query = new GetLatestDetectedEventsQuery { Limit = limit };
+        var lastDetectedEvents = await _mediator.Send(query);
+
+        return Ok(lastDetectedEvents);
+    }
+
+    [HttpGet("collection-statistics")]
+    public async Task<ActionResult<ClimaticEventDetectedEvent>> GetCollectionStatistics(
+        GetLatestDetectedEventsQuery query)
+    {
+        var lastDetectedEvents = await _mediator.Send(query);
+
+        return Ok(lastDetectedEvents);
     }
 
     [HttpPost("data-source")]

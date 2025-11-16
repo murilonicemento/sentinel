@@ -1,17 +1,17 @@
 ﻿using Dapper;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Interfaces.Repositories;
-using Ingestion.Infrastructure.DbContext;
+using Ingestion.Infrastructure.Write.Persistence.Postgres.DbContext;
 
-namespace Ingestion.Infrastructure.Repositories;
+namespace Ingestion.Infrastructure.Write.Persistence.Postgres.Repositories;
 
 public class DataCollectionRepository : IDataCollectionRepository
 {
-    private readonly IngestionDbContext _ingestionDbContext;
+    private readonly WriteDbContext _writeDbContext;
 
-    public DataCollectionRepository(IngestionDbContext ingestionDbContext)
+    public DataCollectionRepository(WriteDbContext writeDbContext)
     {
-        _ingestionDbContext = ingestionDbContext;
+        _writeDbContext = writeDbContext;
     }
 
     public async Task<Guid> RegisterAsync(DataCollection dataCollection)
@@ -23,7 +23,7 @@ public class DataCollectionRepository : IDataCollectionRepository
                 VALUES 
                     (@Id, @DataSourceId, @CollectedAt, @Payload::jsonb, @TenantId, @CreatedAt)";
 
-        await _ingestionDbContext.Connection.ExecuteAsync(query, dataCollection);
+        await _writeDbContext.Connection.ExecuteAsync(query, dataCollection);
 
         return dataCollection.Id;
     }

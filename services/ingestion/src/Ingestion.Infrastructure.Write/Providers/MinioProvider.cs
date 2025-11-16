@@ -5,7 +5,7 @@ using Minio;
 using Minio.DataModel.Args;
 using Minio.DataModel.Response;
 
-namespace Ingestion.Infrastructure.Providers;
+namespace Ingestion.Infrastructure.Write.Providers;
 
 public class MinioProvider : IObjectStorageProvider
 {

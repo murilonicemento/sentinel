@@ -4,18 +4,18 @@ using Ingestion.Application.Interfaces.Providers;
 using Ingestion.Application.Interfaces.Publishers;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Repositories;
-using Ingestion.Infrastructure.DbContext;
-using Ingestion.Infrastructure.Deduplicators;
-using Ingestion.Infrastructure.HostedServices;
-using Ingestion.Infrastructure.Providers;
-using Ingestion.Infrastructure.Publishers;
-using Ingestion.Infrastructure.Repositories;
+using Ingestion.Infrastructure.Write.Cache.Deduplicators;
+using Ingestion.Infrastructure.Write.HostedServices;
+using Ingestion.Infrastructure.Write.Messaging.Publishers;
+using Ingestion.Infrastructure.Write.Persistence.Postgres.DbContext;
+using Ingestion.Infrastructure.Write.Persistence.Postgres.Repositories;
+using Ingestion.Infrastructure.Write.Providers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Minio;
 using StackExchange.Redis;
 
-namespace Ingestion.Infrastructure;
+namespace Ingestion.Infrastructure.Write;
 
 public static class InfrastructureServiceCollectionExtension
 {
@@ -24,7 +24,7 @@ public static class InfrastructureServiceCollectionExtension
         IConfiguration configuration
     ) =>
         services
-            .AddSingleton<IngestionDbContext>()
+            .AddSingleton<WriteDbContext>()
             .AddRepositories()
             .AddProviders(configuration)
             .AddPublishers(configuration)

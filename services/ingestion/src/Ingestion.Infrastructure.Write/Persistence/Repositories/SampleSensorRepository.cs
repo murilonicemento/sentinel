@@ -1,17 +1,17 @@
 ﻿using Dapper;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Repositories;
-using Ingestion.Infrastructure.DbContext;
+using Ingestion.Infrastructure.Write.Persistence.Postgres.DbContext;
 
-namespace Ingestion.Infrastructure.Repositories;
+namespace Ingestion.Infrastructure.Write.Persistence.Postgres.Repositories;
 
 public class SampleSensorRepository : ISampleSensorRepository
 {
-    private readonly IngestionDbContext _ingestionDbContext;
+    private readonly WriteDbContext _writeDbContext;
 
-    public SampleSensorRepository(IngestionDbContext ingestionDbContext)
+    public SampleSensorRepository(WriteDbContext writeDbContext)
     {
-        _ingestionDbContext = ingestionDbContext;
+        _writeDbContext = writeDbContext;
     }
 
     public async Task<Guid> RegisterAsync(SampleSensor sampleSensor)
@@ -22,7 +22,7 @@ public class SampleSensorRepository : ISampleSensorRepository
                         VALUES 
                             (@Id, @DataCollectionId, @SensorValue, @Unit, @Latitude, @Longitude, @RecordedAt)";
 
-        await _ingestionDbContext.Connection.ExecuteAsync(query, sampleSensor);
+        await _writeDbContext.Connection.ExecuteAsync(query, sampleSensor);
 
         return sampleSensor.Id;
     }

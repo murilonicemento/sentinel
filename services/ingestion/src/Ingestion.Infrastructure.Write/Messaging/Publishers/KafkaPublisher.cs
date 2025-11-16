@@ -1,9 +1,8 @@
 ﻿using Confluent.Kafka;
 using Ingestion.Application.Interfaces.Publishers;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace Ingestion.Infrastructure.Publishers;
+namespace Ingestion.Infrastructure.Write.Messaging.Publishers;
 
 public class KafkaPublisher : IPublisher
 {
