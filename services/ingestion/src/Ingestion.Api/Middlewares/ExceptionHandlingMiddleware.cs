@@ -17,7 +17,9 @@ public class ExceptionHandlingMiddleware
         {
             await _next(httpContext);
         }
-        catch (ArgumentException exception)
+        catch (Exception exception) when (
+            exception is KeyNotFoundException or ArgumentException
+        )
         {
             httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
             await httpContext.Response.WriteAsJsonAsync(new
@@ -25,6 +27,7 @@ public class ExceptionHandlingMiddleware
                 title = "One or more validation errors occurred.",
                 type = exception.GetType().Name,
                 statusCode = StatusCodes.Status400BadRequest,
+                success = false,
                 errors = new { messages = new List<string> { exception.Message } }
             });
         }
@@ -37,6 +40,7 @@ public class ExceptionHandlingMiddleware
                 title = "An error occurred.",
                 type = exception.GetType().Name,
                 statusCode = StatusCodes.Status500InternalServerError,
+                success = false,
                 error = exception.Message
             });
         }
