@@ -6,11 +6,12 @@ using Microsoft.Extensions.Logging;
 
 namespace Ingestion.Infrastructure.HostedServices;
 
-public class OutboxHostedService : IHostedService
+public class OutboxHostedService : BackgroundService
 {
     private readonly IOutboxRepository _outboxRepository;
     private readonly IPublisher _kafkaPublisher;
     private readonly ILogger<OutboxHostedService> _logger;
+    private readonly TimeSpan _interval = TimeSpan.FromSeconds(10);
 
     public OutboxHostedService(
         IOutboxRepository outboxRepository,
@@ -23,25 +24,33 @@ public class OutboxHostedService : IHostedService
         _logger = logger;
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        var pending = await _outboxRepository.GetPending();
-
-        foreach (var row in pending)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            try
+            var pending = await _outboxRepository.GetPending();
+
+            foreach (var row in pending)
             {
-                await _kafkaPublisher.PublishAsync(row.OutboxType, row.Payload, cancellationToken);
-                await _outboxRepository.UpdateProcessed(row.Id);
-                _logger.LogInformation("Outbox message published with success with id {id}.", row.Id);
+                try
+                {
+                    await _kafkaPublisher.PublishAsync(row.OutboxType, row.Payload, cancellationToken);
+                    await _outboxRepository.UpdateProcessed(row.Id);
+                    _logger.LogInformation("Outbox message published with success with id {id}.", row.Id);
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception, "Failed to publish outbox {outboxId}", row.Id);
+                }
             }
-            catch (Exception exception)
-            {
-                _logger.LogError(exception, "Failed to publish outbox {outboxId}", row.Id);
-            }
+
+            await Task.Delay(_interval, cancellationToken);
         }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken) =>
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
         await _kafkaPublisher.DisposeAsync();
+        await base.StopAsync(cancellationToken);
+    }
 }

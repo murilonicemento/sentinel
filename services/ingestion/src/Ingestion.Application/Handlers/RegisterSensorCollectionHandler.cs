@@ -1,10 +1,8 @@
 ﻿using System.Text.Json;
 using Ingestion.Application.Commands;
-using Ingestion.Application.DTO;
 using Ingestion.Application.Events;
 using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.Providers;
-using Ingestion.Domain.AggregateRoots;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Outbox;
@@ -68,7 +66,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
             var isValidFrequency = CollectionFrequencyType
                 .From(dataSource.CollectionFrequency)
                 .IsValidFrequency(lastDataCollected.CollectedAt);
-        
+
             if (!isValidFrequency)
                 throw new ArgumentException(
                     $"Unable to collect data. The collection frequency to data source is {dataSource.CollectionFrequency}");
@@ -110,8 +108,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
             );
 
             await _sampleSensorRepository.RegisterAsync(sampleSensor);
-            
-            // TODO: testar kafka
+
             var intensity = MeasurementType
                 .From(dataSource.MeasurementType)
                 .CalculateIntensity(sampleSensorDto.SensorValue);

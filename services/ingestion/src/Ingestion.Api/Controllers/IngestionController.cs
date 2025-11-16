@@ -19,11 +19,11 @@ public class IngestionController : ControllerBase
     [HttpPost("data-source")]
     public async Task<ActionResult<RegisterDatasourceResponseDTO>> RegisterDatasource(RegisterDataSourceCommand command)
     {
-        var response = await _mediator.Send(command);
+        var (dataSourceId, tenantId) = await _mediator.Send(command);
 
         return Created(
             "api/ingestion/data-source",
-            new { response.dataSourceId, response.tenantId }
+            new RegisterDatasourceResponseDTO { DataSourceId = dataSourceId, TenantId = tenantId }
         );
     }
 
