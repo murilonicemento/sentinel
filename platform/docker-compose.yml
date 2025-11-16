@@ -24,9 +24,9 @@
       - ConnectionStrings__Redis=${ConnectionStrings__Redis}
       - ConnectionStrings__Kafka=${ConnectionStrings__Kafka}
       - MinIO__Host=${MinIO__Host}
-      - MinIO__Host=${MinIO__Port}
-      - MinIO__AccessKey=${MinIO__AccessKey}
-      - MinIO__SecretKey=${MinIO__SecretKey}
+      - MinIO__Port=${MinIO__Port}
+      - MinIO__AccessKey=${MINIO_ROOT_USER}
+      - MinIO__SecretKey=${MINIO_ROOT_PASSWORD}
     ports:
       - "7001:8080"
     depends_on:
@@ -68,6 +68,7 @@
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -102,6 +103,21 @@
       - ZOOKEEPER_TICK_TIME=2000
     ports:
       - "2181:2181"
+    restart: unless-stopped
+    networks:
+      - sentinel-network
+  kafkaui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka
+      - zookeeper
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     restart: unless-stopped
     networks:
       - sentinel-network
