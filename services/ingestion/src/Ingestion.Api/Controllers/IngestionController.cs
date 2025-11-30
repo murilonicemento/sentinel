@@ -29,7 +29,7 @@ public class IngestionController : ControllerBase
     }
 
     [HttpGet("collection-statistics")]
-    public async Task<ActionResult<ResponseBaseDTO<ClimaticEventDetectedEvent>>> GetCollectionStatistics(
+    public async Task<ActionResult<ResponseBaseDTO<CollectionStatisticsResponseDTO>>> GetCollectionStatistics(
         [FromQuery] DateTime initialDate,
         [FromQuery] DateTime endDate)
     {

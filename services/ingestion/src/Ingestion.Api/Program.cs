@@ -5,11 +5,21 @@ using Ingestion.Application;
 using Ingestion.Infrastructure.Read;
 using Ingestion.Infrastructure.Write;
 using Microsoft.AspNetCore.Mvc;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Conventions;
+using MongoDB.Bson.Serialization.Serializers;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+var pack = new ConventionPack
+{
+    new IgnoreExtraElementsConvention(true)
+};
+BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+ConventionRegistry.Register("IgnoreExtra", pack, _ => true);
 
 builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
 builder.Services

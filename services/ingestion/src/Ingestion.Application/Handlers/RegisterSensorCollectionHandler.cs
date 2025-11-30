@@ -8,6 +8,7 @@ using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Outbox;
 using Ingestion.Domain.Repositories;
 using Ingestion.Domain.ValueObjects;
+using Ingestion.Infrastructure.Read.Persistence.DbContext;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 
@@ -21,6 +22,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
     private readonly IEventDeduplicator _eventDeduplicator;
     private readonly IObjectStorageProvider _minioProvider;
     private readonly IOutboxRepository _outboxRepository;
+    private readonly ReadDbContext _readDbContext;
     private readonly IConfiguration _configuration;
 
     public RegisterSensorCollectionHandler(
@@ -30,6 +32,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         IEventDeduplicator eventDeduplicator,
         IObjectStorageProvider minioProvider,
         IOutboxRepository outboxRepository,
+        ReadDbContext readDbContext,
         IConfiguration configuration
     )
     {
@@ -39,6 +42,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         _eventDeduplicator = eventDeduplicator;
         _minioProvider = minioProvider;
         _outboxRepository = outboxRepository;
+        _readDbContext = readDbContext;
         _configuration = configuration;
     }
 
@@ -66,12 +70,12 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
             var isValidFrequency = CollectionFrequencyType
                 .From(dataSource.CollectionFrequency)
                 .IsValidFrequency(lastDataCollected.CollectedAt);
-
+        
             if (!isValidFrequency)
                 throw new ArgumentException(
                     $"Unable to collect data. The collection frequency to data source is {dataSource.CollectionFrequency}");
         }
-
+        
         var deduplicateKey = $"ing:{request.TenantId}:{request.DatasourceId}:{request.CollectedAt:yyyyMMddHHmmss}";
         var isDuplicate = await _eventDeduplicator.IsDuplicateAsync(deduplicateKey);
 
@@ -94,6 +98,8 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         );
 
         await _dataCollectionRepository.RegisterAsync(dataCollection);
+
+        var collection = _readDbContext.GetCollection<ClimaticEventDetectedEvent>("events");
 
         foreach (var sampleSensorDto in request.SampleSensors)
         {
@@ -129,6 +135,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
                 climaticEventDetectedEventJson
             );
 
+            await collection.InsertOneAsync(climaticEventDetectedEvent, cancellationToken);
             await _outboxRepository.RegisterAsync(outboxMessage);
         }
 
