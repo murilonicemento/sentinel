@@ -19,7 +19,8 @@ public class IngestionController : ControllerBase
     }
 
     [HttpGet("last-detected-events")]
-    public async Task<ActionResult<ClimaticEventDetectedEvent>> GetLastDetectedEvents([FromQuery] int limit = 50)
+    public async Task<ActionResult<ResponseBaseDTO<IEnumerable<ClimaticEventDetectedEvent>>>> GetLastDetectedEvents(
+        [FromQuery] int limit = 50)
     {
         var query = new GetLatestDetectedEventsQuery { Limit = limit };
         var lastDetectedEvents = await _mediator.Send(query);
@@ -28,16 +29,19 @@ public class IngestionController : ControllerBase
     }
 
     [HttpGet("collection-statistics")]
-    public async Task<ActionResult<ClimaticEventDetectedEvent>> GetCollectionStatistics(
-        GetLatestDetectedEventsQuery query)
+    public async Task<ActionResult<ResponseBaseDTO<ClimaticEventDetectedEvent>>> GetCollectionStatistics(
+        [FromQuery] DateTime initialDate,
+        [FromQuery] DateTime endDate)
     {
+        var query = new GetCollectionStatisticsQuery { InitialDate = initialDate, EndDate = endDate };
         var lastDetectedEvents = await _mediator.Send(query);
 
         return Ok(lastDetectedEvents);
     }
 
     [HttpPost("data-source")]
-    public async Task<ActionResult<RegisterDatasourceResponseDTO>> RegisterDatasource(RegisterDataSourceCommand command)
+    public async Task<ActionResult<ResponseBaseDTO<RegisterDatasourceResponseDTO>>> RegisterDatasource(
+        [FromBody] RegisterDataSourceCommand command)
     {
         var (dataSourceId, tenantId) = await _mediator.Send(command);
 
@@ -48,7 +52,8 @@ public class IngestionController : ControllerBase
     }
 
     [HttpPost("sensor-collection")]
-    public async Task<ActionResult<Guid>> RegisterSensorCollection([FromBody] RegisterSensorCollectionCommand command)
+    public async Task<ActionResult<ResponseBaseDTO<Guid>>> RegisterSensorCollection(
+        [FromBody] RegisterSensorCollectionCommand command)
     {
         var sensorCollectionId = await _mediator.Send(command);
 

@@ -1,6 +1,8 @@
 using System.Net;
+using Ingestion.Api.Filters;
 using Ingestion.Api.Middlewares;
 using Ingestion.Application;
+using Ingestion.Infrastructure.Read;
 using Ingestion.Infrastructure.Write;
 using Microsoft.AspNetCore.Mvc;
 using Scalar.AspNetCore;
@@ -9,11 +11,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
 builder.Services
     .AddOpenApi()
     .AddApplicationServiceCollection()
-    .AddInfrastructureServiceCollection(builder.Configuration)
+    .AddInfrastructureReadServiceCollection()
+    .AddInfrastructureWriteServiceCollection(builder.Configuration)
     .Configure<ApiBehaviorOptions>(options =>
     {
         options.InvalidModelStateResponseFactory = context =>
@@ -27,7 +30,9 @@ builder.Services
             var responseObj = new
             {
                 title = "One or more validation errors occurred.",
+                type = "RequestFormat",
                 statusCode = HttpStatusCode.BadRequest,
+                success = false,
                 errors = new
                 {
                     messages = errors
