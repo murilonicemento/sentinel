@@ -9,7 +9,7 @@ using MongoDB.Driver;
 namespace Ingestion.Application.Handlers;
 
 public class
-    GetCollectionStatisticsHandler : IRequestHandler<GetCollectionStatisticsQuery, CollectionStatisticsResponse>
+    GetCollectionStatisticsHandler : IRequestHandler<GetCollectionStatisticsQuery, CollectionStatisticsResponseDTO>
 {
     private readonly ReadDbContext _context;
 
@@ -18,7 +18,7 @@ public class
         _context = context;
     }
 
-    public async Task<CollectionStatisticsResponse> Handle(GetCollectionStatisticsQuery request,
+    public async Task<CollectionStatisticsResponseDTO> Handle(GetCollectionStatisticsQuery request,
         CancellationToken cancellationToken)
     {
         var collection = _context.GetCollection<ClimaticEventDetectedEvent>("events_normalized");
@@ -32,33 +32,40 @@ public class
         var filter = filters.Count > 0
             ? Builders<ClimaticEventDetectedEvent>.Filter.And(filters)
             : Builders<ClimaticEventDetectedEvent>.Filter.Empty;
+        var pipeline = new IPipelineStageDefinition[]
+        {
+            PipelineStageDefinitionBuilder.Match(filter),
+            PipelineStageDefinitionBuilder.Group<ClimaticEventDetectedEvent, BsonNull, BsonDocument>(
+                _ => BsonNull.Value,
+                g => new BsonDocument
+                {
+                    { "totalEvents", new BsonDocument("$sum", 1) },
+                    { "totalByType", new BsonDocument("$push", "$type") },
+                    { "minIntensity", new BsonDocument("$min", "$intensity") },
+                    { "maxIntensity", new BsonDocument("$max", "$intensity") },
+                    { "averageIntensity", new BsonDocument("$avg", "$intensity") }
+                }
+            )
+        };
+        var bson = await collection
+            .Aggregate<BsonDocument>(pipeline, cancellationToken: cancellationToken)
+            .FirstOrDefaultAsync(cancellationToken: cancellationToken);
 
-        return new CollectionStatisticsResponse();
+        if (bson is null)
+            return new CollectionStatisticsResponseDTO();
 
-        // var pipeline = new[]
-        // {
-        //     PipelineStageDefinitionBuilder.Match(filter),
-        //     PipelineStageDefinitionBuilder.Group(
-        //         BsonNull.Value,
-        //         new BsonDocument
-        //         {
-        //             { "totalEventos", new BsonDocument("$sum", 1) },
-        //             {
-        //                 "totalPorTipo",
-        //                 new BsonDocument("$sum", new BsonDocument("$cond", new BsonArray { "$type", 1, 0 }))
-        //             },
-        //             { "minIntensidade", new BsonDocument("$min", "$intensity") },
-        //             { "maxIntensidade", new BsonDocument("$max", "$intensity") },
-        //             { "mediaIntensidade", new BsonDocument("$avg", "$intensity") }
-        //         }
-        //     )
-        // };
-        //
-        // var result =
-        //     await collection.AggregateAsync<CollectionStatisticsResponse>(pipeline,
-        //         cancellationToken: cancellationToken);
-        //
-        // return await result.FirstOrDefaultAsync(cancellationToken: cancellationToken)
-        //        ?? new CollectionStatisticsResponse();
+        var types = bson["totalByType"].AsBsonArray
+            .Select(t => t.AsString)
+            .GroupBy(t => t)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        return new CollectionStatisticsResponseDTO
+        {
+            TotalEvents = bson["totalEvents"].ToInt32(),
+            TotalByType = types,
+            MinIntensity = bson["minIntensity"].ToDouble(),
+            MaxIntensity = bson["maxIntensity"].ToDouble(),
+            AverageIntensity = bson["averageIntensity"].ToDouble()
+        };
     }
 }

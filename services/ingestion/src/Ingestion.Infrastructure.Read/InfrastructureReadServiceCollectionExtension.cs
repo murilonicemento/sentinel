@@ -3,9 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Ingestion.Infrastructure.Read;
 
-public static class InfrastructureServiceCollectionExtension
+public static class InfrastructureReadServiceCollectionExtension
 {
-    public static IServiceCollection AddReadInfrastructureServiceCollection(
+    public static IServiceCollection AddInfrastructureReadServiceCollection(
         this IServiceCollection services
     ) =>
         services

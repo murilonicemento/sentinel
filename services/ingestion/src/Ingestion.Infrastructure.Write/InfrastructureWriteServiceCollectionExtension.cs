@@ -17,9 +17,9 @@ using StackExchange.Redis;
 
 namespace Ingestion.Infrastructure.Write;
 
-public static class InfrastructureServiceCollectionExtension
+public static class InfrastructureWriteServiceCollectionExtension
 {
-    public static IServiceCollection AddInfrastructureServiceCollection(
+    public static IServiceCollection AddInfrastructureWriteServiceCollection(
         this IServiceCollection services,
         IConfiguration configuration
     ) =>
