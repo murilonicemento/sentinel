@@ -1,3 +1,4 @@
+using System.Net;
 using Ingestion.Application.Commands;
 using Ingestion.Application.DTO;
 using Ingestion.Application.Events;
@@ -37,9 +38,21 @@ public class RegisterSensorCollectionHandlerTests
         _mockEventDeduplicator = new Mock<IEventDeduplicator>();
         _mockMinioProvider = new Mock<IObjectStorageProvider>();
         _mockOutboxRepository = new Mock<IOutboxRepository>();
-        _mockReadDbContext = new Mock<ReadDbContext>(MockBehavior.Loose);
-        _mockConfiguration = new Mock<IConfiguration>();
 
+        var configData = new Dictionary<string, string?>
+        {
+            { "ConnectionStrings:IngestionReadDatabase", "mongodb://localhost:27017" }
+        };
+
+        _mockConfiguration = new Mock<IConfiguration>();
+        _mockConfiguration.Setup(x => x[It.IsAny<string>()])
+            .Returns((string key) => configData.TryGetValue(key, out var value) ? value : null);
+
+        var configurationBuilder = new ConfigurationBuilder();
+        configurationBuilder.AddInMemoryCollection(configData);
+        var realConfiguration = configurationBuilder.Build();
+
+        _mockReadDbContext = new Mock<ReadDbContext>(realConfiguration) { CallBase = false };
         _handler = new RegisterSensorCollectionHandler(
             _mockDataSourceRepository.Object,
             _mockDataCollectionRepository.Object,
@@ -52,34 +65,26 @@ public class RegisterSensorCollectionHandlerTests
         );
     }
 
-    private object CreateMockPutObjectResponse()
-    {
-        return new { Bucket = "test-bucket", Key = "raw/test.json", ETag = "test-etag" };
-    }
-
     #region Validação de Payload
 
     [Fact]
     public async Task Handle_WithNullPayload_ThrowsArgumentException()
     {
-        // Arrange
         var command = new RegisterSensorCollectionCommand
         {
-            Payload = null,
+            Payload = null!,
             DatasourceId = Guid.NewGuid(),
             TenantId = Guid.NewGuid(),
             CollectedAt = DateTime.UtcNow,
             SampleSensors = new List<SampleSensorDTO>()
         };
 
-        // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
     }
 
     [Fact]
     public async Task Handle_WithEmptyPayload_ThrowsArgumentException()
     {
-        // Arrange
         var command = new RegisterSensorCollectionCommand
         {
             Payload = string.Empty,
@@ -89,7 +94,6 @@ public class RegisterSensorCollectionHandlerTests
             SampleSensors = new List<SampleSensorDTO>()
         };
 
-        // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
     }
 
@@ -100,10 +104,9 @@ public class RegisterSensorCollectionHandlerTests
     [Fact]
     public async Task Handle_WithNullUnitInSampleSensor_ThrowsArgumentException()
     {
-        // Arrange
         var sampleSensors = new List<SampleSensorDTO>
         {
-            new() { Unit = null, SensorValue = 25.5 }
+            new() { Unit = null!, SensorValue = 25.5 }
         };
         var command = new RegisterSensorCollectionCommand
         {
@@ -114,14 +117,12 @@ public class RegisterSensorCollectionHandlerTests
             SampleSensors = sampleSensors
         };
 
-        // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
     }
 
     [Fact]
     public async Task Handle_WithEmptyUnitInSampleSensor_ThrowsArgumentException()
     {
-        // Arrange
         var sampleSensors = new List<SampleSensorDTO>
         {
             new() { Unit = string.Empty, SensorValue = 25.5 }
@@ -135,7 +136,6 @@ public class RegisterSensorCollectionHandlerTests
             SampleSensors = sampleSensors
         };
 
-        // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
     }
 
@@ -146,12 +146,11 @@ public class RegisterSensorCollectionHandlerTests
     [Fact]
     public async Task Handle_WithNonExistentDataSource_ThrowsKeyNotFoundException()
     {
-        // Arrange
         var datasourceId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();
         var sampleSensors = new List<SampleSensorDTO>
         {
-            new SampleSensorDTO { Unit = "C", SensorValue = 25.5 }
+            new() { Unit = "C", SensorValue = 25.5 }
         };
         var command = new RegisterSensorCollectionCommand
         {
@@ -163,9 +162,8 @@ public class RegisterSensorCollectionHandlerTests
         };
 
         _mockDataSourceRepository.Setup(x => x.GetByIdAndTenantId(datasourceId, tenantId))
-            .Returns((DataSource)null);
+            .Returns((DataSource?)null);
 
-        // Act & Assert
         var exception =
             await Assert.ThrowsAsync<KeyNotFoundException>(() => _handler.Handle(command, CancellationToken.None));
         Assert.Contains("Data source or tenant not exist", exception.Message);
@@ -178,7 +176,6 @@ public class RegisterSensorCollectionHandlerTests
     [Fact]
     public async Task Handle_WithInvalidUnitForMeasurementType_ThrowsArgumentException()
     {
-        // Arrange
         var datasourceId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();
         var dataSource = new DataSource(
@@ -190,7 +187,6 @@ public class RegisterSensorCollectionHandlerTests
             "Hourly",
             tenantId
         );
-
         var sampleSensors = new List<SampleSensorDTO>
         {
             new()
@@ -202,7 +198,6 @@ public class RegisterSensorCollectionHandlerTests
                 RecordedAt = DateTime.UtcNow
             }
         };
-
         var command = new RegisterSensorCollectionCommand
         {
             Payload = "{\"data\": \"test\"}",
@@ -215,7 +210,6 @@ public class RegisterSensorCollectionHandlerTests
         _mockDataSourceRepository.Setup(x => x.GetByIdAndTenantId(datasourceId, tenantId))
             .Returns(dataSource);
 
-        // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
     }
 
@@ -226,7 +220,6 @@ public class RegisterSensorCollectionHandlerTests
     [Fact]
     public async Task Handle_WithInvalidCollectionFrequency_ThrowsArgumentException()
     {
-        // Arrange
         var datasourceId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();
         var collectionTime = DateTime.UtcNow.AddHours(-1);
@@ -238,7 +231,6 @@ public class RegisterSensorCollectionHandlerTests
             "{}",
             tenantId
         );
-
         var dataSource = new DataSource(
             datasourceId,
             "Temperature Sensor",
@@ -251,10 +243,9 @@ public class RegisterSensorCollectionHandlerTests
         {
             DataCollections = new List<DataCollection> { lastCollection }
         };
-
         var sampleSensors = new List<SampleSensorDTO>
         {
-            new SampleSensorDTO
+            new()
             {
                 Unit = "C",
                 SensorValue = 25.5,
@@ -276,7 +267,6 @@ public class RegisterSensorCollectionHandlerTests
         _mockDataSourceRepository.Setup(x => x.GetByIdAndTenantId(datasourceId, tenantId))
             .Returns(dataSource);
 
-        // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
     }
 
@@ -287,7 +277,6 @@ public class RegisterSensorCollectionHandlerTests
     [Fact]
     public async Task Handle_WithDuplicateEvent_ReturnsDataSourceIdWithoutProcessing()
     {
-        // Arrange
         var datasourceId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();
         var dataSource = new DataSource(
@@ -299,10 +288,9 @@ public class RegisterSensorCollectionHandlerTests
             "Hourly",
             tenantId
         );
-
         var sampleSensors = new List<SampleSensorDTO>
         {
-            new SampleSensorDTO
+            new()
             {
                 Unit = "C",
                 SensorValue = 25.5,
@@ -311,7 +299,6 @@ public class RegisterSensorCollectionHandlerTests
                 RecordedAt = DateTime.UtcNow
             }
         };
-
         var command = new RegisterSensorCollectionCommand
         {
             Payload = "{\"data\": \"test\"}",
@@ -326,10 +313,8 @@ public class RegisterSensorCollectionHandlerTests
         _mockEventDeduplicator.Setup(x => x.IsDuplicateAsync(It.IsAny<string>()))
             .ReturnsAsync(true);
 
-        // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        // Assert
         Assert.Equal(datasourceId, result);
         _mockDataCollectionRepository.Verify(x => x.RegisterAsync(It.IsAny<DataCollection>()), Times.Never);
         _mockSampleSensorRepository.Verify(x => x.RegisterAsync(It.IsAny<SampleSensor>()), Times.Never);
@@ -342,7 +327,6 @@ public class RegisterSensorCollectionHandlerTests
     [Fact]
     public async Task Handle_WithValidCommand_SuccessfullyRegistersCollection()
     {
-        // Arrange
         var datasourceId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();
         var dataSource = new DataSource(
@@ -354,10 +338,9 @@ public class RegisterSensorCollectionHandlerTests
             "Hourly",
             tenantId
         );
-
         var sampleSensors = new List<SampleSensorDTO>
         {
-            new SampleSensorDTO
+            new()
             {
                 Unit = "C",
                 SensorValue = 25.5,
@@ -366,7 +349,6 @@ public class RegisterSensorCollectionHandlerTests
                 RecordedAt = DateTime.UtcNow
             }
         };
-
         var command = new RegisterSensorCollectionCommand
         {
             Payload = "{\"data\": \"test\"}",
@@ -382,18 +364,22 @@ public class RegisterSensorCollectionHandlerTests
             .ReturnsAsync(false);
         _mockConfiguration.Setup(x => x["MinIO:BucketName"])
             .Returns("test-bucket");
-
         _mockMinioProvider.Setup(x => x.UploadJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((PutObjectResponse)CreateMockPutObjectResponse());
+            .ReturnsAsync(new UploadResultDTO
+            {
+                ETag = "fake-etag",
+                Size = 123,
+                ObjectName = "whatever.json",
+                ResponseContent = "ok",
+                ResponseStatusCode = HttpStatusCode.OK
+            });
 
         var mockCollection = new Mock<IMongoCollection<ClimaticEventDetectedEvent>>();
         _mockReadDbContext.Setup(x => x.GetCollection<ClimaticEventDetectedEvent>("events"))
             .Returns(mockCollection.Object);
 
-        // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        // Assert
         Assert.Equal(datasourceId, result);
         _mockDataCollectionRepository.Verify(x => x.RegisterAsync(It.IsAny<DataCollection>()), Times.Once);
         _mockSampleSensorRepository.Verify(x => x.RegisterAsync(It.IsAny<SampleSensor>()), Times.Once);
@@ -405,7 +391,6 @@ public class RegisterSensorCollectionHandlerTests
     [Fact]
     public async Task Handle_WithMultipleSampleSensors_RegistersAllSensorsAndEvents()
     {
-        // Arrange
         var datasourceId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();
         var dataSource = new DataSource(
@@ -417,7 +402,6 @@ public class RegisterSensorCollectionHandlerTests
             "Hourly",
             tenantId
         );
-
         var sampleSensors = new List<SampleSensorDTO>
         {
             new()
@@ -437,7 +421,6 @@ public class RegisterSensorCollectionHandlerTests
                 RecordedAt = DateTime.UtcNow
             }
         };
-
         var command = new RegisterSensorCollectionCommand
         {
             Payload = "{\"data\": \"test\"}",
@@ -454,16 +437,21 @@ public class RegisterSensorCollectionHandlerTests
         _mockConfiguration.Setup(x => x["MinIO:BucketName"])
             .Returns("test-bucket");
         _mockMinioProvider.Setup(x => x.UploadJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((PutObjectResponse)CreateMockPutObjectResponse());
+            .ReturnsAsync(new UploadResultDTO
+            {
+                ETag = "fake-etag",
+                Size = 123,
+                ObjectName = "whatever.json",
+                ResponseContent = "ok",
+                ResponseStatusCode = HttpStatusCode.OK
+            });
 
         var mockCollection = new Mock<IMongoCollection<ClimaticEventDetectedEvent>>();
         _mockReadDbContext.Setup(x => x.GetCollection<ClimaticEventDetectedEvent>("events"))
             .Returns(mockCollection.Object);
 
-        // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        // Assert
         Assert.Equal(datasourceId, result);
         _mockSampleSensorRepository.Verify(x => x.RegisterAsync(It.IsAny<SampleSensor>()), Times.Exactly(2));
         _mockOutboxRepository.Verify(x => x.RegisterAsync(It.IsAny<OutboxMessage>()), Times.Exactly(2));
@@ -476,7 +464,6 @@ public class RegisterSensorCollectionHandlerTests
     [Fact]
     public async Task Handle_WithValidFrequencyAndNoLastCollection_Succeeds()
     {
-        // Arrange
         var datasourceId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();
         var dataSource = new DataSource(
@@ -517,16 +504,21 @@ public class RegisterSensorCollectionHandlerTests
         _mockConfiguration.Setup(x => x["MinIO:BucketName"])
             .Returns("test-bucket");
         _mockMinioProvider.Setup(x => x.UploadJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((PutObjectResponse)CreateMockPutObjectResponse());
+            .ReturnsAsync(new UploadResultDTO
+            {
+                ETag = "fake-etag",
+                Size = 123,
+                ObjectName = "whatever.json",
+                ResponseContent = "ok",
+                ResponseStatusCode = HttpStatusCode.OK
+            });
 
         var mockCollection = new Mock<IMongoCollection<ClimaticEventDetectedEvent>>();
         _mockReadDbContext.Setup(x => x.GetCollection<ClimaticEventDetectedEvent>("events"))
             .Returns(mockCollection.Object);
 
-        // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        // Assert
         Assert.Equal(datasourceId, result);
         _mockDataCollectionRepository.Verify(x => x.RegisterAsync(It.IsAny<DataCollection>()), Times.Once);
     }
@@ -534,7 +526,6 @@ public class RegisterSensorCollectionHandlerTests
     [Fact]
     public async Task Handle_WithMinIOUploadFailure_PropagatesException()
     {
-        // Arrange
         var datasourceId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();
         var dataSource = new DataSource(
@@ -546,10 +537,9 @@ public class RegisterSensorCollectionHandlerTests
             "Hourly",
             tenantId
         );
-
         var sampleSensors = new List<SampleSensorDTO>
         {
-            new SampleSensorDTO
+            new()
             {
                 Unit = "C",
                 SensorValue = 25.5,
@@ -558,7 +548,6 @@ public class RegisterSensorCollectionHandlerTests
                 RecordedAt = DateTime.UtcNow
             }
         };
-
         var command = new RegisterSensorCollectionCommand
         {
             Payload = "{\"data\": \"test\"}",
@@ -577,7 +566,6 @@ public class RegisterSensorCollectionHandlerTests
         _mockMinioProvider.Setup(x => x.UploadJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new Exception("MinIO connection failed"));
 
-        // Act & Assert
         await Assert.ThrowsAsync<Exception>(() => _handler.Handle(command, CancellationToken.None));
     }
 

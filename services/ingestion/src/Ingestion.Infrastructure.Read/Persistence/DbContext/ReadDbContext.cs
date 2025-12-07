@@ -13,6 +13,6 @@ public class ReadDbContext
         _database = client.GetDatabase("IngestionReadModel");
     }
 
-    public IMongoCollection<T> GetCollection<T>(string name)
+    public virtual IMongoCollection<T> GetCollection<T>(string name)
         => _database.GetCollection<T>(name);
 }

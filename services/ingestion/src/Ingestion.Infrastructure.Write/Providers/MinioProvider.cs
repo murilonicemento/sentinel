@@ -1,9 +1,10 @@
 ﻿using System.Text;
+using Ingestion.Application.DTO;
 using Ingestion.Application.Interfaces.Providers;
 using Microsoft.Extensions.Logging;
 using Minio;
 using Minio.DataModel.Args;
-using Minio.DataModel.Response;
+using MongoDB.Bson;
 
 namespace Ingestion.Infrastructure.Write.Providers;
 
@@ -18,7 +19,7 @@ public class MinioProvider : IObjectStorageProvider
         _logger = logger;
     }
 
-    public async Task<PutObjectResponse> UploadJsonAsync(string bucketName, string objectName, string payload)
+    public async Task<UploadResultDTO> UploadJsonAsync(string bucketName, string objectName, string payload)
     {
         try
         {
@@ -45,7 +46,14 @@ public class MinioProvider : IObjectStorageProvider
 
             _logger.LogInformation("Object with name {objectName} was uploaded to MinIO successfully.", objectName);
 
-            return putObject;
+            return new UploadResultDTO
+            {
+                ETag = putObject.Etag,
+                Size = putObject.Size,
+                ObjectName = putObject.ObjectName,
+                ResponseContent = putObject.ResponseContent,
+                ResponseStatusCode = putObject.ResponseStatusCode
+            };
         }
         catch (Exception exception)
         {
