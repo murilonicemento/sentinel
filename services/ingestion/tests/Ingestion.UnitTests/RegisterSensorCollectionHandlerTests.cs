@@ -12,7 +12,6 @@ using Ingestion.Domain.Outbox;
 using Ingestion.Domain.Repositories;
 using Ingestion.Infrastructure.Read.Persistence.DbContext;
 using Microsoft.Extensions.Configuration;
-using Minio.DataModel.Response;
 using MongoDB.Driver;
 using Moq;
 
@@ -65,7 +64,7 @@ public class RegisterSensorCollectionHandlerTests
         );
     }
 
-    #region Validação de Payload
+    #region Payload Validation
 
     [Fact]
     public async Task Handle_WithNullPayload_ThrowsArgumentException()
@@ -99,7 +98,7 @@ public class RegisterSensorCollectionHandlerTests
 
     #endregion
 
-    #region Validação de Unit
+    #region Unit Validation
 
     [Fact]
     public async Task Handle_WithNullUnitInSampleSensor_ThrowsArgumentException()
@@ -141,7 +140,7 @@ public class RegisterSensorCollectionHandlerTests
 
     #endregion
 
-    #region Validação de DataSource e Tenant
+    #region DataSource and Tenant Validation
 
     [Fact]
     public async Task Handle_WithNonExistentDataSource_ThrowsKeyNotFoundException()
@@ -171,7 +170,7 @@ public class RegisterSensorCollectionHandlerTests
 
     #endregion
 
-    #region Validação de Unit Type
+    #region Unit Type Validation
 
     [Fact]
     public async Task Handle_WithInvalidUnitForMeasurementType_ThrowsArgumentException()
@@ -215,7 +214,7 @@ public class RegisterSensorCollectionHandlerTests
 
     #endregion
 
-    #region Validação de Frequência de Coleta
+    #region Collection Frequency Validation
 
     [Fact]
     public async Task Handle_WithInvalidCollectionFrequency_ThrowsArgumentException()
@@ -272,7 +271,7 @@ public class RegisterSensorCollectionHandlerTests
 
     #endregion
 
-    #region Deduplicação
+    #region Deduplication
 
     [Fact]
     public async Task Handle_WithDuplicateEvent_ReturnsDataSourceIdWithoutProcessing()
@@ -322,7 +321,7 @@ public class RegisterSensorCollectionHandlerTests
 
     #endregion
 
-    #region Sucesso
+    #region Success
 
     [Fact]
     public async Task Handle_WithValidCommand_SuccessfullyRegistersCollection()
@@ -459,7 +458,7 @@ public class RegisterSensorCollectionHandlerTests
 
     #endregion
 
-    #region Casos Limite
+    #region Edge Cases
 
     [Fact]
     public async Task Handle_WithValidFrequencyAndNoLastCollection_Succeeds()
