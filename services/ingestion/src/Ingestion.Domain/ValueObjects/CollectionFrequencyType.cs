@@ -25,20 +25,13 @@ public class CollectionFrequencyType : ValueObject
 
     public bool IsValidFrequency(DateTime lastDataCollectedDateTime)
     {
-        switch (Value)
+        return Value switch
         {
-            case "Hourly":
-                if (DateTime.Now.Day - lastDataCollectedDateTime.Day > 1)
-                    return true;
-
-                return DateTime.Now.Hour - lastDataCollectedDateTime.Hour > 1;
-            case "Daily":
-                return DateTime.Now.Day - lastDataCollectedDateTime.Day > 1;
-            case "Weekly":
-                return DateTime.Now.Day - lastDataCollectedDateTime.Day > 7;
-            default:
-                return false;
-        }
+            "Hourly" => (DateTime.Now - lastDataCollectedDateTime).TotalHours > 1,
+            "Daily" => (DateTime.Now - lastDataCollectedDateTime).TotalDays > 1,
+            "Weekly" => (DateTime.Now - lastDataCollectedDateTime).TotalDays > 7,
+            _ => false
+        };
     }
 
     protected override IEnumerable<object> GetEqualityComponents()
