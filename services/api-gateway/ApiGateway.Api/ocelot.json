@@ -1,0 +1,68 @@
+﻿{
+  "Routes": [
+    {
+      "UpstreamPathTemplate": "/gateway/ingestion/data-source",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "UpstreamScheme": "https",
+      "DownstreamPathTemplate": "/api/ingestion/data-source",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api-gateway",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/ingestion/sensor-collection",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "UpstreamScheme": "https",
+      "DownstreamPathTemplate": "/api/ingestion/sensor-collection",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api-gateway",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/ingestion/last-detected-events",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Options"
+      ],
+      "UpstreamScheme": "https",
+      "DownstreamPathTemplate": "/api/ingestion/last-detected-events",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api-gateway",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/ingestion/collection-statistics",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Options"
+      ],
+      "UpstreamScheme": "https",
+      "DownstreamPathTemplate": "/api/ingestion/collection-statistics",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api-gateway",
+          "Port": 8080
+        }
+      ]
+    }
+  ]
+}

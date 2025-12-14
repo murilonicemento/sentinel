@@ -2,36 +2,65 @@ classDiagram
 %% =====================
 %% Namespace: Ingestion
 %% =====================
-namespace Ingestion {
-  class FonteDeDados {
-    +id: Guid
-    +nome: string
-    +tipo: string
-    +coletar(): void
+%% Domain / Persistence Namespace
+namespace Ingestion.Domain {
+  class DataSource {
+    +Id: Guid
+    +Name: string
+    +Type: DataSourceTypeEnum
+    +Endpoint: string
+    +CollectionFrequency: CollectionFrequencyEnum
   }
-  class Coleta {
-    +id: Guid
-    +dataHora: DateTime
-    +payload: string
+
+  class DataCollection {
+    +Id: Guid
+    +DataSourceIdÇ Guid
+    +CollectedAt: DateTime
+    +Payload: string
   }
-  class AmostraSensor {
-    +id: Guid
-    +valor: double
-    +unidade: string
-    +timestamp: DateTime
-  }
-  class EventoClimaticoDTO {
-    +eventoId: Guid
-    +tipoEvento: string
-    +latitude: double
-    +longitude: double
-    +intensidade: double
-    +coletadoEm: DateTime
+
+  class SensorSample {
+    +Id: Guid
+    +DataCollectionId: Guid
+    +SensorValue: double
+    +Unit: string
+    +RecordedAt: DateTime
   }
 }
 
-Coleta --> FonteDeDados
-AmostraSensor --> Coleta
+%% Relações de aggregate
+DataSource "1" --> "N" DataCollection
+DataCollection "1" --> "N" SensorSample
+
+%% Enums
+namespace Ingestion.Domain.Enums {
+  class DataSourceType {
+    <<enumeration>>
+    Sensor
+    Api
+    File
+    ExternalSystem
+  }
+
+  class CollectionFrequency {
+    <<enumeration>>
+    Hourly
+    Daily
+    Weekly
+  }
+}
+
+%% Namespace de eventos (publicados para downstream)
+namespace Ingestion.Events {
+    class ClimaticEventDTO {
+      +EventId: Guid
+      +EventType: string
+      +Latitude: double
+      +Longitude: double
+      +Intensity: double
+      +CollectedAt: DateTime
+    }
+}
 
 %% =====================
 %% Namespace: Geospatial
