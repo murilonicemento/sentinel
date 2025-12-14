@@ -136,11 +136,37 @@
     restart: unless-stopped
     networks:
       - sentinel-network
+  elasticsearch:
+    container_name: elasticsearch
+    image: elasticsearch:8.17.4
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    networks:
+      - sentinel-network
+    restart: unless-stopped
+  kibana:
+    container_name: kibana
+    image: kibana:8.17.4
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    environment:
+      - ELASTICSEARCH_HOSTS=${ElasticSearch_URI}
+    networks:
+      - sentinel-network
+    restart: unless-stopped
 volumes:
   postgres-data:
   mongo-data:
   redis-data:
   minio-data:
+  elasticsearch-data:
 networks:
   sentinel-network:
   

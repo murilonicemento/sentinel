@@ -10,6 +10,8 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Bson.Serialization.Serializers;
 using Scalar.AspNetCore;
+using Serilog;
+using Serilog.Sinks.Elasticsearch;
 
 namespace Ingestion.Api;
 
@@ -21,16 +23,33 @@ public class Program
 
         Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
-        if (BsonSerializer.LookupSerializer<Guid>().GetType() != typeof(GuidSerializer))
+        var pack = new ConventionPack
         {
-            var pack = new ConventionPack
-            {
-                new IgnoreExtraElementsConvention(true)
-            };
-            BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
-            ConventionRegistry.Register("IgnoreExtra", pack, _ => true);
-        }
+            new IgnoreExtraElementsConvention(true)
+        };
+        BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+        ConventionRegistry.Register("IgnoreExtra", pack, _ => true);
 
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+
+        Log.Logger = new LoggerConfiguration()
+            .Enrich.FromLogContext()
+            .Enrich.WithEnvironmentName()
+            .Enrich.WithThreadId()
+            .WriteTo.Console()
+            .WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(builder.Configuration["ElasticSearch:URI"]!))
+            {
+                AutoRegisterTemplate = true,
+                IndexFormat = $"ingestion-logs-{environment.ToLower()}-{DateTime.UtcNow:yyyy-MM}",
+                NumberOfShards = 1,
+                NumberOfReplicas = 1,
+                MinimumLogEventLevel = Serilog.Events.LogEventLevel.Information,
+                FailureCallback = e =>
+                    Console.WriteLine("An error occurred while sending logs to Elasticsearch: " + e.MessageTemplate)
+            })
+            .CreateLogger();
+
+        builder.Host.UseSerilog();
         builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
         builder.Services
             .AddOpenApi()
@@ -62,8 +81,7 @@ public class Program
                     return new BadRequestObjectResult(responseObj);
                 };
             });
-        ;
-        
+
         var app = builder.Build();
 
         if (app.Environment.IsDevelopment())

@@ -12,6 +12,7 @@ using Ingestion.Domain.Outbox;
 using Ingestion.Domain.Repositories;
 using Ingestion.Infrastructure.Read.Persistence.DbContext;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Moq;
 
@@ -27,6 +28,7 @@ public class RegisterSensorCollectionHandlerTests
     private readonly Mock<IOutboxRepository> _mockOutboxRepository;
     private readonly Mock<ReadDbContext> _mockReadDbContext;
     private readonly Mock<IConfiguration> _mockConfiguration;
+    private readonly Mock<ILogger<RegisterSensorCollectionHandler>> _mockLogger;
     private readonly RegisterSensorCollectionHandler _handler;
 
     public RegisterSensorCollectionHandlerTests()
@@ -37,6 +39,7 @@ public class RegisterSensorCollectionHandlerTests
         _mockEventDeduplicator = new Mock<IEventDeduplicator>();
         _mockMinioProvider = new Mock<IObjectStorageProvider>();
         _mockOutboxRepository = new Mock<IOutboxRepository>();
+        _mockLogger = new Mock<ILogger<RegisterSensorCollectionHandler>>();
 
         var configData = new Dictionary<string, string?>
         {
@@ -60,7 +63,8 @@ public class RegisterSensorCollectionHandlerTests
             _mockMinioProvider.Object,
             _mockOutboxRepository.Object,
             _mockReadDbContext.Object,
-            _mockConfiguration.Object
+            _mockConfiguration.Object,
+            _mockLogger.Object
         );
     }
 

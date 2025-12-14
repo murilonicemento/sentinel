@@ -11,6 +11,7 @@ using Ingestion.Domain.ValueObjects;
 using Ingestion.Infrastructure.Read.Persistence.DbContext;
 using MediatR;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Ingestion.Application.Handlers;
 
@@ -24,6 +25,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
     private readonly IOutboxRepository _outboxRepository;
     private readonly ReadDbContext _readDbContext;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<RegisterSensorCollectionHandler> _logger;
 
     public RegisterSensorCollectionHandler(
         IDataSourceRepository dataSourceRepository,
@@ -33,8 +35,8 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         IObjectStorageProvider minioProvider,
         IOutboxRepository outboxRepository,
         ReadDbContext readDbContext,
-        IConfiguration configuration
-    )
+        IConfiguration configuration,
+        ILogger<RegisterSensorCollectionHandler> logger)
     {
         _dataSourceRepository = dataSourceRepository;
         _dataCollectionRepository = dataCollectionRepository;
@@ -44,6 +46,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         _outboxRepository = outboxRepository;
         _readDbContext = readDbContext;
         _configuration = configuration;
+        _logger = logger;
     }
 
     public async Task<Guid> Handle(RegisterSensorCollectionCommand request, CancellationToken cancellationToken)
@@ -56,6 +59,9 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         var dataSource = _dataSourceRepository.GetByIdAndTenantId(request.DatasourceId, request.TenantId) ??
                          throw new KeyNotFoundException(
                              $"Data source or tenant not exist. Data source Id: {request.DatasourceId}; Tenant Id: {request.TenantId}");
+
+        _logger.LogInformation("Datasource info. Id: {id}; TenantId: {tenantId}", dataSource.Id, dataSource.TenantId);
+
         var isSamplesUnitValid = request.SampleSensors
             .Select(sample => MeasurementType.From(dataSource.MeasurementType).IsValidUnit(sample.Unit))
             .Any(isValidUnit => isValidUnit);
@@ -65,25 +71,38 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
 
         var lastDataCollected = dataSource.DataCollections.OrderByDescending(x => x.CollectedAt).FirstOrDefault();
 
+        _logger.LogInformation(
+            "Last data collected from DataSource with id {id} and name: {name}. Json {lastDataCollected}",
+            dataSource.Id,
+            dataSource.Name,
+            JsonSerializer.Serialize(lastDataCollected)
+        );
+
         if (lastDataCollected is not null)
         {
             var isValidFrequency = CollectionFrequencyType
                 .From(dataSource.CollectionFrequency)
                 .IsValidFrequency(lastDataCollected.CollectedAt);
-        
+
             if (!isValidFrequency)
                 throw new ArgumentException(
                     $"Unable to collect data. The collection frequency to data source is {dataSource.CollectionFrequency}");
         }
-        
+
         var deduplicateKey = $"ing:{request.TenantId}:{request.DatasourceId}:{request.CollectedAt:yyyyMMddHHmmss}";
         var isDuplicate = await _eventDeduplicator.IsDuplicateAsync(deduplicateKey);
 
         if (isDuplicate)
+        {
+            _logger.LogInformation("Event duplicated. DeduplicateKey: {deduplicateKey}", deduplicateKey);
             return dataSource.Id;
+        }
 
         var collectionId = Guid.NewGuid();
         var objectName = $"raw/{collectionId}.json";
+        
+        _logger.LogInformation("MinIO Object Name: {objectName}", objectName);
+        
         var putObjectResponse = await _minioProvider.UploadJsonAsync(
             _configuration["MinIO:BucketName"]!,
             objectName,
@@ -134,7 +153,10 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
                 "climatic-event-detected",
                 climaticEventDetectedEventJson
             );
-
+            _logger.LogInformation(
+                "Inserting climatic event to mongodb. Json event: {ClimaticEventDetectedEventJson}",
+                climaticEventDetectedEventJson
+            );
             await collection.InsertOneAsync(climaticEventDetectedEvent, cancellationToken);
             await _outboxRepository.RegisterAsync(outboxMessage);
         }
