@@ -33,13 +33,29 @@
       ]
     },
     {
-      "UpstreamPathTemplate": "/gateway/ingestion/natural-event",
+      "UpstreamPathTemplate": "/gateway/ingestion/last-detected-events",
       "UpstreamHttpMethod": [
-        "Post",
+        "Get",
         "Options"
       ],
       "UpstreamScheme": "https",
-      "DownstreamPathTemplate": "/api/ingestion/natural-event",
+      "DownstreamPathTemplate": "/api/ingestion/last-detected-events",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "api-gateway",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/ingestion/collection-statistics",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Options"
+      ],
+      "UpstreamScheme": "https",
+      "DownstreamPathTemplate": "/api/ingestion/collection-statistics",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
         {
