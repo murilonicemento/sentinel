@@ -1,7 +1,7 @@
 ﻿using Dapper;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Outbox;
-using Ingestion.Infrastructure.Write.Persistence.Postgres.DbContext;
+using Ingestion.Infrastructure.Write.Persistence.DbContext;
 
 namespace Ingestion.Infrastructure.Write.Persistence.Postgres.Repositories;
 

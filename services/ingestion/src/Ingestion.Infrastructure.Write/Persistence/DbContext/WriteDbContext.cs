@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Npgsql;
 
-namespace Ingestion.Infrastructure.Write.Persistence.Postgres.DbContext;
+namespace Ingestion.Infrastructure.Write.Persistence.DbContext;
 
 public class WriteDbContext
 {

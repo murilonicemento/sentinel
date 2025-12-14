@@ -1,8 +1,10 @@
 using Ingestion.Api;
+using Ingestion.Infrastructure.Write.HostedServices;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Testcontainers.Kafka;
 using Testcontainers.Minio;
 using Testcontainers.MongoDb;
 using Testcontainers.PostgreSql;
@@ -10,7 +12,7 @@ using Testcontainers.Redis;
 
 namespace Ingestion.IntegrationTests;
 
-public class IngestionWebApplicationFactory : WebApplicationFactory<Program>
+public class IngestionWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgreSqlContainer = new PostgreSqlBuilder()
         .WithImage("postgres")
@@ -29,6 +31,12 @@ public class IngestionWebApplicationFactory : WebApplicationFactory<Program>
         .WithImage("redis")
         .Build();
 
+    private readonly KafkaContainer _kafkaContainer = new KafkaBuilder()
+        .WithImage("confluentinc/cp-kafka:7.6.0")
+        .WithEnvironment("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "true")
+        .WithEnvironment("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
+        .Build();
+
     private readonly MinioContainer _minioContainer = new MinioBuilder()
         .WithImage("minio/minio")
         .WithUsername("minioadmin")
@@ -39,7 +47,7 @@ public class IngestionWebApplicationFactory : WebApplicationFactory<Program>
     {
         builder.UseEnvironment("Testing");
 
-        builder.ConfigureTestServices(services => { });
+        builder.ConfigureServices(services => { services.RemoveAll<OutboxHostedService>(); });
 
         builder.ConfigureAppConfiguration((context, config) =>
         {
@@ -50,6 +58,9 @@ public class IngestionWebApplicationFactory : WebApplicationFactory<Program>
                 {
                     "ConnectionStrings:Redis", $"{_redisContainer.Hostname}:{_redisContainer.GetMappedPublicPort(6379)}"
                 },
+                {
+                    "ConnectionStrings:Kafka", $"{_kafkaContainer.Hostname}:{_kafkaContainer.GetMappedPublicPort(9093)}"
+                },
                 { "MinIO:Host", _minioContainer.Hostname },
                 { "MinIO:Port", _minioContainer.GetMappedPublicPort(9000).ToString() },
                 { "MinIO:AccessKey", "minioadmin" },
@@ -57,8 +68,6 @@ public class IngestionWebApplicationFactory : WebApplicationFactory<Program>
                 { "MinIO:BucketName", "ingestion-test" }
             });
         });
-
-        builder.ConfigureServices(services => { });
     }
 
     public async Task InitializeAsync()
@@ -66,14 +75,16 @@ public class IngestionWebApplicationFactory : WebApplicationFactory<Program>
         await _postgreSqlContainer.StartAsync();
         await _mongoDbContainer.StartAsync();
         await _redisContainer.StartAsync();
+        await _kafkaContainer.StartAsync();
         await _minioContainer.StartAsync();
     }
 
-    public async new Task DisposeAsync()
+    public async Task DisposeAsync()
     {
         await _postgreSqlContainer.StopAsync();
         await _mongoDbContainer.StopAsync();
         await _redisContainer.StopAsync();
+        await _kafkaContainer.StopAsync();
         await _minioContainer.StopAsync();
     }
 }

@@ -11,58 +11,70 @@ using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Bson.Serialization.Serializers;
 using Scalar.AspNetCore;
 
-var builder = WebApplication.CreateBuilder(args);
+namespace Ingestion.Api;
 
-Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
-var pack = new ConventionPack
+public class Program
 {
-    new IgnoreExtraElementsConvention(true)
-};
-BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
-ConventionRegistry.Register("IgnoreExtra", pack, _ => true);
-
-builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
-builder.Services
-    .AddOpenApi()
-    .AddApplicationServiceCollection()
-    .AddInfrastructureReadServiceCollection()
-    .AddInfrastructureWriteServiceCollection(builder.Configuration)
-    .Configure<ApiBehaviorOptions>(options =>
+    public static void Main(string[] args)
     {
-        options.InvalidModelStateResponseFactory = context =>
+        var builder = WebApplication.CreateBuilder(args);
+
+        Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+
+        if (BsonSerializer.LookupSerializer<Guid>().GetType() != typeof(GuidSerializer))
         {
-            var errors = context.ModelState
-                .Values
-                .SelectMany(v => v.Errors)
-                .Select(e => e.ErrorMessage)
-                .ToList();
-
-            var responseObj = new
+            var pack = new ConventionPack
             {
-                title = "One or more validation errors occurred.",
-                type = "RequestFormat",
-                statusCode = HttpStatusCode.BadRequest,
-                success = false,
-                errors = new
-                {
-                    messages = errors
-                }
+                new IgnoreExtraElementsConvention(true)
             };
+            BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+            ConventionRegistry.Register("IgnoreExtra", pack, _ => true);
+        }
 
-            return new BadRequestObjectResult(responseObj);
-        };
-    });
-;
+        builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
+        builder.Services
+            .AddOpenApi()
+            .AddApplicationServiceCollection()
+            .AddInfrastructureReadServiceCollection()
+            .AddInfrastructureWriteServiceCollection(builder.Configuration)
+            .Configure<ApiBehaviorOptions>(options =>
+            {
+                options.InvalidModelStateResponseFactory = context =>
+                {
+                    var errors = context.ModelState
+                        .Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .ToList();
 
-var app = builder.Build();
+                    var responseObj = new
+                    {
+                        title = "One or more validation errors occurred.",
+                        type = "RequestFormat",
+                        statusCode = HttpStatusCode.BadRequest,
+                        success = false,
+                        errors = new
+                        {
+                            messages = errors
+                        }
+                    };
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    app.MapScalarApiReference();
+                    return new BadRequestObjectResult(responseObj);
+                };
+            });
+        ;
+        
+        var app = builder.Build();
+
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapOpenApi();
+            app.MapScalarApiReference();
+        }
+
+        app.UseHttpsRedirection();
+        app.UseMiddleware<ExceptionHandlingMiddleware>();
+        app.MapControllers();
+        app.Run();
+    }
 }
-
-app.UseHttpsRedirection();
-app.UseMiddleware<ExceptionHandlingMiddleware>();
-app.MapControllers();
-app.Run();

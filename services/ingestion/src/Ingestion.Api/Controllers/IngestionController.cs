@@ -30,8 +30,8 @@ public class IngestionController : ControllerBase
 
     [HttpGet("collection-statistics")]
     public async Task<ActionResult<ResponseBaseDTO<CollectionStatisticsResponseDTO>>> GetCollectionStatistics(
-        [FromQuery] DateTime initialDate,
-        [FromQuery] DateTime endDate)
+        [FromQuery] DateTime? initialDate = null,
+        [FromQuery] DateTime? endDate = null)
     {
         var query = new GetCollectionStatisticsQuery { InitialDate = initialDate, EndDate = endDate };
         var lastDetectedEvents = await _mediator.Send(query);

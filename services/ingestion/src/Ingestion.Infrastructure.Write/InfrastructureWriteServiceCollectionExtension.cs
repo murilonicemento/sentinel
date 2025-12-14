@@ -7,7 +7,7 @@ using Ingestion.Domain.Repositories;
 using Ingestion.Infrastructure.Write.Cache.Deduplicators;
 using Ingestion.Infrastructure.Write.HostedServices;
 using Ingestion.Infrastructure.Write.Messaging.Publishers;
-using Ingestion.Infrastructure.Write.Persistence.Postgres.DbContext;
+using Ingestion.Infrastructure.Write.Persistence.DbContext;
 using Ingestion.Infrastructure.Write.Persistence.Postgres.Repositories;
 using Ingestion.Infrastructure.Write.Providers;
 using Microsoft.Extensions.Configuration;
