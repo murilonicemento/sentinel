@@ -37,6 +37,19 @@
     restart: unless-stopped
     networks:
       - sentinel-network
+  risk-catalog:
+    image: risk-catalog
+    build:
+      context: ../services/risk-catalog
+      dockerfile: Dockerfile
+    container_name: risk-catalog
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "7002:8080"
+    restart: unless-stopped
+    networks:
+      - sentinel-network
   postgres:
     image: postgres
     container_name: postgres
