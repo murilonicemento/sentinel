@@ -61,15 +61,6 @@ subgraph AlertOrchestrator
 end
 
 %% =====================
-%% Channels Service
-%% =====================
-subgraph ChannelsService
-    Channels_Server[Channels Server]
-    Channels_Queue[Kafka Topics por Canal]
-    Channels_Store[MongoDB / Redis]
-end
-
-%% =====================
 %% Tenants & Billing
 %% =====================
 subgraph TenantsBilling
