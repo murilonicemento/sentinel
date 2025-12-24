@@ -38,6 +38,9 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ingestion.Infrastructure.Read", "services\ingestion\src\Ingestion.Infrastructure.Read\Ingestion.Infrastructure.Read.csproj", "{57F8E1BA-E9EA-499E-BDE0-B43540F8C5F3}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "risk-catalog", "risk-catalog", "{EA8AE364-9EC8-4048-CEA5-1FBCEA2B08D2}"
+	ProjectSection(SolutionItems) = preProject
+		services\risk-catalog\Dockerfile = services\risk-catalog\Dockerfile
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{21452FDB-6661-27D2-6188-1AA03375898F}"
 EndProject
