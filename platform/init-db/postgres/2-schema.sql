@@ -1,4 +1,6 @@
-﻿CREATE TABLE data_source
+﻿-- INGESTION SERVICE DATABASE SCHEMA
+
+CREATE TABLE data_source
 (
     id                   uuid PRIMARY KEY,
     name                 varchar(100) NOT NULL,
@@ -43,3 +45,59 @@ CREATE TABLE outbox
 );
 
 CREATE INDEX idx_outbox_processed ON outbox (processed) WHERE processed = false;
+
+-- RISK CATALOG SERVICE DATABASE SCHEMA
+
+CREATE TABLE event_type
+(
+    id          uuid PRIMARY KEY,
+    code        varchar(50)  NOT NULL,
+    name        varchar(100) NOT NULL,
+    description varchar(255) NOT NULL,
+    is_active    boolean      NOT NULL default true
+);
+
+CREATE TABLE severity
+(
+    id          uuid PRIMARY KEY,
+    level       varchar(50) NOT NULL,
+    description varchar(255)
+);
+
+CREATE TABLE severity_criterion
+(
+    id            uuid PRIMARY KEY,
+    event_type_id uuid    NOT NULL REFERENCES event_type (id),
+    severity_id   uuid    NOT NULL REFERENCES severity (id),
+    min_value     double precision,
+    max_value     double precision,
+    unit          varchar(20),
+    version       integer NOT NULL default 1
+);
+
+CREATE TABLE idf_curve
+(
+    id                  uuid PRIMARY KEY,
+    event_type_id       uuid             NOT NULL REFERENCES event_type (id),
+    duration_minutes    integer          NOT NULL,
+    intensity           double precision NOT NULL,
+    return_period_years integer          NOT NULL,
+    version             integer          NOT NULL default 1
+);
+
+CREATE TABLE regional_parameter
+(
+    id                uuid PRIMARY KEY,
+    region_id         uuid             NOT NULL,
+    adjustment_factor double precision NOT NULL,
+    description       varchar(255)
+);
+
+CREATE TABLE risk_matrix
+(
+    id             uuid PRIMARY KEY,
+    event_type_id  uuid        NOT NULL REFERENCES event_type (id),
+    severity_level varchar(50) NOT NULL,
+    risk_level     varchar(50) NOT NULL,
+    version        integer     NOT NULL default 1
+);

@@ -20,7 +20,8 @@
     container_name: ingestion
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__IngestionDatabase=${ConnectionStrings__IngestionDatabase}
+      - ConnectionStrings__IngestionWriteDatabase=${ConnectionStrings__IngestionWriteDatabase}
+      - ConnectionStrings__IngestionReadDatabase=${ConnectionStrings__IngestionReadDatabase}
       - ConnectionStrings__Redis=${ConnectionStrings__Redis}
       - ConnectionStrings__Kafka=${ConnectionStrings__Kafka}
       - MinIO__Host=${MinIO__Host}
@@ -45,8 +46,11 @@
     container_name: risk-catalog
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__RiskCatalogDatabase=${ConnectionStrings__IngestionDatabase}
     ports:
       - "7002:8080"
+    depends_on:
+      - postgres
     restart: unless-stopped
     networks:
       - sentinel-network
