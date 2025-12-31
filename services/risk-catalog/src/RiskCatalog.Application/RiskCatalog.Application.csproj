@@ -7,11 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Handlers\" />
+    <PackageReference Include="MediatR" Version="13.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MediatR" Version="13.0.0" />
+    <ProjectReference Include="..\RiskCatalog.Domain\RiskCatalog.Domain.csproj" />
   </ItemGroup>
 
 </Project>
