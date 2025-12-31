@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using RiskCatalog.Application.DTO;
+using RiskCatalog.Application.Queries;
 
 namespace RiskCatalog.Api.Controllers;
 
@@ -16,26 +17,36 @@ public class EventTypeController : ControllerBase
     }
 
     [HttpGet("event-types")]
-    public ActionResult<EventTypeDTO> GetEventTypes([FromQuery] bool? isActive)
+    public async Task<ActionResult<List<EventTypeDTO>>> GetEventTypes([FromQuery] bool? isActive)
     {
-        // Implementation to retrieve event types would go here.
-        return Ok();
+        var query = new GetEventTypesQuery { IsActive = isActive };
+        var eventTypes = await _mediator.Send(query);
+
+        return eventTypes.Count != 0 ? Ok(eventTypes) : NoContent();
     }
 
     [HttpGet("event-type-by-code")]
-    public ActionResult<EventTypeDTO> GetEventTypeByCode([FromQuery] string eventTypeCode)
+    public async Task<ActionResult<EventTypeDTO>> GetEventTypeByCode([FromQuery] string eventTypeCode)
     {
-        // Implementation to retrieve event types would go here.
-        return Ok();
+        var query = new GetEventTypeByCodeQuery { EventTypeCode = eventTypeCode };
+        var eventType = await _mediator.Send(query);
+
+        return eventType is not null ? Ok(eventType) : NoContent();
     }
 
     [HttpGet("severity-criterion")]
-    public ActionResult<SeverityCriterionDTO> GetSeverityCriterionForEventType(
+    public async Task<ActionResult<List<SeverityCriterionDTO>>> GetSeverityCriterionForEventType(
         [FromQuery] string eventTypeCode,
         [FromQuery] int? version
     )
     {
-        // Implementation to retrieve event types would go here.
-        return Ok();
+        var query = new GetSeverityCriterionForEventTypeQuery
+        {
+            EventTypeCode = eventTypeCode,
+            Version = version
+        };
+        var severityCriterion = await _mediator.Send(query);
+
+        return severityCriterion.Count != 0 ? Ok(severityCriterion) : NoContent();
     }
 }

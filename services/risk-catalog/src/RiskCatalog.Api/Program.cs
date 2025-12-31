@@ -1,12 +1,18 @@
 using System.Net;
 using Microsoft.AspNetCore.Mvc;
+using RiskCatalog.Api.Filters;
 using RiskCatalog.Api.Middlewares;
+using RiskCatalog.Application;
+using RiskCatalog.Infrastructure;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
 builder.Services
     .AddOpenApi()
+    .AddApplicationServiceCollection()
+    .AddInfrastructureServiceCollection(builder.Configuration)
     .Configure<ApiBehaviorOptions>(options =>
     {
         options.InvalidModelStateResponseFactory = context =>
