@@ -1,14 +1,18 @@
-﻿namespace RiskCatalog.Domain.EventTypes;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace RiskCatalog.Domain.EventTypes;
 
 public class SeverityCriterion
 {
-    public Guid Id { get; set; }
+    [Key] public Guid Id { get; set; }
     public Guid EventTypeId { get; set; }
     public Guid SeverityId { get; set; }
     public double MinValue { get; set; }
     public double MaxValue { get; set; }
     public string Unit { get; set; }
     public int Version { get; set; }
+    public virtual EventType EventType { get; set; }
+    public virtual Severity Severity { get; set; }
 
     public SeverityCriterion()
     {
