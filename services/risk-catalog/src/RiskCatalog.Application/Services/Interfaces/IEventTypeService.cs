@@ -1,0 +1,20 @@
+using RiskCatalog.Application.DTO;
+
+namespace RiskCatalog.Application.Services.Interfaces;
+
+public interface IEventTypeService
+{
+    public Task<List<EventTypeDTO>> GetEventTypesAsync(
+        bool? isActive,
+        CancellationToken cancellationToken = default);
+
+    public Task<EventTypeDTO?> GetEventTypeByCodeAsync(
+        string eventTypeCode,
+        CancellationToken cancellationToken = default);
+
+    public Task<List<SeverityCriterionDTO>> GetSeverityCriterionForEventTypeAsync(
+        string eventTypeCode,
+        int? version,
+        CancellationToken cancellationToken = default);
+}
+

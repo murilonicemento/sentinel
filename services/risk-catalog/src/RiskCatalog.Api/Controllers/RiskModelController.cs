@@ -1,7 +1,6 @@
-using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using RiskCatalog.Application.DTO;
-using RiskCatalog.Application.Queries;
+using RiskCatalog.Application.Services.Interfaces;
 
 namespace RiskCatalog.Api.Controllers;
 
@@ -9,11 +8,11 @@ namespace RiskCatalog.Api.Controllers;
 [ApiController]
 public class RiskModelController : ControllerBase
 {
-    private readonly IMediator _mediator;
+    private readonly IRiskModelService _riskModelService;
 
-    public RiskModelController(IMediator mediator)
+    public RiskModelController(IRiskModelService riskModelService)
     {
-        _mediator = mediator;
+        _riskModelService = riskModelService;
     }
 
     [HttpGet("risk-matrix")]
@@ -23,13 +22,10 @@ public class RiskModelController : ControllerBase
         [FromQuery] int? version
     )
     {
-        var query = new GetRiskMatrixForEventTypeQuery
-        {
-            EventTypeCode = eventTypeCode,
-            SeverityLevel = severityLevel,
-            Version = version
-        };
-        var riskMatrix = await _mediator.Send(query);
+        var riskMatrix = await _riskModelService.GetRiskMatrixForEventTypeAsync(
+            eventTypeCode,
+            severityLevel,
+            version);
 
         return riskMatrix is not null ? Ok(riskMatrix) : NoContent();
     }
@@ -40,12 +36,9 @@ public class RiskModelController : ControllerBase
         [FromQuery] int? returnPeriodYears
     )
     {
-        var query = new GetIDFCurvesForEventTypeQuery
-        {
-            EventTypeCode = eventTypeCode,
-            ReturnPeriodYears = returnPeriodYears
-        };
-        var idfCurves = await _mediator.Send(query);
+        var idfCurves = await _riskModelService.GetIDFCurvesForEventTypeAsync(
+            eventTypeCode,
+            returnPeriodYears);
 
         return idfCurves is not null ? Ok(idfCurves) : NoContent();
     }
@@ -53,11 +46,7 @@ public class RiskModelController : ControllerBase
     [HttpGet("regional-risk-parameters")]
     public async Task<ActionResult<RegionalRiskParametersDTO>> GetRegionalRiskParameters([FromQuery] Guid regionId)
     {
-        var query = new GetRegionalRiskParametersQuery
-        {
-            RegionId = regionId
-        };
-        var regionParameter = await _mediator.Send(query);
+        var regionParameter = await _riskModelService.GetRegionalRiskParametersAsync(regionId);
 
         return regionParameter is not null ? Ok(regionParameter) : NoContent();
     }

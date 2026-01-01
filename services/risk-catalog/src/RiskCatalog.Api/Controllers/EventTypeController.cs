@@ -1,7 +1,6 @@
-using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using RiskCatalog.Application.DTO;
-using RiskCatalog.Application.Queries;
+using RiskCatalog.Application.Services.Interfaces;
 
 namespace RiskCatalog.Api.Controllers;
 
@@ -9,18 +8,17 @@ namespace RiskCatalog.Api.Controllers;
 [ApiController]
 public class EventTypeController : ControllerBase
 {
-    private readonly IMediator _mediator;
+    private readonly IEventTypeService _eventTypeService;
 
-    public EventTypeController(IMediator mediator)
+    public EventTypeController(IEventTypeService eventTypeService)
     {
-        _mediator = mediator;
+        _eventTypeService = eventTypeService;
     }
 
     [HttpGet("event-types")]
     public async Task<ActionResult<List<EventTypeDTO>>> GetEventTypes([FromQuery] bool? isActive)
     {
-        var query = new GetEventTypesQuery { IsActive = isActive };
-        var eventTypes = await _mediator.Send(query);
+        var eventTypes = await _eventTypeService.GetEventTypesAsync(isActive);
 
         return eventTypes.Count != 0 ? Ok(eventTypes) : NoContent();
     }
@@ -28,8 +26,7 @@ public class EventTypeController : ControllerBase
     [HttpGet("event-type-by-code")]
     public async Task<ActionResult<EventTypeDTO>> GetEventTypeByCode([FromQuery] string eventTypeCode)
     {
-        var query = new GetEventTypeByCodeQuery { EventTypeCode = eventTypeCode };
-        var eventType = await _mediator.Send(query);
+        var eventType = await _eventTypeService.GetEventTypeByCodeAsync(eventTypeCode);
 
         return eventType is not null ? Ok(eventType) : NoContent();
     }
@@ -40,12 +37,9 @@ public class EventTypeController : ControllerBase
         [FromQuery] int? version
     )
     {
-        var query = new GetSeverityCriterionForEventTypeQuery
-        {
-            EventTypeCode = eventTypeCode,
-            Version = version
-        };
-        var severityCriterion = await _mediator.Send(query);
+        var severityCriterion = await _eventTypeService.GetSeverityCriterionForEventTypeAsync(
+            eventTypeCode,
+            version);
 
         return severityCriterion.Count != 0 ? Ok(severityCriterion) : NoContent();
     }
