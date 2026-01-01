@@ -65,5 +65,11 @@ public class EventTypeService : IEventTypeService
 
         return severityCriterionDTOs;
     }
-}
 
+    public async Task<EventTypeDTO> CreateEventTypeAsync(
+        CreateEventTypeDTO eventTypeDto,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+}

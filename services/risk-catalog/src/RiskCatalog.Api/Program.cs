@@ -1,5 +1,8 @@
 using System.Net;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Tokens;
 using RiskCatalog.Api.Filters;
 using RiskCatalog.Api.Middlewares;
 using RiskCatalog.Application;
@@ -38,6 +41,9 @@ builder.Services
             return new BadRequestObjectResult(responseObj);
         };
     });
+builder.Services
+    .AddAuthorizationBuilder()
+    .AddPolicy("RiskCatalogWrite", policy => policy.RequireRole("RiskCatalog.Admin", "RiskCatalog.Write"));
 
 var app = builder.Build();
 
@@ -49,6 +55,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<TenantValidationMiddleware>();
 app.MapControllers();
 
 app.Run();

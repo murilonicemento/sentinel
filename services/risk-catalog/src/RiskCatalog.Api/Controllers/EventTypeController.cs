@@ -1,10 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RiskCatalog.Application.DTO;
 using RiskCatalog.Application.Services.Interfaces;
 
 namespace RiskCatalog.Api.Controllers;
 
-[Route("api/[controller]")]
+[Route("api/event-types")]
 [ApiController]
 public class EventTypeController : ControllerBase
 {
@@ -15,7 +16,7 @@ public class EventTypeController : ControllerBase
         _eventTypeService = eventTypeService;
     }
 
-    [HttpGet("event-types")]
+    [HttpGet]
     public async Task<ActionResult<List<EventTypeDTO>>> GetEventTypes([FromQuery] bool? isActive)
     {
         var eventTypes = await _eventTypeService.GetEventTypesAsync(isActive);
@@ -42,5 +43,31 @@ public class EventTypeController : ControllerBase
             version);
 
         return severityCriterion.Count != 0 ? Ok(severityCriterion) : NoContent();
+    }
+
+    [HttpPost]
+    [Authorize(Policy = "RiskCatalogWrite")]
+    public async Task<ActionResult<EventTypeDTO>> CreateEventType([FromBody] CreateEventTypeDTO eventTypeDto)
+    {
+        var createdEventType = await _eventTypeService.CreateEventTypeAsync(eventTypeDto);
+
+        return Created("/api/event-types", new { eventTypeCode = createdEventType.Code });
+    }
+
+    [HttpPatch("{id:guid}/status")]
+    [Authorize(Policy = "RiskCatalogWrite")]
+    public async Task<ActionResult> UpdateEventTypeStatus(
+        [FromRoute] Guid id,
+        [FromQuery] bool isActive)
+    {
+        return NoContent();
+    }
+
+    [HttpPost("severity-criterion")]
+    [Authorize(Policy = "RiskCatalogWrite")]
+    public async Task<ActionResult> AddSeverityCriterionToEventType(
+        [FromBody] SeverityCriterionDTO severityCriterionDto)
+    {
+        return NoContent();
     }
 }

@@ -80,5 +80,18 @@ public class RiskModelService : IRiskModelService
             Description = regionalParameter.Description
         };
     }
-}
 
+    public async Task<RiskMatrixDTO> CreateRiskMatrixAsync(
+        RiskMatrixDTO riskMatrixDto,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task<RiskMatrixDTO> CreateIDFCurvesAsync(
+        CreateIDFCurvesDTO idfCurvesDto,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+}

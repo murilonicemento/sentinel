@@ -18,5 +18,12 @@ public interface IRiskModelService
     public Task<RegionalRiskParametersDTO?> GetRegionalRiskParametersAsync(
         Guid regionId,
         CancellationToken cancellationToken = default);
-}
 
+    public Task<RiskMatrixDTO> CreateRiskMatrixAsync(
+        RiskMatrixDTO riskMatrixDto,
+        CancellationToken cancellationToken = default);
+    
+    public  Task<RiskMatrixDTO> CreateIDFCurvesAsync(
+        CreateIDFCurvesDTO idfCurvesDto,
+        CancellationToken cancellationToken = default);
+}

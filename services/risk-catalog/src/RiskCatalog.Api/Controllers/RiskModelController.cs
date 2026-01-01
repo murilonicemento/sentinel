@@ -1,10 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RiskCatalog.Application.DTO;
 using RiskCatalog.Application.Services.Interfaces;
 
 namespace RiskCatalog.Api.Controllers;
 
-[Route("api/[controller]")]
+[Route("api/risk-model")]
 [ApiController]
 public class RiskModelController : ControllerBase
 {
@@ -49,5 +50,38 @@ public class RiskModelController : ControllerBase
         var regionParameter = await _riskModelService.GetRegionalRiskParametersAsync(regionId);
 
         return regionParameter is not null ? Ok(regionParameter) : NoContent();
+    }
+
+    [HttpPost("risk-matrix")]
+    [Authorize(Policy = "RiskCatalogWrite")]
+    public async Task<ActionResult<RiskMatrixDTO>> CreateRiskMatrix([FromBody] RiskMatrixDTO riskMatrixDto)
+    {
+        var createdRiskMatrix = await _riskModelService.CreateRiskMatrixAsync(riskMatrixDto);
+
+        return Created("/api/risk-model/risk-matrix", new { eventTypeCode = createdRiskMatrix.EventTypeCode });
+    }
+
+    [HttpPost("idf-curves")]
+    [Authorize(Policy = "RiskCatalogWrite")]
+    public async Task<ActionResult<IDFCurvesDTO>> CreateIDFCurves([FromBody] CreateIDFCurvesDTO idfCurvesDto)
+    {
+        var createdIDFCurves = await _riskModelService.CreateIDFCurvesAsync(idfCurvesDto);
+
+        return Created("/api/risk-model/idf-curves", new { eventTypeCode = createdIDFCurves.EventTypeCode });
+    }
+
+    [HttpPost("regional-risk-parameters")]
+    [Authorize(Policy = "RiskCatalogWrite")]
+    public async Task<ActionResult> CreateRegionalRiskParametersToRegion(
+        [FromBody] RegionalRiskParametersDTO regionalRiskParametersDto)
+    {
+        return NoContent();
+    }
+
+    [HttpPost("catalog/publish")]
+    [Authorize(Policy = "RiskCatalogWrite")]
+    public async Task<ActionResult> PublishRiskCatalogVersion(CatalogPublishDTO catalogPublishDto)
+    {
+        return NoContent();
     }
 }

@@ -16,5 +16,8 @@ public interface IEventTypeService
         string eventTypeCode,
         int? version,
         CancellationToken cancellationToken = default);
-}
 
+    public Task<EventTypeDTO> CreateEventTypeAsync(
+        CreateEventTypeDTO eventTypeDto,
+        CancellationToken cancellationToken = default);
+}
