@@ -56,18 +56,32 @@ public class RiskModelController : ControllerBase
     [Authorize(Policy = "RiskCatalogWrite")]
     public async Task<ActionResult<RiskMatrixDTO>> CreateRiskMatrix([FromBody] RiskMatrixDTO riskMatrixDto)
     {
-        var createdRiskMatrix = await _riskModelService.CreateRiskMatrixAsync(riskMatrixDto);
+        var isCreated = await _riskModelService.CreateRiskMatrixAsync(riskMatrixDto);
 
-        return Created("/api/risk-model/risk-matrix", new { eventTypeCode = createdRiskMatrix.EventTypeCode });
+        return isCreated
+            ? Created("/api/risk-model/risk-matrix", new { isCreated })
+            : Problem(
+                title: "An error occurred.",
+                detail: "Failed to create Risk Matrix.",
+                type: "AddError",
+                statusCode: 500
+            );
     }
 
     [HttpPost("idf-curves")]
     [Authorize(Policy = "RiskCatalogWrite")]
     public async Task<ActionResult<IDFCurvesDTO>> CreateIDFCurves([FromBody] CreateIDFCurvesDTO idfCurvesDto)
     {
-        var createdIDFCurves = await _riskModelService.CreateIDFCurvesAsync(idfCurvesDto);
+        var isCreated = await _riskModelService.CreateIDFCurvesAsync(idfCurvesDto);
 
-        return Created("/api/risk-model/idf-curves", new { eventTypeCode = createdIDFCurves.EventTypeCode });
+        return isCreated
+            ? Created("/api/risk-model/idf-curves", new { isCreated })
+            : Problem(
+                title: "An error occurred.",
+                detail: "Failed to create IDF Curves.",
+                type: "AddError",
+                statusCode: 500
+            );
     }
 
     [HttpPost("regional-risk-parameters")]
@@ -75,7 +89,16 @@ public class RiskModelController : ControllerBase
     public async Task<ActionResult> CreateRegionalRiskParametersToRegion(
         [FromBody] RegionalRiskParametersDTO regionalRiskParametersDto)
     {
-        return NoContent();
+        var isCreated = await _riskModelService.CreateRegionalRiskParametersAsync(regionalRiskParametersDto);
+
+        return isCreated
+            ? Created("/api/risk-model/regional-risk-parameters", new { isCreated })
+            : Problem(
+                title: "An error occurred.",
+                detail: "Failed to create Regional Risk Parameters.",
+                type: "AddError",
+                statusCode: 500
+            );
     }
 
     [HttpPost("catalog/publish")]

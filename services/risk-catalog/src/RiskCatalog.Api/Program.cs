@@ -8,8 +8,31 @@ using RiskCatalog.Api.Middlewares;
 using RiskCatalog.Application;
 using RiskCatalog.Infrastructure;
 using Scalar.AspNetCore;
+using Serilog;
+using Serilog.Sinks.Elasticsearch;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+
+Log.Logger = new LoggerConfiguration()
+    .Enrich.FromLogContext()
+    .Enrich.WithEnvironmentName()
+    .Enrich.WithThreadId()
+    .WriteTo.Console()
+    .WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(builder.Configuration["ElasticSearch:URI"]!))
+    {
+        AutoRegisterTemplate = true,
+        IndexFormat = $"risk-catalog-logs-{environment.ToLower()}-{DateTime.UtcNow:yyyy-MM}",
+        NumberOfShards = 1,
+        NumberOfReplicas = 1,
+        MinimumLogEventLevel = Serilog.Events.LogEventLevel.Information,
+        FailureCallback = e =>
+            Console.WriteLine("An error occurred while sending logs to Elasticsearch: " + e.MessageTemplate)
+    })
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 
 builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
 builder.Services

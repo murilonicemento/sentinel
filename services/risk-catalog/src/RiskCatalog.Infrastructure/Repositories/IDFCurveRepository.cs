@@ -14,10 +14,33 @@ public class IDFCurveRepository : IIDFCurveRepository
         _dbContext = dbContext;
     }
 
-    public async Task<IDFCurve?> GetIDFCurveForEventTypeAsync(string eventTypeCode, int? returnPeriodYears)
+    public async Task<IDFCurve?> GetIDFCurveForEventTypeAsync(
+        string eventTypeCode,
+        int? returnPeriodYears,
+        CancellationToken cancellationToken = default)
     {
         return await _dbContext.IDFCurves.FirstOrDefaultAsync(idfCurve =>
             idfCurve.EventType.Code == eventTypeCode &&
-            (returnPeriodYears == null || idfCurve.ReturnPeriodYears == returnPeriodYears));
+            (returnPeriodYears == null || idfCurve.ReturnPeriodYears == returnPeriodYears), cancellationToken);
+    }
+
+    public async Task<IDFCurve?> GetIDFCurveForDurationAndPeriod(
+        string eventTypeCode,
+        int durationMinutes,
+        int returnPeriodYears, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.IDFCurves.FirstOrDefaultAsync(idfCurve =>
+            idfCurve.EventType.Code == eventTypeCode &&
+            idfCurve.DurationMinutes == durationMinutes &&
+            idfCurve.ReturnPeriodYears == returnPeriodYears, cancellationToken);
+    }
+
+    public async Task<bool> AddIDFCurveAsync(IDFCurve idfCurve, CancellationToken cancellationToken = default)
+    {
+        await _dbContext.IDFCurves.AddAsync(idfCurve, cancellationToken);
+
+        var result = await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return result > 0;
     }
 }

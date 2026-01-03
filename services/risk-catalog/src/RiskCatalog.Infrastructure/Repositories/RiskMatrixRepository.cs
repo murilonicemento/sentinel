@@ -14,12 +14,23 @@ public class RiskMatrixRepository : IRiskMatrixRepository
         _dbContext = riskCatalogDbContext;
     }
 
-    public async Task<RiskMatrix?> GetRiskMatrixForEventTypeAsync(string eventTypeCode, string severityLevel,
-        int? version)
+    public async Task<RiskMatrix?> GetRiskMatrixForEventTypeAsync(
+        string eventTypeCode,
+        string severityLevel,
+        int? version, CancellationToken cancellationToken = default)
     {
         return await _dbContext.RiskMatrices.FirstOrDefaultAsync(riskMatrix =>
             riskMatrix.EventType.Code == eventTypeCode &&
             riskMatrix.SeverityLevel.ToString() == severityLevel &&
-            (version == null || riskMatrix.Version == version));
+            (version == null || riskMatrix.Version == version), cancellationToken);
+    }
+
+    public async Task<bool> AddRiskMatrixAsync(RiskMatrix riskMatrix, CancellationToken cancellationToken = default)
+    {
+        await _dbContext.RiskMatrices.AddAsync(riskMatrix, cancellationToken);
+
+        var result = await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return result > 0;
     }
 }

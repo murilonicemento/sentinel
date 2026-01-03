@@ -49,9 +49,9 @@ public class EventTypeController : ControllerBase
     [Authorize(Policy = "RiskCatalogWrite")]
     public async Task<ActionResult<EventTypeDTO>> CreateEventType([FromBody] CreateEventTypeDTO eventTypeDto)
     {
-        var createdEventType = await _eventTypeService.CreateEventTypeAsync(eventTypeDto);
+        var isCreated = await _eventTypeService.CreateEventTypeAsync(eventTypeDto);
 
-        return Created("/api/event-types", new { eventTypeCode = createdEventType.Code });
+        return Created("/api/event-types", new { isCreated });
     }
 
     [HttpPatch("{id:guid}/status")]
@@ -60,7 +60,16 @@ public class EventTypeController : ControllerBase
         [FromRoute] Guid id,
         [FromQuery] bool isActive)
     {
-        return NoContent();
+        var isUpdated = await _eventTypeService.UpdateEventTypeStatusAsync(id, isActive);
+
+        return isUpdated
+            ? Ok()
+            : Problem(
+                title: "An error occurred.",
+                detail: "Failed to update event type status.",
+                type: "UpdateError",
+                statusCode: 500
+            );
     }
 
     [HttpPost("severity-criterion")]
@@ -68,6 +77,15 @@ public class EventTypeController : ControllerBase
     public async Task<ActionResult> AddSeverityCriterionToEventType(
         [FromBody] SeverityCriterionDTO severityCriterionDto)
     {
-        return NoContent();
+        var isAdded = await _eventTypeService.AddSeverityCriterionToEventType(severityCriterionDto);
+
+        return isAdded
+            ? Created("/api/event-types/severity-criterion", new { isAdded })
+            : Problem(
+                title: "An error occurred.",
+                detail: "Failed to add severity criterion to event type.",
+                type: "AddError",
+                statusCode: 500
+            );
     }
 }

@@ -17,7 +17,16 @@ public interface IEventTypeService
         int? version,
         CancellationToken cancellationToken = default);
 
-    public Task<EventTypeDTO> CreateEventTypeAsync(
+    public Task<bool> CreateEventTypeAsync(
         CreateEventTypeDTO eventTypeDto,
+        CancellationToken cancellationToken = default);
+
+    public Task<bool> UpdateEventTypeStatusAsync(
+        Guid id,
+        bool isActive,
+        CancellationToken cancellationToken = default);
+
+    public Task<bool> AddSeverityCriterionToEventType(
+        SeverityCriterionDTO severityCriterionDto,
         CancellationToken cancellationToken = default);
 }

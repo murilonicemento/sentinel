@@ -18,7 +18,7 @@ public class ExceptionHandlingMiddleware
             await _next(httpContext);
         }
         catch (Exception exception) when (
-            exception is KeyNotFoundException or ArgumentException
+            exception is KeyNotFoundException or ArgumentException or BadHttpRequestException
         )
         {
             httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
