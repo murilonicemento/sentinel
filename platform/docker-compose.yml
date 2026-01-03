@@ -32,6 +32,7 @@
       - "7001:8080"
     depends_on:
       - postgres
+      - elasticsearch
       - redis
       - minio
       - kafka
@@ -47,10 +48,15 @@
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__RiskCatalogDatabase=${ConnectionStrings__IngestionDatabase}
+      - ConnectionStrings__Redis=${ConnectionStrings__Redis}
+      - Redis__MaxMemory=256mb
+      - Redis__EvictionPolicy=allkeys-lru
     ports:
       - "7002:8080"
     depends_on:
       - postgres
+      - elasticsearch
+      - redis
     restart: unless-stopped
     networks:
       - sentinel-network
