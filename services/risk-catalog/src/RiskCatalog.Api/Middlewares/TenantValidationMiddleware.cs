@@ -11,6 +11,17 @@ public class TenantValidationMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        if (context.Request.Path.StartsWithSegments("/scalar") ||
+            context.Request.Path.StartsWithSegments("/openapi") ||
+            context.Request.Path.StartsWithSegments("/swagger") ||
+            context.Request.Method.Equals("OPTIONS", StringComparison.OrdinalIgnoreCase) ||
+            context.Request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+
+            return;
+        }
+
         if (!context.User.Identity?.IsAuthenticated ?? true)
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;

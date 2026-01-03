@@ -65,18 +65,46 @@ builder.Services
         };
     });
 builder.Services
-    .AddAuthorizationBuilder()
-    .AddPolicy("RiskCatalogWrite", policy => policy.RequireRole("RiskCatalog.Admin", "RiskCatalog.Write"));
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+        };
+    });
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("RiskCatalogWrite", policy =>
+        policy.RequireRole("RiskCatalog.Admin", "RiskCatalog.Write"))
+    .AddPolicy("RiskCatalogRead", policy =>
+        policy.RequireRole("RiskCatalog.Admin", "RiskCatalog.Read"));
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.MapScalarApiReference();
+    app.MapScalarApiReference(options =>
+    {
+        options
+            .WithTitle("Sentinel - Risk Catalog API")
+            .WithTheme(ScalarTheme.Moon)
+            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
+            .AddPreferredSecuritySchemes("BearerAuth")
+            .AddHttpAuthentication("BearerAuth", auth => { auth.Token = builder.Configuration["Scalar:AuthToken"]; });
+    });
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseMiddleware<TenantValidationMiddleware>();
 app.MapControllers();
