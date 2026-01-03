@@ -10,6 +10,10 @@ public class RiskMatrixConfiguration : IEntityTypeConfiguration<RiskMatrix>
     {
         builder.ToTable("risk_matrix");
         builder.HasKey(rm => rm.Id);
+        builder.Property(et => et.Id)
+            .IsRequired()
+            .HasColumnType("uniqueidentifier")
+            .HasColumnName("id");
         builder.Property(rm => rm.EventTypeId)
             .IsRequired()
             .HasColumnType("uniqueidentifier")

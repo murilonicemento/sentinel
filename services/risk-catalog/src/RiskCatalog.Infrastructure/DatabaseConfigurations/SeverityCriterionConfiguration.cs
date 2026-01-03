@@ -10,6 +10,10 @@ public class SeverityCriterionConfiguration : IEntityTypeConfiguration<SeverityC
     {
         builder.ToTable("severity_criterion");
         builder.HasKey(sc => sc.Id);
+        builder.Property(et => et.Id)
+            .IsRequired()
+            .HasColumnType("uniqueidentifier")
+            .HasColumnName("id");
         builder.Property(sc => sc.EventTypeId)
             .IsRequired()
             .HasColumnType("uniqueidentifier");

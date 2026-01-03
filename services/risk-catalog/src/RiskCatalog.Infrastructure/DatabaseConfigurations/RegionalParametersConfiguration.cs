@@ -10,6 +10,10 @@ public class RegionalParametersConfiguration : IEntityTypeConfiguration<Regional
     {
         builder.ToTable("regional_parameter");
         builder.HasKey(rp => rp.Id);
+        builder.Property(et => et.Id)
+            .IsRequired()
+            .HasColumnType("uniqueidentifier")
+            .HasColumnName("id");
         builder.Property(rp => rp.RegionId)
             .IsRequired()
             .HasColumnType("uniqueidentifier")

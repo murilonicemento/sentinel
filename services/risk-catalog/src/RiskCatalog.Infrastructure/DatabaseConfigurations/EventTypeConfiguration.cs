@@ -8,8 +8,12 @@ public class EventTypeConfiguration : IEntityTypeConfiguration<EventType>
 {
     public void Configure(EntityTypeBuilder<EventType> builder)
     {
-        builder.ToTable("event_types");
+        builder.ToTable("event_type");
         builder.HasKey(et => et.Id);
+        builder.Property(et => et.Id)
+            .IsRequired()
+            .HasColumnType("uniqueidentifier")
+            .HasColumnName("id");
         builder.Property(et => et.Code)
             .IsRequired()
             .HasColumnType("nvarchar(50)")

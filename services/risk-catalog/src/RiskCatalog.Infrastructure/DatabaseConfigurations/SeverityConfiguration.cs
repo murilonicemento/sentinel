@@ -10,6 +10,10 @@ public class SeverityConfiguration : IEntityTypeConfiguration<Severity>
     {
         builder.ToTable("severity");
         builder.HasKey(s => s.Id);
+        builder.Property(et => et.Id)
+            .IsRequired()
+            .HasColumnType("uniqueidentifier")
+            .HasColumnName("id");
         builder.Property(s => s.Level)
             .IsRequired()
             .HasColumnType("nvarchar(50)")

@@ -10,6 +10,10 @@ public class IDFCurveConfiguration : IEntityTypeConfiguration<IDFCurve>
     {
         builder.ToTable("idf_curve");
         builder.HasKey(idf => idf.Id);
+        builder.Property(et => et.Id)
+            .IsRequired()
+            .HasColumnType("uniqueidentifier")
+            .HasColumnName("id");
         builder.Property(idf => idf.EventTypeId)
             .IsRequired()
             .HasColumnType("uniqueidentifier")
