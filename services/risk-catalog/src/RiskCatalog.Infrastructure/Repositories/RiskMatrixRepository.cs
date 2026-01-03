@@ -33,4 +33,13 @@ public class RiskMatrixRepository : IRiskMatrixRepository
 
         return result > 0;
     }
+
+    public async Task<bool> MarkVersionAsActiveAsync(int version, CancellationToken cancellationToken = default)
+    {
+        var matricesWithVersion = await _dbContext.RiskMatrices
+            .Where(rm => rm.Version == version)
+            .ToListAsync(cancellationToken);
+
+        return matricesWithVersion.Count != 0;
+    }
 }

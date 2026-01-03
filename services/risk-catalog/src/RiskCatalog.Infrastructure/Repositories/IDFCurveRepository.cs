@@ -43,4 +43,13 @@ public class IDFCurveRepository : IIDFCurveRepository
 
         return result > 0;
     }
+
+    public async Task<bool> MarkVersionAsActiveAsync(int version, CancellationToken cancellationToken = default)
+    {
+        var curvesWithVersion = await _dbContext.IDFCurves
+            .Where(idf => idf.Version == version)
+            .ToListAsync(cancellationToken);
+
+        return curvesWithVersion.Count != 0;
+    }
 }

@@ -49,6 +49,7 @@
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__RiskCatalogDatabase=${ConnectionStrings__IngestionDatabase}
       - ConnectionStrings__Redis=${ConnectionStrings__Redis}
+      - ConnectionStrings__Kafka=${ConnectionStrings__Kafka}
       - Redis__MaxMemory=256mb
       - Redis__EvictionPolicy=allkeys-lru
     ports:
@@ -57,6 +58,7 @@
       - postgres
       - elasticsearch
       - redis
+      - kafka
     restart: unless-stopped
     networks:
       - sentinel-network

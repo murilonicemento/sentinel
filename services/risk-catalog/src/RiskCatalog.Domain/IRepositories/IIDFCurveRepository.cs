@@ -18,4 +18,6 @@ public interface IIDFCurveRepository
     public Task<bool> AddIDFCurveAsync(
         IDFCurve idfCurve,
         CancellationToken cancellationToken = default);
+    
+    public Task<bool> MarkVersionAsActiveAsync(int version, CancellationToken cancellationToken = default);
 }

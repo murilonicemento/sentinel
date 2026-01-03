@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RiskCatalog.Application.DTO;
+using RiskCatalog.Application.Events;
 using RiskCatalog.Application.Interfaces;
 using RiskCatalog.Application.Services.Interfaces;
 using RiskCatalog.Domain.Enums;
@@ -15,10 +17,12 @@ public class RiskModelService : IRiskModelService
     private readonly IIDFCurveRepository _IDFCurveRepository;
     private readonly IRegionalParameterRepository _regionalParameterRepository;
     private readonly ICacheService _cacheService;
+    private readonly IPublisher _publisher;
     private readonly ILogger<RiskModelService> _logger;
     private const string RiskMatrixCachePrefix = "risk-matrix";
     private const string IDFCurveCachePrefix = "idf-curve";
     private const string RegionalParameterCachePrefix = "regional-parameter";
+    private const string RiskCatalogPublishedTopic = "risk-catalog-published";
 
     public RiskModelService(
         IEventTypeRepository eventTypeRepository,
@@ -26,6 +30,7 @@ public class RiskModelService : IRiskModelService
         IIDFCurveRepository idfCurveRepository,
         IRegionalParameterRepository regionalParameterRepository,
         ICacheService cacheService,
+        IPublisher publisher,
         ILogger<RiskModelService> logger)
     {
         _eventTypeRepository = eventTypeRepository;
@@ -33,6 +38,7 @@ public class RiskModelService : IRiskModelService
         _IDFCurveRepository = idfCurveRepository;
         _regionalParameterRepository = regionalParameterRepository;
         _cacheService = cacheService;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -392,5 +398,57 @@ public class RiskModelService : IRiskModelService
         }
 
         return isCreated;
+    }
+
+    public async Task<bool> PublishCatalogVersionAsync(
+        CatalogPublishDTO catalogPublishDto,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation(
+            "Publishing catalog version. Version: {version}, Notes: {notes}",
+            catalogPublishDto.Version,
+            catalogPublishDto.Notes);
+
+        var riskMatrixExists = await _riskMatrixRepository.MarkVersionAsActiveAsync(
+            catalogPublishDto.Version,
+            cancellationToken);
+        var idfCurveExists = await _IDFCurveRepository.MarkVersionAsActiveAsync(
+            catalogPublishDto.Version,
+            cancellationToken);
+
+        if (!riskMatrixExists && !idfCurveExists)
+        {
+            _logger.LogWarning(
+                "Failed to publish catalog version. No data found for version: {version}",
+                catalogPublishDto.Version);
+            throw new ArgumentException($"No data found for version {catalogPublishDto.Version}");
+        }
+
+        var publishedEvent = new RiskCatalogPublishedEvent
+        {
+            Version = catalogPublishDto.Version,
+            Notes = catalogPublishDto.Notes,
+            PublishedAt = DateTime.UtcNow,
+            PublishedBy = tenantId
+        };
+
+        var eventPayload = JsonSerializer.Serialize(publishedEvent, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        await _publisher.PublishAsync(RiskCatalogPublishedTopic, eventPayload, cancellationToken);
+
+        await _cacheService.RemoveByPatternAsync($"{RiskMatrixCachePrefix}:*", cancellationToken);
+        await _cacheService.RemoveByPatternAsync($"{IDFCurveCachePrefix}:*", cancellationToken);
+        await _cacheService.RemoveByPatternAsync($"{RegionalParameterCachePrefix}:*", cancellationToken);
+
+        _logger.LogInformation(
+            "Catalog version published successfully. Version: {version}, Notes: {notes}",
+            catalogPublishDto.Version,
+            catalogPublishDto.Notes);
+
+        return true;
     }
 }

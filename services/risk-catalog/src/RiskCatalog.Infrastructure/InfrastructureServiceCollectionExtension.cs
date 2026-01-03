@@ -1,10 +1,12 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Confluent.Kafka;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RiskCatalog.Application.Interfaces;
 using RiskCatalog.Domain.IRepositories;
 using RiskCatalog.Infrastructure.Cache;
 using RiskCatalog.Infrastructure.DatabaseContext;
+using RiskCatalog.Infrastructure.Messaging;
 using RiskCatalog.Infrastructure.Repositories;
 using StackExchange.Redis;
 
@@ -20,6 +22,7 @@ public static class InfrastructureServiceCollectionExtension
                 options.UseNpgsql(configuration.GetConnectionString("IngestionReadDatabase"));
             })
             .AddRedisCache(configuration)
+            .AddKafkaPublisher(configuration)
             .AddRepositories();
 
     private static IServiceCollection AddRedisCache(this IServiceCollection services, IConfiguration configuration)
@@ -42,6 +45,29 @@ public static class InfrastructureServiceCollectionExtension
                 return ConnectionMultiplexer.Connect(configurationOptions);
             })
             .AddScoped<ICacheService, RedisCacheService>();
+    }
+
+    private static IServiceCollection AddKafkaPublisher(this IServiceCollection services, IConfiguration configuration)
+    {
+        var kafkaConnectionString = configuration["ConnectionStrings:Kafka"];
+
+        if (string.IsNullOrEmpty(kafkaConnectionString))
+            throw new InvalidOperationException("Kafka connection string is not configured.");
+
+        return services
+            .AddSingleton<IProducer<Null, string>>(sp =>
+            {
+                var config = new ProducerConfig
+                {
+                    BootstrapServers = kafkaConnectionString,
+                    Acks = Acks.All,
+                    EnableIdempotence = true,
+                    MessageTimeoutMs = 5000
+                };
+
+                return new ProducerBuilder<Null, string>(config).Build();
+            })
+            .AddScoped<IPublisher, KafkaPublisher>();
     }
 
     private static IServiceCollection AddRepositories(this IServiceCollection services) =>

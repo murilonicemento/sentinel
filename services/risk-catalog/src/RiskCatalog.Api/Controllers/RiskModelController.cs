@@ -103,8 +103,20 @@ public class RiskModelController : ControllerBase
 
     [HttpPost("catalog/publish")]
     [Authorize(Policy = "RiskCatalogWrite")]
-    public async Task<ActionResult> PublishRiskCatalogVersion(CatalogPublishDTO catalogPublishDto)
+    public async Task<ActionResult> PublishRiskCatalogVersion([FromBody] CatalogPublishDTO catalogPublishDto)
     {
-        return NoContent();
+        HttpContext.Request.Headers.TryGetValue("X-Tenant-Id", out var tenantHeader);
+
+        var tenantId = Guid.Parse(tenantHeader!);
+        var isPublished = await _riskModelService.PublishCatalogVersionAsync(catalogPublishDto, tenantId);
+
+        return isPublished
+            ? Ok(new { message = "Catalog version published successfully", version = catalogPublishDto.Version })
+            : Problem(
+                title: "An error occurred.",
+                detail: "Failed to publish catalog version.",
+                type: "PublishError",
+                statusCode: 500
+            );
     }
 }
