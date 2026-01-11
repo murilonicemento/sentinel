@@ -1,8 +1,10 @@
 using System.Net;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using RiskCatalog.Api.Filters;
 using RiskCatalog.Api.Middlewares;
 using RiskCatalog.Application;
@@ -36,7 +38,49 @@ builder.Host.UseSerilog();
 
 builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
 builder.Services
-    .AddOpenApi()
+    .AddOpenApi(options =>
+    {
+        options.AddDocumentTransformer((document, context, cancellationToken) =>
+        {
+            document.Components ??= new OpenApiComponents();
+            document.Components.SecuritySchemes.Add("BearerAuth", new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT"
+            });
+            return Task.CompletedTask;
+        });
+
+        options.AddOperationTransformer((operation, context, cancellationToken) =>
+        {
+            var metadata = context.Description.ActionDescriptor.EndpointMetadata;
+            var hasAuthorize = metadata.Any(m => m is IAuthorizeData);
+            var hasAllowAnonymous = metadata.Any(m => m is IAllowAnonymous);
+
+            if (hasAuthorize && !hasAllowAnonymous)
+            {
+                operation.Security = new List<OpenApiSecurityRequirement>
+                {
+                    new OpenApiSecurityRequirement
+                    {
+                        {
+                            new OpenApiSecurityScheme
+                            {
+                                Reference = new OpenApiReference
+                                {
+                                    Type = ReferenceType.SecurityScheme,
+                                    Id = "BearerAuth"
+                                }
+                            },
+                            Array.Empty<string>()
+                        }
+                    }
+                };
+            }
+            return Task.CompletedTask;
+        });
+    })
     .AddApplicationServiceCollection()
     .AddInfrastructureServiceCollection(builder.Configuration)
     .Configure<ApiBehaviorOptions>(options =>
@@ -95,7 +139,7 @@ if (app.Environment.IsDevelopment())
     {
         options
             .WithTitle("Sentinel - Risk Catalog API")
-            .WithTheme(ScalarTheme.Moon)
+            .WithTheme(ScalarTheme.DeepSpace)
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
             .AddPreferredSecuritySchemes("BearerAuth")
             .AddHttpAuthentication("BearerAuth", auth => { auth.Token = builder.Configuration["Scalar:AuthToken"]; });
@@ -106,7 +150,6 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-app.UseMiddleware<TenantValidationMiddleware>();
 app.MapControllers();
 
 app.Run();
