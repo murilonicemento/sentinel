@@ -26,57 +26,8 @@ public class RedisCacheService : ICacheService
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        ConfigureRedisPolicies(configuration);
+        // ConfigureRedisPolicies(configuration);
         RegisterCallbacks();
-    }
-
-    private void ConfigureRedisPolicies(IConfiguration configuration)
-    {
-        var server = _connectionMultiplexer.GetServer(_connectionMultiplexer.GetEndPoints().First());
-        var maxMemory = configuration["Redis:MaxMemory"] ?? "256mb";
-        var evictionPolicy = configuration["Redis:EvictionPolicy"] ?? "allkeys-lru";
-
-        try
-        {
-            server.ConfigSet("maxmemory", maxMemory);
-            server.ConfigSet("maxmemory-policy", evictionPolicy);
-
-            _logger.LogInformation(
-                "Redis cache policies configured. MaxMemory: {maxMemory}, EvictionPolicy: {evictionPolicy}",
-                maxMemory,
-                evictionPolicy);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "Failed to configure Redis policies. Using default settings. MaxMemory: {maxMemory}, EvictionPolicy: {evictionPolicy}",
-                maxMemory,
-                evictionPolicy);
-        }
-    }
-
-    private void RegisterCallbacks()
-    {
-        _connectionMultiplexer.ConnectionFailed += (sender, e) =>
-        {
-            _logger.LogError(
-                "Redis connection failed. EndPoint: {endPoint}, FailureType: {failureType}",
-                e.EndPoint,
-                e.FailureType);
-        };
-        _connectionMultiplexer.ConnectionRestored += (sender, e) =>
-        {
-            _logger.LogInformation(
-                "Redis connection restored. EndPoint: {endPoint}",
-                e.EndPoint);
-        };
-        _connectionMultiplexer.ErrorMessage += (sender, e) =>
-        {
-            _logger.LogError(
-                "Redis error message. EndPoint: {endPoint}, Message: {message}",
-                e.EndPoint,
-                e.Message);
-        };
     }
 
     public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) where T : class
@@ -144,14 +95,20 @@ public class RedisCacheService : ICacheService
         try
         {
             var server = _connectionMultiplexer.GetServer(_connectionMultiplexer.GetEndPoints().First());
-            var keys = server.Keys(pattern: pattern).ToArray();
+            var keysLength = 0;
 
-            if (keys.Length > 0)
+            await foreach (var key in server.KeysAsync(pattern: pattern, pageSize: 20)
+                               .WithCancellation(cancellationToken))
             {
-                await _database.KeyDeleteAsync(keys);
+                await _database.KeyDeleteAsync(key);
+                keysLength++;
+            }
+
+            if (keysLength > 0)
+            {
                 _logger.LogInformation(
                     "Removed {count} keys from cache matching pattern: {pattern}",
-                    keys.Length,
+                    keysLength,
                     pattern);
             }
             else
@@ -162,6 +119,7 @@ public class RedisCacheService : ICacheService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to remove keys by pattern from cache: {pattern}", pattern);
+            throw new Exception("An error ocurred.", ex);
         }
     }
 
@@ -176,5 +134,54 @@ public class RedisCacheService : ICacheService
             _logger.LogError(ex, "Failed to check if key exists in cache: {key}", key);
             return false;
         }
+    }
+
+    private void ConfigureRedisPolicies(IConfiguration configuration)
+    {
+        var server = _connectionMultiplexer.GetServer(_connectionMultiplexer.GetEndPoints().First());
+        var maxMemory = configuration["Redis:MaxMemory"] ?? "256mb";
+        var evictionPolicy = configuration["Redis:EvictionPolicy"] ?? "allkeys-lru";
+
+        try
+        {
+            server.ConfigSet("maxmemory", maxMemory);
+            server.ConfigSet("maxmemory-policy", evictionPolicy);
+
+            _logger.LogInformation(
+                "Redis cache policies configured. MaxMemory: {maxMemory}, EvictionPolicy: {evictionPolicy}",
+                maxMemory,
+                evictionPolicy);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to configure Redis policies. Using default settings. MaxMemory: {maxMemory}, EvictionPolicy: {evictionPolicy}",
+                maxMemory,
+                evictionPolicy);
+        }
+    }
+
+    private void RegisterCallbacks()
+    {
+        _connectionMultiplexer.ConnectionFailed += (sender, e) =>
+        {
+            _logger.LogError(
+                "Redis connection failed. EndPoint: {endPoint}, FailureType: {failureType}",
+                e.EndPoint,
+                e.FailureType);
+        };
+        _connectionMultiplexer.ConnectionRestored += (sender, e) =>
+        {
+            _logger.LogInformation(
+                "Redis connection restored. EndPoint: {endPoint}",
+                e.EndPoint);
+        };
+        _connectionMultiplexer.ErrorMessage += (sender, e) =>
+        {
+            _logger.LogError(
+                "Redis error message. EndPoint: {endPoint}, Message: {message}",
+                e.EndPoint,
+                e.Message);
+        };
     }
 }

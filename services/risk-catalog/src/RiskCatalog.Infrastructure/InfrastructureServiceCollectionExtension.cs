@@ -39,8 +39,9 @@ public static class InfrastructureServiceCollectionExtension
 
                 configurationOptions.AbortOnConnectFail = false;
                 configurationOptions.ConnectRetry = 3;
-                configurationOptions.ConnectTimeout = 5000;
-                configurationOptions.SyncTimeout = 5000;
+                configurationOptions.ConnectTimeout = 15000;
+                configurationOptions.SyncTimeout = 15000;
+                configurationOptions.AsyncTimeout = 15000;
 
                 return ConnectionMultiplexer.Connect(configurationOptions);
             })
