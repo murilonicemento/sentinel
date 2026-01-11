@@ -1,10 +1,12 @@
-﻿namespace RiskCatalog.Application.DTO;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace RiskCatalog.Application.DTO;
 
 public record CreateIDFCurvesDTO
 {
-    public string EventTypeCode { get; set; }
-    public int DurationMinutes { get; set; }
-    public double Intensity { get; set; }
-    public int ReturnPeriodYears { get; set; }
-    public int Version { get; set; }
+    [Required] public string EventTypeCode { get; set; }
+    [Required] public int DurationMinutes { get; set; }
+    [Required] public double Intensity { get; set; }
+    [Required] public int ReturnPeriodYears { get; set; }
+    [Required] public int Version { get; set; }
 }

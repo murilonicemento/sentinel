@@ -1,7 +1,9 @@
-﻿namespace RiskCatalog.Application.DTO;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace RiskCatalog.Application.DTO;
 
 public record CatalogPublishDTO
 {
-    public int Version { get; set; }
-    public string Notes { get; set; }
+    [Required] public int Version { get; set; }
+    [Required] public string Notes { get; set; }
 }

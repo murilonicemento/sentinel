@@ -1,9 +1,11 @@
-﻿namespace RiskCatalog.Application.DTO;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace RiskCatalog.Application.DTO;
 
 public record CreateEventTypeDTO
 {
-    public string Code { get; set; }
-    public string Name { get; set; }
-    public string Description { get; set; }
+    [Required] public string Code { get; set; }
+    [Required] public string Name { get; set; }
+    [Required] public string Description { get; set; }
     public bool IsActive { get; set; } = false;
 }
