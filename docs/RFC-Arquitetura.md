@@ -86,7 +86,7 @@ A arquitetura é baseada em **microsserviços**, cada um responsável por um **b
 ## 6. Tecnologias
 
 - **Backend**: ASP.NET Core (C#/.NET)
-- **Mensageria**: RabbitMQ
+- **Mensageria**: Kafka
 - **Cache**: Redis
 - **Indexação & Busca**: Elasticsearch (NEST client)
 - **Banco Relacional**: PostgreSQL
