@@ -14,12 +14,20 @@ public class RegionalParameterRepository : IRegionalParameterRepository
         _dbContext = dbContext;
     }
 
-    public async Task<RegionalParameter?> GetByRegionIdAsync(
-        Guid regionId,
+    public async Task<RegionalParameter?> GetRegionByIdAsync(Guid regionId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.RegionalParameters
+            .FirstOrDefaultAsync(regionalParameter => regionalParameter.Id == regionId,
+                cancellationToken: cancellationToken);
+    }
+
+    public async Task<RegionalParameter?> GetByAdjustmentFactorAsync(
+        double adjustmentFactor,
         CancellationToken cancellationToken = default)
     {
         return await _dbContext.RegionalParameters.FirstOrDefaultAsync(regionalParameter =>
-            regionalParameter.RegionId == regionId, cancellationToken);
+            regionalParameter.AdjustmentFactor == adjustmentFactor, cancellationToken);
     }
 
     public async Task<bool> AddRegionalParameterAsync(

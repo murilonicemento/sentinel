@@ -20,15 +20,15 @@ public class RiskMatrixConfiguration : IEntityTypeConfiguration<RiskMatrix>
             .HasColumnName("event_type_id");
         builder.Property(rm => rm.SeverityLevel)
             .IsRequired()
-            .HasColumnType("varchar(50)")
+            .HasColumnType("integer")
             .HasColumnName("severity_level");
         builder.Property(rm => rm.RiskLevel)
             .IsRequired()
-            .HasColumnType("varchar(50)")
+            .HasColumnType("integer")
             .HasColumnName("risk_level");
         builder.Property(rm => rm.Version)
             .IsRequired()
-            .HasColumnType("varchar(50)")
+            .HasColumnType("integer")
             .HasColumnName("version");
 
         builder.HasOne(rm => rm.EventType).WithMany(rm => rm.RiskMatrix).HasForeignKey(rm => rm.EventTypeId);

@@ -19,9 +19,11 @@ public class IDFCurveRepository : IIDFCurveRepository
         int? returnPeriodYears,
         CancellationToken cancellationToken = default)
     {
-        return await _dbContext.IDFCurves.FirstOrDefaultAsync(idfCurve =>
-            idfCurve.EventType.Code == eventTypeCode &&
-            (returnPeriodYears == null || idfCurve.ReturnPeriodYears == returnPeriodYears), cancellationToken);
+        return await _dbContext.IDFCurves
+            .Include(idfCurve => idfCurve.EventType)
+            .FirstOrDefaultAsync(idfCurve =>
+                idfCurve.EventType.Code == eventTypeCode &&
+                (!returnPeriodYears.HasValue || idfCurve.ReturnPeriodYears == returnPeriodYears), cancellationToken);
     }
 
     public async Task<IDFCurve?> GetIDFCurveForDurationAndPeriod(

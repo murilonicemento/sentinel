@@ -26,7 +26,6 @@ public class RedisCacheService : ICacheService
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        // ConfigureRedisPolicies(configuration);
         RegisterCallbacks();
     }
 
@@ -97,7 +96,7 @@ public class RedisCacheService : ICacheService
             var server = _connectionMultiplexer.GetServer(_connectionMultiplexer.GetEndPoints().First());
             var keysLength = 0;
 
-            await foreach (var key in server.KeysAsync(pattern: pattern, pageSize: 20)
+            await foreach (var key in server.KeysAsync(pattern: pattern, pageSize: 100)
                                .WithCancellation(cancellationToken))
             {
                 await _database.KeyDeleteAsync(key);
@@ -133,31 +132,6 @@ public class RedisCacheService : ICacheService
         {
             _logger.LogError(ex, "Failed to check if key exists in cache: {key}", key);
             return false;
-        }
-    }
-
-    private void ConfigureRedisPolicies(IConfiguration configuration)
-    {
-        var server = _connectionMultiplexer.GetServer(_connectionMultiplexer.GetEndPoints().First());
-        var maxMemory = configuration["Redis:MaxMemory"] ?? "256mb";
-        var evictionPolicy = configuration["Redis:EvictionPolicy"] ?? "allkeys-lru";
-
-        try
-        {
-            server.ConfigSet("maxmemory", maxMemory);
-            server.ConfigSet("maxmemory-policy", evictionPolicy);
-
-            _logger.LogInformation(
-                "Redis cache policies configured. MaxMemory: {maxMemory}, EvictionPolicy: {evictionPolicy}",
-                maxMemory,
-                evictionPolicy);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "Failed to configure Redis policies. Using default settings. MaxMemory: {maxMemory}, EvictionPolicy: {evictionPolicy}",
-                maxMemory,
-                evictionPolicy);
         }
     }
 

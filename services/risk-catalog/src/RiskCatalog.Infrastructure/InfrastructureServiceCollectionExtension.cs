@@ -19,7 +19,7 @@ public static class InfrastructureServiceCollectionExtension
         services
             .AddDbContext<RiskCatalogDbContext>(options =>
             {
-                options.UseNpgsql(configuration.GetConnectionString("IngestionReadDatabase"));
+                options.UseNpgsql(configuration.GetConnectionString("RiskCatalogDatabase"));
             })
             .AddRedisCache(configuration)
             .AddKafkaPublisher(configuration)
@@ -27,7 +27,7 @@ public static class InfrastructureServiceCollectionExtension
 
     private static IServiceCollection AddRedisCache(this IServiceCollection services, IConfiguration configuration)
     {
-        var redisConnectionString = configuration["ConnectionStrings:Redis"];
+        var redisConnectionString = configuration.GetConnectionString("Redis");
 
         if (string.IsNullOrEmpty(redisConnectionString))
             throw new InvalidOperationException("Redis connection string is not configured.");
@@ -50,7 +50,7 @@ public static class InfrastructureServiceCollectionExtension
 
     private static IServiceCollection AddKafkaPublisher(this IServiceCollection services, IConfiguration configuration)
     {
-        var kafkaConnectionString = configuration["ConnectionStrings:Kafka"];
+        var kafkaConnectionString = configuration.GetConnectionString("Kafka");
 
         if (string.IsNullOrEmpty(kafkaConnectionString))
             throw new InvalidOperationException("Kafka connection string is not configured.");

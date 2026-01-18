@@ -208,6 +208,49 @@ public class EventTypeService : IEventTypeService
         return isCreated;
     }
 
+    public async Task<bool> CreateSeverity(SeverityDTO severityDto, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation(
+            "Creating severity. Level: {level}, Description: {description}",
+            severityDto.Level,
+            severityDto.Description
+        );
+        var severityLevel = Enum.Parse<SeverityLevelEnum>(severityDto.Level);
+        var severityExists = await _severityRepository.GetByLevel(severityLevel, cancellationToken) is not null;
+
+        if (severityExists)
+        {
+            _logger.LogWarning(
+                "Failed to create severity. Severity level already exists. Level: {level}",
+                severityDto.Level);
+
+            throw new ArgumentException("Severity with the same level already exists.");
+        }
+
+        var severity = new Severity
+        {
+            Level = severityLevel,
+            Description = severityDto.Description
+        };
+        var isCreated = await _severityRepository.CreateSeverity(severity, cancellationToken);
+
+        if (isCreated)
+        {
+            _logger.LogInformation(
+                "Severity created successfully. Level: {level}, Description: {description}",
+                severityDto.Level,
+                severityDto.Description);
+        }
+        else
+        {
+            _logger.LogError(
+                "Failed to create severity. Database operation returned false. Level: {level}",
+                severityDto.Level);
+        }
+
+        return isCreated;
+    }
+
     public async Task<bool> UpdateEventTypeStatusAsync(
         Guid id,
         bool isActive,
@@ -241,7 +284,7 @@ public class EventTypeService : IEventTypeService
         return isUpdated;
     }
 
-    public async Task<bool> AddSeverityCriterionToEventType(
+    public async Task<bool> CreateSeverityCriterionToEventType(
         SeverityCriterionDTO severityCriterionDto,
         CancellationToken cancellationToken = default)
     {
@@ -293,6 +336,7 @@ public class EventTypeService : IEventTypeService
             _logger.LogError(
                 "Failed to add severity criterion. Severity level not found. SeverityLevel: {severityLevel}",
                 severityCriterionDto.SeverityLevel);
+
             throw new ArgumentException("Severity level not found.");
         }
 

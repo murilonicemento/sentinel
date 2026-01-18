@@ -19,10 +19,12 @@ public class RiskMatrixRepository : IRiskMatrixRepository
         string severityLevel,
         int? version, CancellationToken cancellationToken = default)
     {
-        return await _dbContext.RiskMatrices.FirstOrDefaultAsync(riskMatrix =>
-            riskMatrix.EventType.Code == eventTypeCode &&
-            riskMatrix.SeverityLevel.ToString() == severityLevel &&
-            (version == null || riskMatrix.Version == version), cancellationToken);
+        return await _dbContext.RiskMatrices
+            .Include(riskMatrix => riskMatrix.EventType)
+            .FirstOrDefaultAsync(riskMatrix =>
+                riskMatrix.EventType.Code == eventTypeCode &&
+                riskMatrix.SeverityLevel.ToString() == severityLevel &&
+                (version == null || riskMatrix.Version == version), cancellationToken);
     }
 
     public async Task<bool> AddRiskMatrixAsync(RiskMatrix riskMatrix, CancellationToken cancellationToken = default)

@@ -57,6 +57,7 @@ public class RiskModelService : IRiskModelService
             version);
 
         var cachedResult = await _cacheService.GetAsync<RiskMatrixDTO>(cacheKey, cancellationToken);
+
         if (cachedResult != null)
         {
             _logger.LogInformation("Risk matrix retrieved from cache. EventTypeCode: {eventTypeCode}", eventTypeCode);
@@ -115,7 +116,7 @@ public class RiskModelService : IRiskModelService
         if (cachedResult != null)
         {
             _logger.LogInformation("IDF curve retrieved from cache. EventTypeCode: {eventTypeCode}", eventTypeCode);
-
+        
             return cachedResult;
         }
 
@@ -171,7 +172,7 @@ public class RiskModelService : IRiskModelService
             return cachedResult;
         }
 
-        var regionalParameter = await _regionalParameterRepository.GetByRegionIdAsync(regionId, cancellationToken);
+        var regionalParameter = await _regionalParameterRepository.GetRegionByIdAsync(regionId, cancellationToken);
 
         if (regionalParameter is null)
         {
@@ -182,7 +183,7 @@ public class RiskModelService : IRiskModelService
 
         var result = new RegionalRiskParametersDTO
         {
-            RegionId = regionalParameter.RegionId,
+            RegionId = regionalParameter.Id,
             AdjustmentFactor = regionalParameter.AdjustmentFactor,
             Description = regionalParameter.Description
         };
@@ -191,7 +192,7 @@ public class RiskModelService : IRiskModelService
 
         _logger.LogInformation(
             "Regional risk parameters retrieved successfully. RegionId: {regionId}, AdjustmentFactor: {adjustmentFactor}",
-            regionalParameter.RegionId,
+            regionalParameter.Id,
             regionalParameter.AdjustmentFactor);
 
         return result;
@@ -348,23 +349,24 @@ public class RiskModelService : IRiskModelService
     }
 
     public async Task<bool> CreateRegionalRiskParametersAsync(
-        RegionalRiskParametersDTO regionalRiskParametersDto,
+        CreateRegionalRiskParameterDTO regionalRiskParametersDto,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation(
-            "Creating regional risk parameters. RegionId: {regionId}, AdjustmentFactor: {adjustmentFactor}",
-            regionalRiskParametersDto.RegionId,
-            regionalRiskParametersDto.AdjustmentFactor);
+            "Creating regional risk parameters. Adjustment factor: {adjustmentFactor}, Description: {aescription}",
+            regionalRiskParametersDto.AdjustmentFactor,
+            regionalRiskParametersDto.Description
+        );
 
-        var regionalParameterExist = await _regionalParameterRepository.GetByRegionIdAsync(
-            regionalRiskParametersDto.RegionId,
+        var regionalParameterExist = await _regionalParameterRepository.GetByAdjustmentFactorAsync(
+            regionalRiskParametersDto.AdjustmentFactor,
             cancellationToken) is not null;
 
         if (regionalParameterExist)
         {
             _logger.LogWarning(
-                "Failed to create regional risk parameters. Regional risk parameters already exist. RegionId: {regionId}",
-                regionalRiskParametersDto.RegionId);
+                "Failed to create regional risk parameters. Regional risk parameters already exist. RegionId: {adjustmentFactor}",
+                regionalRiskParametersDto.AdjustmentFactor);
 
             throw new ArgumentException(
                 "Regional risk parameters already exist for the given region.");
@@ -372,7 +374,6 @@ public class RiskModelService : IRiskModelService
 
         var regionalParameter = new RegionalParameter
         {
-            RegionId = regionalRiskParametersDto.RegionId,
             AdjustmentFactor = regionalRiskParametersDto.AdjustmentFactor,
             Description = regionalRiskParametersDto.Description
         };
@@ -382,19 +383,22 @@ public class RiskModelService : IRiskModelService
 
         if (isCreated)
         {
-            var cacheKey = $"{RegionalParameterCachePrefix}:{regionalRiskParametersDto.RegionId}";
+            var regionalParameterCreated = await _regionalParameterRepository.GetByAdjustmentFactorAsync(
+                regionalRiskParametersDto.AdjustmentFactor,
+                cancellationToken);
+            var cacheKey = $"{RegionalParameterCachePrefix}:{regionalParameterCreated.Id}";
             await _cacheService.RemoveAsync(cacheKey, cancellationToken);
 
             _logger.LogInformation(
                 "Regional risk parameters created successfully. RegionId: {regionId}, AdjustmentFactor: {adjustmentFactor}",
-                regionalRiskParametersDto.RegionId,
-                regionalRiskParametersDto.AdjustmentFactor);
+                regionalParameterCreated.Id,
+                regionalParameterCreated.AdjustmentFactor);
         }
         else
         {
             _logger.LogError(
-                "Failed to create regional risk parameters. Database operation returned false. RegionId: {regionId}",
-                regionalRiskParametersDto.RegionId);
+                "Failed to create regional risk parameters. Database operation returned false. AdjustmentFactor: {adjustmentFactor}",
+                regionalRiskParametersDto.AdjustmentFactor);
         }
 
         return isCreated;

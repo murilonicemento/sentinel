@@ -25,7 +25,9 @@ public class EventTypeRepository : IEventTypeRepository
         string eventTypeCode,
         CancellationToken cancellationToken = default)
     {
-        return await _dbContext.EventTypes.FirstOrDefaultAsync(e => e.Code == eventTypeCode, cancellationToken);
+        return await _dbContext.EventTypes
+            .Include(e => e.SeverityCriteria)
+            .FirstOrDefaultAsync(e => e.Code == eventTypeCode, cancellationToken);
     }
 
     public async Task<IEnumerable<SeverityCriterion>> GetSeveritiesCriterionForEventType(
@@ -33,7 +35,7 @@ public class EventTypeRepository : IEventTypeRepository
         int? version,
         CancellationToken cancellationToken = default)
     {
-        var query = _dbContext.SeverityCriteria.AsQueryable();
+        var query = _dbContext.SeverityCriteria.Include(s => s.Severity).AsQueryable();
 
         query = query.Where(sc => sc.EventType.Code == eventTypeCode);
 

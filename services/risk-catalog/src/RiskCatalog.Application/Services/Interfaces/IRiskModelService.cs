@@ -28,7 +28,7 @@ public interface IRiskModelService
         CancellationToken cancellationToken = default);
 
     public Task<bool> CreateRegionalRiskParametersAsync(
-        RegionalRiskParametersDTO regionalRiskParametersDto,
+        CreateRegionalRiskParameterDTO regionalRiskParametersDto,
         CancellationToken cancellationToken = default);
 
     public Task<bool> PublishCatalogVersionAsync(

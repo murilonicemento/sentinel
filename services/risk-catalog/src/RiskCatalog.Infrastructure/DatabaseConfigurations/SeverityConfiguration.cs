@@ -16,7 +16,7 @@ public class SeverityConfiguration : IEntityTypeConfiguration<Severity>
             .HasColumnName("id");
         builder.Property(s => s.Level)
             .IsRequired()
-            .HasColumnType("nvarchar(50)")
+            .HasColumnType("integer")
             .HasColumnName("level");
         builder.Property(s => s.Description)
             .IsRequired()

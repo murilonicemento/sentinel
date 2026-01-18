@@ -1,6 +1,8 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RiskCatalog.Application.DTO;
+using RiskCatalog.Application.Services;
 using RiskCatalog.Application.Services.Interfaces;
 
 namespace RiskCatalog.Api.Controllers;
@@ -87,7 +89,7 @@ public class RiskModelController : ControllerBase
     [HttpPost("regional-risk-parameters")]
     [Authorize(Policy = "RiskCatalogWrite")]
     public async Task<ActionResult> CreateRegionalRiskParametersToRegion(
-        [FromBody] RegionalRiskParametersDTO regionalRiskParametersDto)
+        [FromBody] CreateRegionalRiskParameterDTO regionalRiskParametersDto)
     {
         var isCreated = await _riskModelService.CreateRegionalRiskParametersAsync(regionalRiskParametersDto);
 
@@ -105,9 +107,7 @@ public class RiskModelController : ControllerBase
     [Authorize(Policy = "RiskCatalogWrite")]
     public async Task<ActionResult> PublishRiskCatalogVersion([FromBody] CatalogPublishDTO catalogPublishDto)
     {
-        HttpContext.Request.Headers.TryGetValue("X-Tenant-Id", out var tenantHeader);
-
-        var tenantId = Guid.Parse(tenantHeader!);
+        var tenantId = Guid.Parse(HttpContext.User.FindFirst("tenantId")?.Value!);
         var isPublished = await _riskModelService.PublishCatalogVersionAsync(catalogPublishDto, tenantId);
 
         return isPublished

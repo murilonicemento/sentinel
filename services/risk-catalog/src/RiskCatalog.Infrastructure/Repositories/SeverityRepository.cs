@@ -21,4 +21,13 @@ public class SeverityRepository : ISeverityRepository
     {
         return await _dbContext.Severities.FirstOrDefaultAsync(x => x.Level == severityLevel, cancellationToken);
     }
+
+    public async Task<bool> CreateSeverity(Severity severity, CancellationToken cancellationToken = default)
+    {
+        await _dbContext.Severities.AddAsync(severity, cancellationToken);
+
+        var result = await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return result > 0;
+    }
 }

@@ -21,12 +21,16 @@ public interface IEventTypeService
         CreateEventTypeDTO eventTypeDto,
         CancellationToken cancellationToken = default);
 
+    public Task<bool> CreateSeverity(
+        SeverityDTO severityDto,
+        CancellationToken cancellationToken = default);
+
+    public Task<bool> CreateSeverityCriterionToEventType(
+        SeverityCriterionDTO severityCriterionDto,
+        CancellationToken cancellationToken = default);
+
     public Task<bool> UpdateEventTypeStatusAsync(
         Guid id,
         bool isActive,
-        CancellationToken cancellationToken = default);
-
-    public Task<bool> AddSeverityCriterionToEventType(
-        SeverityCriterionDTO severityCriterionDto,
         CancellationToken cancellationToken = default);
 }

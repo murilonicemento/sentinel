@@ -51,7 +51,48 @@ public class EventTypeController : ControllerBase
     {
         var isCreated = await _eventTypeService.CreateEventTypeAsync(eventTypeDto);
 
-        return Created("/api/event-types", new { isCreated });
+        return isCreated
+            ? Created("/api/event-types", new { isCreated })
+            : Problem(
+                title: "An error occurred.",
+                detail: "Failed to create event type.",
+                type: "CreateError",
+                statusCode: 500
+            );
+    }
+
+    [HttpPost("severity")]
+    [Authorize(Policy = "RiskCatalogWrite")]
+    public async Task<ActionResult> CreateSeverity(
+        [FromBody] SeverityDTO severityCriterionDto)
+    {
+        var isAdded = await _eventTypeService.CreateSeverity(severityCriterionDto);
+
+        return isAdded
+            ? Created("/api/event-types/severity-criterion", new { isAdded })
+            : Problem(
+                title: "An error occurred.",
+                detail: "Failed to create severity to event type.",
+                type: "CreateError",
+                statusCode: 500
+            );
+    }
+
+    [HttpPost("severity-criterion")]
+    [Authorize(Policy = "RiskCatalogWrite")]
+    public async Task<ActionResult> CreateSeverityCriterionToEventType(
+        [FromBody] SeverityCriterionDTO severityCriterionDto)
+    {
+        var isAdded = await _eventTypeService.CreateSeverityCriterionToEventType(severityCriterionDto);
+
+        return isAdded
+            ? Created("/api/event-types/severity-criterion", new { isAdded })
+            : Problem(
+                title: "An error occurred.",
+                detail: "Failed to create severity criterion to event type.",
+                type: "CreateError",
+                statusCode: 500
+            );
     }
 
     [HttpPatch("{id:guid}/status")]
@@ -68,23 +109,6 @@ public class EventTypeController : ControllerBase
                 title: "An error occurred.",
                 detail: "Failed to update event type status.",
                 type: "UpdateError",
-                statusCode: 500
-            );
-    }
-
-    [HttpPost("severity-criterion")]
-    [Authorize(Policy = "RiskCatalogWrite")]
-    public async Task<ActionResult> AddSeverityCriterionToEventType(
-        [FromBody] SeverityCriterionDTO severityCriterionDto)
-    {
-        var isAdded = await _eventTypeService.AddSeverityCriterionToEventType(severityCriterionDto);
-
-        return isAdded
-            ? Created("/api/event-types/severity-criterion", new { isAdded })
-            : Problem(
-                title: "An error occurred.",
-                detail: "Failed to add severity criterion to event type.",
-                type: "AddError",
                 statusCode: 500
             );
     }

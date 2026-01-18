@@ -14,10 +14,6 @@ public class RegionalParametersConfiguration : IEntityTypeConfiguration<Regional
             .IsRequired()
             .HasColumnType("uniqueidentifier")
             .HasColumnName("id");
-        builder.Property(rp => rp.RegionId)
-            .IsRequired()
-            .HasColumnType("uniqueidentifier")
-            .HasColumnName("region_id");
         builder.Property(rp => rp.AdjustmentFactor)
             .IsRequired()
             .HasColumnType("double")
