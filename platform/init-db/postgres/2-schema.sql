@@ -60,7 +60,7 @@ CREATE TABLE event_type
 CREATE TABLE severity
 (
     id          uuid PRIMARY KEY,
-    level       varchar(50) NOT NULL,
+    level       integer NOT NULL,
     description varchar(255)
 );
 
@@ -88,7 +88,6 @@ CREATE TABLE idf_curve
 CREATE TABLE regional_parameter
 (
     id                uuid PRIMARY KEY,
-    region_id         uuid             NOT NULL,
     adjustment_factor double precision NOT NULL,
     description       varchar(255)
 );
@@ -97,7 +96,7 @@ CREATE TABLE risk_matrix
 (
     id             uuid PRIMARY KEY,
     event_type_id  uuid        NOT NULL REFERENCES event_type (id),
-    severity_level varchar(50) NOT NULL,
-    risk_level     varchar(50) NOT NULL,
+    severity_level integer NOT NULL,
+    risk_level     integer NOT NULL,
     version        integer     NOT NULL default 1
 );
