@@ -36,3 +36,4 @@ public interface IRiskModelService
         Guid tenantId,
         CancellationToken cancellationToken = default);
 }
+

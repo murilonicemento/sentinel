@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using RiskCatalog.Domain.Entities;
 using RiskCatalog.Domain.EventTypes;
 using RiskCatalog.Domain.RiskModels;
 
@@ -6,6 +7,7 @@ namespace RiskCatalog.Infrastructure.DatabaseContext;
 
 public class RiskCatalogDbContext : DbContext
 {
+    public virtual DbSet<User> Users { get; set; }
     public virtual DbSet<EventType> EventTypes { get; set; }
     public virtual DbSet<Severity> Severities { get; set; }
     public virtual DbSet<SeverityCriterion> SeverityCriteria { get; set; }

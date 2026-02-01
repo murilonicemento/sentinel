@@ -78,6 +78,7 @@ builder.Services
                     }
                 };
             }
+
             return Task.CompletedTask;
         });
     })
@@ -153,3 +154,7 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program
+{
+}

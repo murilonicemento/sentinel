@@ -73,6 +73,7 @@ public static class InfrastructureServiceCollectionExtension
 
     private static IServiceCollection AddRepositories(this IServiceCollection services) =>
         services
+            .AddScoped<IUserRepository, UserRepository>()
             .AddScoped<IEventTypeRepository, EventTypeRepository>()
             .AddScoped<IIDFCurveRepository, IDFCurveRepository>()
             .AddScoped<IRegionalParameterRepository, RegionalParameterRepository>()

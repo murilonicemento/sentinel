@@ -8,3 +8,4 @@ public record RiskCatalogPublishedEvent
     public Guid PublishedBy { get; init; }
 }
 
+
