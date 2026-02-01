@@ -1,5 +1,7 @@
 ﻿-- INGESTION SERVICE DATABASE SCHEMA
 
+\c ingestion;
+   
 CREATE TABLE data_source
 (
     id                   uuid PRIMARY KEY,
@@ -48,13 +50,15 @@ CREATE INDEX idx_outbox_processed ON outbox (processed) WHERE processed = false;
 
 -- RISK CATALOG SERVICE DATABASE SCHEMA
 
+\c risk_catalog;
+
 CREATE TABLE event_type
 (
     id          uuid PRIMARY KEY,
     code        varchar(50)  NOT NULL,
     name        varchar(100) NOT NULL,
     description varchar(255) NOT NULL,
-    is_active    boolean      NOT NULL default true
+    is_active   boolean      NOT NULL default true
 );
 
 CREATE TABLE severity
@@ -95,8 +99,8 @@ CREATE TABLE regional_parameter
 CREATE TABLE risk_matrix
 (
     id             uuid PRIMARY KEY,
-    event_type_id  uuid        NOT NULL REFERENCES event_type (id),
+    event_type_id  uuid    NOT NULL REFERENCES event_type (id),
     severity_level integer NOT NULL,
     risk_level     integer NOT NULL,
-    version        integer     NOT NULL default 1
+    version        integer NOT NULL default 1
 );
