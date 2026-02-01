@@ -20,7 +20,8 @@
     container_name: ingestion
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__IngestionDatabase=${ConnectionStrings__IngestionDatabase}
+      - ConnectionStrings__IngestionWriteDatabase=${ConnectionStrings__IngestionWriteDatabase}
+      - ConnectionStrings__IngestionReadDatabase=${ConnectionStrings__IngestionReadDatabase}
       - ConnectionStrings__Redis=${ConnectionStrings__Redis}
       - ConnectionStrings__Kafka=${ConnectionStrings__Kafka}
       - MinIO__Host=${MinIO__Host}
@@ -31,14 +32,39 @@
       - "7001:8080"
     depends_on:
       - postgres
+      - mongodb
+      - elasticsearch
       - redis
       - minio
       - kafka
     restart: unless-stopped
     networks:
       - sentinel-network
+  risk-catalog:
+    image: risk-catalog
+    build:
+      context: ../services/risk-catalog
+      dockerfile: Dockerfile
+    container_name: risk-catalog
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__RiskCatalogDatabase=${ConnectionStrings__IngestionDatabase}
+      - ConnectionStrings__Redis=${ConnectionStrings__Redis}
+      - ConnectionStrings__Kafka=${ConnectionStrings__Kafka}
+      - Redis__MaxMemory=256mb
+      - Redis__EvictionPolicy=allkeys-lru
+    ports:
+      - "7002:8080"
+    depends_on:
+      - postgres
+      - elasticsearch
+      - redis
+      - kafka
+    restart: unless-stopped
+    networks:
+      - sentinel-network
   postgres:
-    image: postgres
+    image: postgres:15.5
     container_name: postgres
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
@@ -53,7 +79,7 @@
     networks:
       - sentinel-network
   mongodb:
-    image: mongo
+    image: mongo:7
     container_name: mongodb
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
@@ -68,7 +94,7 @@
     networks:
       - sentinel-network
   redis:
-    image: redis
+    image: redis:7
     container_name: redis
     ports:
       - "6379:6379"
@@ -78,7 +104,7 @@
     networks:
       - sentinel-network
   minio:
-    image: minio/minio
+    image: minio/minio:RELEASE.2025-12-11T05-00-58Z
     container_name: minio
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}

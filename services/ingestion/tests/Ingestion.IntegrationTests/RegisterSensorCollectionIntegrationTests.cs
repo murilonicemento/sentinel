@@ -223,3 +223,4 @@ public class RegisterSensorCollectionIntegrationTests : IClassFixture<IngestionW
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 }
+

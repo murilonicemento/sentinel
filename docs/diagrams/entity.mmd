@@ -63,6 +63,133 @@ namespace Ingestion.Events {
 }
 
 %% =====================
+%% Namespace: Risk Catalog
+%% =====================
+namespace RiskCatalog.Domain {
+
+  %% ===== Event Types and Severity =====
+  class EventType {
+    +Id: Guid
+    +Code: string
+    +Name: string
+    +Description: string
+    +IsActive: bool
+  }
+
+  class Severity {
+    +Id: Guid
+    +Level: SeverityLevelEnum
+    +Description: string
+  }
+
+  class SeverityCriterion {
+    +Id: Guid
+    +EventTypeId: Guid
+    +SeverityId: Guid
+    +MinValue: double
+    +MaxValue: double
+    +Unit: string
+    +Version: int
+  }
+
+  %% ===== Risk Matrices and IDF Curves =====
+  class RiskMatrix {
+    +Id: Guid
+    +EventTypeId: Guid
+    +SeverityLevel: SeverityLevelEnum
+    +RiskLevel: RiskLevelEnum
+    +Version: int
+  }
+
+  class IDFCurve {
+    +Id: Guid
+    +EventTypeId: Guid
+    +DurationMinutes: int
+    +Intensity: double
+    +ReturnPeriodYears: int
+    +Version: int
+  }
+
+  class RegionalParameter {
+    +Id: Guid
+    +RegionId: Guid
+    +AdjustmentFactor: double
+    +Description: string
+  }
+}
+
+%% ---------------------
+%% Domain Relationships
+%% ---------------------
+EventType "1" --> "N" SeverityCriterion
+Severity "1" --> "N" SeverityCriterion
+
+EventType "1" --> "N" RiskMatrix
+EventType "1" --> "N" IDFCurve
+
+RiskMatrix --> EventType
+IDFCurve --> EventType
+RegionalParameter --> RiskMatrix
+
+%% ---------------------
+%% Enums
+%% ---------------------
+namespace RiskCatalog.Domain.Enums {
+
+  class SeverityLevel {
+    <<enumeration>>
+    Low
+    Moderate
+    High
+    Extreme
+  }
+
+  class RiskLevel {
+    <<enumeration>>
+    Low
+    Medium
+    High
+    Critical
+  }
+}
+
+%% =====================
+%% Application DTOs (Read / Sync)
+%% =====================
+namespace RiskCatalog.Application.DTOs {
+
+  class EventTypeDTO {
+    +Id: Guid
+    +Code: string
+    +Name: string
+  }
+
+  class SeverityCriterionDTO {
+    +EventTypeCode: string
+    +SeverityLevel: string
+    +MinValue: double
+    +MaxValue: double
+    +Unit: string
+    +Version: int
+  }
+
+  class RiskMatrixDTO {
+    +EventTypeCode: string
+    +SeverityLevel: string
+    +RiskLevel: string
+    +Version: int
+  }
+}
+
+%% ---------------------
+%% Dependencies (read-only)
+%% ---------------------
+EventType --> EventTypeDTO
+SeverityRule --> SeverityRuleDTO
+RiskMatrix --> RiskMatrixDTO
+
+
+%% =====================
 %% Namespace: Geospatial
 %% =====================
 namespace Geospatial {
@@ -91,25 +218,6 @@ namespace Geospatial {
 }
 
 ZonaRisco --> Regiao
-
-%% =====================
-%% Namespace: Risk
-%% =====================
-namespace Risk {
-  class TipoEvento {
-    +id: Guid
-    +nome: string
-    +descricao: string
-  }
-  class MatrizRisco {
-    +id: Guid
-    +tipoEventoId: Guid
-    +nivelSeveridade: string
-    +curvaIDF: string
-  }
-}
-
-MatrizRisco --> TipoEvento
 
 %% =====================
 %% Namespace: RiskScoring
