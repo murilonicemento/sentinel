@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Geospatial.Application\Geospatial.Application.csproj" />
+    <ProjectReference Include="..\Geospatial.Infrastructure\Geospatial.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

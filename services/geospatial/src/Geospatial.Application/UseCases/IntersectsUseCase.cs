@@ -1,9 +1,10 @@
-﻿using Geospatial.Domain.Geometry;
+﻿using Geospatial.Application.Interfaces.UseCases;
+using Geospatial.Domain.Geometry;
 using Geospatial.Domain.Services;
 
 namespace Geospatial.Application.UseCases;
 
-public class IntersectsUseCase
+public class IntersectsUseCase : IIntersectsUseCase
 {
     private readonly IGeospatialCalculator _calculator;
 

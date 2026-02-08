@@ -1,10 +1,11 @@
-﻿using Geospatial.Domain.Geometry;
+﻿using Geospatial.Application.Interfaces.UseCases;
+using Geospatial.Domain.Geometry;
 using Geospatial.Domain.Services;
 using Geospatial.Domain.ValueObjects;
 
 namespace Geospatial.Application.UseCases;
 
-public class ContainsPointUseCase
+public class ContainsPointUseCase : IContainsPointUseCase
 {
     private readonly IGeospatialCalculator _calculator;
 

@@ -29,7 +29,7 @@ public static class BatchRequestMapper
                     result.Add((eval.Type, (center, target, radius)));
                     break;
                 default:
-                    throw new NotSupportedException($"Evaluation type '{eval.Type}' is not supported");
+                    throw new ArgumentException($"Evaluation type '{eval.Type}' is not supported");
             }
         }
 

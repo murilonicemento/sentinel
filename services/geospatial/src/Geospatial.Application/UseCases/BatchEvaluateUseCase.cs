@@ -1,16 +1,17 @@
 ﻿using Geospatial.Application.DTOs;
+using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.Mappers;
 using Geospatial.Domain.Geometry;
 using Geospatial.Domain.ValueObjects;
 
 namespace Geospatial.Application.UseCases;
 
-public class BatchEvaluateUseCase
+public class BatchEvaluateUseCase : IBatchEvaluateUseCase
 {
-    private readonly ContainsPointUseCase _containsPointUseCase;
-    private readonly WithinRadiusUseCase _withinRadiusUseCase;
+    private readonly IContainsPointUseCase _containsPointUseCase;
+    private readonly IWithinRadiusUseCase _withinRadiusUseCase;
 
-    public BatchEvaluateUseCase(ContainsPointUseCase containsPointUseCase, WithinRadiusUseCase withinRadiusUseCase)
+    public BatchEvaluateUseCase(IContainsPointUseCase containsPointUseCase, IWithinRadiusUseCase withinRadiusUseCase)
     {
         _containsPointUseCase = containsPointUseCase;
         _withinRadiusUseCase = withinRadiusUseCase;
@@ -30,7 +31,7 @@ public class BatchEvaluateUseCase
                     var (center, target, radius) = ((GeoPoint, GeoPoint, GeoRadius))eval.DomainPayload;
                     return (eval.Type, (object)_withinRadiusUseCase.Execute(center, target, radius));
                 default:
-                    throw new NotSupportedException($"Unknown evaluation type {eval.Type}");
+                    throw new ArgumentException($"Unknown evaluation type {eval.Type}");
             }
         }).ToList();
 

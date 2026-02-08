@@ -1,9 +1,10 @@
-﻿using Geospatial.Domain.Services;
+﻿using Geospatial.Application.Interfaces.UseCases;
+using Geospatial.Domain.Services;
 using Geospatial.Domain.ValueObjects;
 
 namespace Geospatial.Application.UseCases;
 
-public class DistanceUseCase
+public class DistanceUseCase : IDistanceUseCase
 {
     private readonly IGeospatialCalculator _calculator;
 

@@ -1,6 +1,6 @@
 ﻿using Geospatial.Application.DTOs;
+using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.Mappers;
-using Geospatial.Application.UseCases;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Geospatial.Api.Controllers;
@@ -9,18 +9,18 @@ namespace Geospatial.Api.Controllers;
 [Route("api/geospatial")]
 public class GeospatialController : ControllerBase
 {
-    private readonly ContainsPointUseCase _containsPointUseCase;
-    private readonly WithinRadiusUseCase _withinRadiusUseCase;
-    private readonly IntersectsUseCase _intersectsUseCase;
-    private readonly DistanceUseCase _distanceUseCase;
-    private readonly BatchEvaluateUseCase _batchEvaluateUseCase;
+    private readonly IContainsPointUseCase _containsPointUseCase;
+    private readonly IWithinRadiusUseCase _withinRadiusUseCase;
+    private readonly IIntersectsUseCase _intersectsUseCase;
+    private readonly IDistanceUseCase _distanceUseCase;
+    private readonly IBatchEvaluateUseCase _batchEvaluateUseCase;
 
     public GeospatialController(
-        ContainsPointUseCase containsPointUseCase,
-        WithinRadiusUseCase withinRadiusUseCase,
-        IntersectsUseCase intersectsUseCase,
-        DistanceUseCase distanceUseCase,
-        BatchEvaluateUseCase batchEvaluateUseCase)
+        IContainsPointUseCase containsPointUseCase,
+        IWithinRadiusUseCase withinRadiusUseCase,
+        IIntersectsUseCase intersectsUseCase,
+        IDistanceUseCase distanceUseCase,
+        IBatchEvaluateUseCase batchEvaluateUseCase)
     {
         _containsPointUseCase = containsPointUseCase;
         _withinRadiusUseCase = withinRadiusUseCase;
