@@ -63,6 +63,19 @@
     restart: unless-stopped
     networks:
       - sentinel-network
+  geospatial:
+    image: risk-catalog
+    build:
+      context: ../services/geospatial
+      dockerfile: Dockerfile
+    container_name: geospatial
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "7003:8080"
+    restart: unless-stopped
+    networks:
+      - sentinel-network
   postgres:
     image: postgres:15.5
     container_name: postgres
