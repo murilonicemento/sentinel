@@ -1,4 +1,4 @@
-﻿services:
+services:
   api-gateway:
     image: api-gateway
     build:
@@ -64,15 +64,20 @@
     networks:
       - sentinel-network
   geospatial:
-    image: risk-catalog
+    image: geospatial
     build:
       context: ../services/geospatial
       dockerfile: Dockerfile
     container_name: geospatial
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Elasticsearch__Url=http://elasticsearch:9200
+      - Loki__Url=http://loki:3100
     ports:
       - "7003:8080"
+    depends_on:
+      - elasticsearch
+      - loki
     restart: unless-stopped
     networks:
       - sentinel-network
@@ -196,7 +201,18 @@
     depends_on:
       - elasticsearch
     environment:
-      - ELASTICSEARCH_HOSTS=${ElasticSearch_URI}
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - sentinel-network
+    restart: unless-stopped
+  loki:
+    container_name: loki
+    image: grafana/loki:2.9.3
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki-data:/loki
     networks:
       - sentinel-network
     restart: unless-stopped
@@ -206,6 +222,7 @@ volumes:
   redis-data:
   minio-data:
   elasticsearch-data:
+  loki-data:
 networks:
   sentinel-network:
   

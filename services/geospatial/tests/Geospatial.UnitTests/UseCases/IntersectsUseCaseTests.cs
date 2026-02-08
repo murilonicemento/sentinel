@@ -1,7 +1,9 @@
+using Geospatial.Application.Interfaces.Repositories;
 using Geospatial.Application.UseCases;
 using Geospatial.Domain.Geometry;
 using Geospatial.Domain.Services;
 using Geospatial.Domain.ValueObjects;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace Geospatial.UnitTests.UseCases;
@@ -9,37 +11,43 @@ namespace Geospatial.UnitTests.UseCases;
 public class IntersectsUseCaseTests
 {
     private readonly Mock<IGeospatialCalculator> _mockCalculator;
+    private readonly Mock<IGeospatialEventRepository> _mockEventRepository;
+    private readonly Mock<ILogger<IntersectsUseCase>> _mockLogger;
     private readonly IntersectsUseCase _sut;
 
     public IntersectsUseCaseTests()
     {
         _mockCalculator = new Mock<IGeospatialCalculator>();
-        _sut = new IntersectsUseCase(_mockCalculator.Object);
+        _mockEventRepository = new Mock<IGeospatialEventRepository>();
+        _mockEventRepository.Setup(x => x.IndexAsync(It.IsAny<Geospatial.Application.Models.GeospatialOperationEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _mockLogger = new Mock<ILogger<IntersectsUseCase>>();
+        _sut = new IntersectsUseCase(_mockCalculator.Object, _mockEventRepository.Object, _mockLogger.Object);
     }
 
     [Fact]
-    public void Execute_WhenPolygonsIntersect_ReturnsTrue()
+    public async Task ExecuteAsync_WhenPolygonsIntersect_ReturnsTrue()
     {
         var polyA = CreateTestPolygon();
         var polyB = CreateOverlappingPolygon();
 
         _mockCalculator.Setup(x => x.Intersects(polyA, polyB)).Returns(true);
 
-        var result = _sut.Execute(polyA, polyB);
+        var result = await _sut.ExecuteAsync(polyA, polyB);
 
         Assert.True(result);
         _mockCalculator.Verify(x => x.Intersects(polyA, polyB), Times.Once);
     }
 
     [Fact]
-    public void Execute_WhenPolygonsDoNotIntersect_ReturnsFalse()
+    public async Task ExecuteAsync_WhenPolygonsDoNotIntersect_ReturnsFalse()
     {
         var polyA = CreateTestPolygon();
         var polyB = CreateNonOverlappingPolygon();
 
         _mockCalculator.Setup(x => x.Intersects(polyA, polyB)).Returns(false);
 
-        var result = _sut.Execute(polyA, polyB);
+        var result = await _sut.ExecuteAsync(polyA, polyB);
 
         Assert.False(result);
     }

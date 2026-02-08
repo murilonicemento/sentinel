@@ -1,8 +1,8 @@
-﻿using Geospatial.Domain.ValueObjects;
+using Geospatial.Domain.ValueObjects;
 
 namespace Geospatial.Application.Interfaces.UseCases;
 
 public interface IWithinRadiusUseCase
 {
-    public (bool WithinRadius, double Distance) Execute(GeoPoint center, GeoPoint point, GeoRadius radius);
+    Task<(bool WithinRadius, double Distance)> ExecuteAsync(GeoPoint center, GeoPoint point, GeoRadius radius, CancellationToken cancellationToken = default);
 }

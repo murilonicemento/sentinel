@@ -1,6 +1,8 @@
+using Geospatial.Application.Interfaces.Repositories;
 using Geospatial.Application.UseCases;
 using Geospatial.Domain.Services;
 using Geospatial.Domain.ValueObjects;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace Geospatial.UnitTests.UseCases;
@@ -8,16 +10,22 @@ namespace Geospatial.UnitTests.UseCases;
 public class WithinRadiusUseCaseTests
 {
     private readonly Mock<IGeospatialCalculator> _mockCalculator;
+    private readonly Mock<IGeospatialEventRepository> _mockEventRepository;
+    private readonly Mock<ILogger<WithinRadiusUseCase>> _mockLogger;
     private readonly WithinRadiusUseCase _sut;
 
     public WithinRadiusUseCaseTests()
     {
         _mockCalculator = new Mock<IGeospatialCalculator>();
-        _sut = new WithinRadiusUseCase(_mockCalculator.Object);
+        _mockEventRepository = new Mock<IGeospatialEventRepository>();
+        _mockEventRepository.Setup(x => x.IndexAsync(It.IsAny<Geospatial.Application.Models.GeospatialOperationEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _mockLogger = new Mock<ILogger<WithinRadiusUseCase>>();
+        _sut = new WithinRadiusUseCase(_mockCalculator.Object, _mockEventRepository.Object, _mockLogger.Object);
     }
 
     [Fact]
-    public void Execute_WhenPointWithinRadius_ReturnsTrueAndDistance()
+    public async Task ExecuteAsync_WhenPointWithinRadius_ReturnsTrueAndDistance()
     {
         var center = new GeoPoint(-23.5505, -46.6333);
         var point = new GeoPoint(-23.5506, -46.6334);
@@ -25,14 +33,14 @@ public class WithinRadiusUseCaseTests
 
         _mockCalculator.Setup(x => x.Distance(center, point)).Returns(150.0);
 
-        var (withinRadius, distance) = _sut.Execute(center, point, radius);
+        var (withinRadius, distance) = await _sut.ExecuteAsync(center, point, radius);
 
         Assert.True(withinRadius);
         Assert.Equal(150.0, distance);
     }
 
     [Fact]
-    public void Execute_WhenPointOutsideRadius_ReturnsFalseAndDistance()
+    public async Task ExecuteAsync_WhenPointOutsideRadius_ReturnsFalseAndDistance()
     {
         var center = new GeoPoint(-23.5505, -46.6333);
         var point = new GeoPoint(-23.5600, -46.6400);
@@ -40,14 +48,14 @@ public class WithinRadiusUseCaseTests
 
         _mockCalculator.Setup(x => x.Distance(center, point)).Returns(1500.0);
 
-        var (withinRadius, distance) = _sut.Execute(center, point, radius);
+        var (withinRadius, distance) = await _sut.ExecuteAsync(center, point, radius);
 
         Assert.False(withinRadius);
         Assert.Equal(1500.0, distance);
     }
 
     [Fact]
-    public void Execute_WhenPointExactlyAtRadiusBoundary_ReturnsTrue()
+    public async Task ExecuteAsync_WhenPointExactlyAtRadiusBoundary_ReturnsTrue()
     {
         var center = new GeoPoint(0, 0);
         var point = new GeoPoint(0, 0);
@@ -55,14 +63,14 @@ public class WithinRadiusUseCaseTests
 
         _mockCalculator.Setup(x => x.Distance(center, point)).Returns(100.0);
 
-        var (withinRadius, distance) = _sut.Execute(center, point, radius);
+        var (withinRadius, distance) = await _sut.ExecuteAsync(center, point, radius);
 
         Assert.True(withinRadius);
         Assert.Equal(100.0, distance);
     }
 
     [Fact]
-    public void Execute_WhenRadiusInKilometers_ConvertsCorrectly()
+    public async Task ExecuteAsync_WhenRadiusInKilometers_ConvertsCorrectly()
     {
         var center = new GeoPoint(0, 0);
         var point = new GeoPoint(0, 0);
@@ -70,7 +78,7 @@ public class WithinRadiusUseCaseTests
 
         _mockCalculator.Setup(x => x.Distance(center, point)).Returns(999.0);
 
-        var (withinRadius, _) = _sut.Execute(center, point, radius);
+        var (withinRadius, _) = await _sut.ExecuteAsync(center, point, radius);
 
         Assert.True(withinRadius);
     }

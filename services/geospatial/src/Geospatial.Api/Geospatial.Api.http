@@ -1,6 +1,84 @@
 @Geospatial.Api_HostAddress = http://localhost:5170
 
-GET {{Geospatial.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### Contains Point
+POST {{Geospatial.Api_HostAddress}}/api/geospatial/contains-point
+Content-Type: application/json
 
-###
+{
+  "point": { "latitude": -23.5505, "longitude": -46.6333 },
+  "area": {
+    "coordinates": [
+      { "latitude": -23.56, "longitude": -46.65 },
+      { "latitude": -23.54, "longitude": -46.65 },
+      { "latitude": -23.54, "longitude": -46.61 },
+      { "latitude": -23.56, "longitude": -46.61 },
+      { "latitude": -23.56, "longitude": -46.65 }
+    ]
+  }
+}
+
+### Within Radius
+POST {{Geospatial.Api_HostAddress}}/api/geospatial/within-radius
+Content-Type: application/json
+
+{
+  "center": { "latitude": -23.5505, "longitude": -46.6333 },
+  "point": { "latitude": -23.5506, "longitude": -46.6334 },
+  "radius": { "value": 500, "unit": "Meters" }
+}
+
+### Distance
+POST {{Geospatial.Api_HostAddress}}/api/geospatial/distance
+Content-Type: application/json
+
+{
+  "from": { "latitude": -23.5505, "longitude": -46.6333 },
+  "to": { "latitude": -23.5506, "longitude": -46.6334 }
+}
+
+### Intersects
+POST {{Geospatial.Api_HostAddress}}/api/geospatial/intersects
+Content-Type: application/json
+
+{
+  "polygonA": {
+    "coordinates": [
+      { "latitude": 0, "longitude": 0 },
+      { "latitude": 1, "longitude": 0 },
+      { "latitude": 1, "longitude": 1 },
+      { "latitude": 0, "longitude": 1 },
+      { "latitude": 0, "longitude": 0 }
+    ]
+  },
+  "polygonB": {
+    "coordinates": [
+      { "latitude": 0.5, "longitude": 0.5 },
+      { "latitude": 1.5, "longitude": 0.5 },
+      { "latitude": 1.5, "longitude": 1.5 },
+      { "latitude": 0.5, "longitude": 1.5 },
+      { "latitude": 0.5, "longitude": 0.5 }
+    ]
+  }
+}
+
+### Search by Radius (Elasticsearch geo-query)
+POST {{Geospatial.Api_HostAddress}}/api/geospatial/query/search-by-radius
+Content-Type: application/json
+
+{
+  "center": { "latitude": -23.5505, "longitude": -46.6333 },
+  "radiusMeters": 10000
+}
+
+### Search by Polygon (Elasticsearch geo-query)
+POST {{Geospatial.Api_HostAddress}}/api/geospatial/query/search-by-polygon
+Content-Type: application/json
+
+{
+  "polygon": [
+    { "latitude": -23.56, "longitude": -46.65 },
+    { "latitude": -23.54, "longitude": -46.65 },
+    { "latitude": -23.54, "longitude": -46.61 },
+    { "latitude": -23.56, "longitude": -46.61 }
+  ]
+}

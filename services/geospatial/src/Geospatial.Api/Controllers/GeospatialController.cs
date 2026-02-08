@@ -1,4 +1,4 @@
-﻿using Geospatial.Application.DTOs;
+using Geospatial.Application.DTOs;
 using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.Mappers;
 using Microsoft.AspNetCore.Mvc;
@@ -31,23 +31,23 @@ public class GeospatialController : ControllerBase
 
 
     [HttpPost("contains-point")]
-    public IActionResult ContainsPoint([FromBody] ContainsPointRequestDTO request)
+    public async Task<IActionResult> ContainsPoint([FromBody] ContainsPointRequestDTO request, CancellationToken cancellationToken)
     {
         var area = GeoPolygonMapper.ToDomain(request.Area);
         var point = GeoPointMapper.ToDomain(request.Point);
-        var contains = _containsPointUseCase.Execute(area, point);
+        var contains = await _containsPointUseCase.ExecuteAsync(area, point, cancellationToken);
 
         return Ok(new { contains });
     }
 
 
     [HttpPost("within-radius")]
-    public IActionResult WithinRadius([FromBody] WithinRadiusRequestDTO request)
+    public async Task<IActionResult> WithinRadius([FromBody] WithinRadiusRequestDTO request, CancellationToken cancellationToken)
     {
         var center = GeoPointMapper.ToDomain(request.Center);
         var target = GeoPointMapper.ToDomain(request.Point);
         var radius = GeoRadiusMapper.ToDomain(request.Radius);
-        var result = _withinRadiusUseCase.Execute(center, target, radius);
+        var result = await _withinRadiusUseCase.ExecuteAsync(center, target, radius, cancellationToken);
 
         return Ok(new
         {
@@ -57,30 +57,30 @@ public class GeospatialController : ControllerBase
     }
 
     [HttpPost("intersects")]
-    public IActionResult Intersects([FromBody] IntersectsRequestDTO request)
+    public async Task<IActionResult> Intersects([FromBody] IntersectsRequestDTO request, CancellationToken cancellationToken)
     {
         var polygonA = GeoPolygonMapper.ToDomain(request.PolygonA);
         var polygonB = GeoPolygonMapper.ToDomain(request.PolygonB);
-        var intersects = _intersectsUseCase.Execute(polygonA, polygonB);
+        var intersects = await _intersectsUseCase.ExecuteAsync(polygonA, polygonB, cancellationToken);
 
         return Ok(new { intersects });
     }
 
     [HttpPost("distance")]
-    public IActionResult Distance([FromBody] DistanceRequestDTO request)
+    public async Task<IActionResult> Distance([FromBody] DistanceRequestDTO request, CancellationToken cancellationToken)
     {
         var from = GeoPointMapper.ToDomain(request.From);
         var to = GeoPointMapper.ToDomain(request.To);
-        var distance = _distanceUseCase.Execute(from, to);
+        var distance = await _distanceUseCase.ExecuteAsync(from, to, cancellationToken);
 
         return Ok(new { distance });
     }
 
 
     [HttpPost("evaluate-batch")]
-    public IActionResult EvaluateBatch([FromBody] BatchRequestDTO request)
+    public async Task<IActionResult> EvaluateBatch([FromBody] BatchRequestDTO request, CancellationToken cancellationToken)
     {
-        var response = _batchEvaluateUseCase.Execute(request);
+        var response = await _batchEvaluateUseCase.ExecuteAsync(request, cancellationToken);
 
         return Ok(response);
     }

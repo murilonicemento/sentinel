@@ -4,6 +4,7 @@ using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.UseCases;
 using Geospatial.Domain.Geometry;
 using Geospatial.Domain.ValueObjects;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace Geospatial.UnitTests.UseCases;
@@ -12,23 +13,25 @@ public class BatchEvaluateUseCaseTests
 {
     private readonly Mock<IContainsPointUseCase> _mockContainsPointUseCase;
     private readonly Mock<IWithinRadiusUseCase> _mockWithinRadiusUseCase;
+    private readonly Mock<ILogger<BatchEvaluateUseCase>> _mockLogger;
     private readonly BatchEvaluateUseCase _sut;
 
     public BatchEvaluateUseCaseTests()
     {
         _mockContainsPointUseCase = new Mock<IContainsPointUseCase>();
         _mockWithinRadiusUseCase = new Mock<IWithinRadiusUseCase>();
-        _sut = new BatchEvaluateUseCase(_mockContainsPointUseCase.Object, _mockWithinRadiusUseCase.Object);
+        _mockLogger = new Mock<ILogger<BatchEvaluateUseCase>>();
+        _sut = new BatchEvaluateUseCase(_mockContainsPointUseCase.Object, _mockWithinRadiusUseCase.Object, _mockLogger.Object);
     }
 
     [Fact]
-    public void Execute_WithContainsPointEvaluation_ReturnsCorrectResult()
+    public async Task ExecuteAsync_WithContainsPointEvaluation_ReturnsCorrectResult()
     {
         var request = CreateContainsPointRequest();
-        _mockContainsPointUseCase.Setup(x => x.Execute(It.IsAny<GeoPolygon>(), It.IsAny<GeoPoint>()))
-            .Returns(true);
+        _mockContainsPointUseCase.Setup(x => x.ExecuteAsync(It.IsAny<GeoPolygon>(), It.IsAny<GeoPoint>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
-        var result = _sut.Execute(request);
+        var result = await _sut.ExecuteAsync(request);
 
         Assert.Single(result.Results);
         Assert.Equal("contains-point", result.Results[0].Type, StringComparer.OrdinalIgnoreCase);
@@ -36,13 +39,13 @@ public class BatchEvaluateUseCaseTests
     }
 
     [Fact]
-    public void Execute_WithWithinRadiusEvaluation_ReturnsCorrectResult()
+    public async Task ExecuteAsync_WithWithinRadiusEvaluation_ReturnsCorrectResult()
     {
         var request = CreateWithinRadiusRequest();
-        _mockWithinRadiusUseCase.Setup(x => x.Execute(It.IsAny<GeoPoint>(), It.IsAny<GeoPoint>(), It.IsAny<GeoRadius>()))
-            .Returns((true, 250.0));
+        _mockWithinRadiusUseCase.Setup(x => x.ExecuteAsync(It.IsAny<GeoPoint>(), It.IsAny<GeoPoint>(), It.IsAny<GeoRadius>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((true, 250.0));
 
-        var result = _sut.Execute(request);
+        var result = await _sut.ExecuteAsync(request);
 
         Assert.Single(result.Results);
         Assert.Equal("within-radius", result.Results[0].Type, StringComparer.OrdinalIgnoreCase);
@@ -51,7 +54,7 @@ public class BatchEvaluateUseCaseTests
     }
 
     [Fact]
-    public void Execute_WithMixedEvaluations_ReturnsAllResults()
+    public async Task ExecuteAsync_WithMixedEvaluations_ReturnsAllResults()
     {
         var request = new BatchRequestDTO
         {
@@ -62,12 +65,12 @@ public class BatchEvaluateUseCaseTests
             }
         };
 
-        _mockContainsPointUseCase.Setup(x => x.Execute(It.IsAny<GeoPolygon>(), It.IsAny<GeoPoint>()))
-            .Returns(true);
-        _mockWithinRadiusUseCase.Setup(x => x.Execute(It.IsAny<GeoPoint>(), It.IsAny<GeoPoint>(), It.IsAny<GeoRadius>()))
-            .Returns((false, 1500.0));
+        _mockContainsPointUseCase.Setup(x => x.ExecuteAsync(It.IsAny<GeoPolygon>(), It.IsAny<GeoPoint>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _mockWithinRadiusUseCase.Setup(x => x.ExecuteAsync(It.IsAny<GeoPoint>(), It.IsAny<GeoPoint>(), It.IsAny<GeoRadius>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((false, 1500.0));
 
-        var result = _sut.Execute(request);
+        var result = await _sut.ExecuteAsync(request);
 
         Assert.Equal(2, result.Results.Count);
         Assert.True(result.Results[0].Contains);
@@ -76,7 +79,7 @@ public class BatchEvaluateUseCaseTests
     }
 
     [Fact]
-    public void Execute_WithUnknownEvaluationType_ThrowsArgumentException()
+    public async Task ExecuteAsync_WithUnknownEvaluationType_ThrowsArgumentException()
     {
         var request = new BatchRequestDTO
         {
@@ -90,7 +93,7 @@ public class BatchEvaluateUseCaseTests
             }
         };
 
-        var ex = Assert.Throws<ArgumentException>(() => _sut.Execute(request));
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _sut.ExecuteAsync(request));
         Assert.Contains("not supported", ex.Message);
     }
 
