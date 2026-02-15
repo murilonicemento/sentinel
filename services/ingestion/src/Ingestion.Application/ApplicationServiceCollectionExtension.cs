@@ -1,4 +1,5 @@
-﻿using Ingestion.Application.Handlers;
+using Ingestion.Application.Handlers;
+using Ingestion.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Ingestion.Application;
@@ -12,6 +13,7 @@ public static class ApplicationServiceCollectionExtension
             {
                 config.RegisterServicesFromAssembly(typeof(RegisterDataSourceHandler).Assembly);
                 config.RegisterServicesFromAssembly(typeof(RegisterSensorCollectionHandler).Assembly);
-            });
+            })
+            .AddScoped<IGeospatialValidationService, GeospatialValidationService>();
     }
 }

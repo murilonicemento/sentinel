@@ -34,7 +34,6 @@ public class OutboxHostedService : BackgroundService
                 try
                 {
                     await _kafkaPublisher.PublishAsync(row.OutboxType, row.Payload, cancellationToken);
-                    await _outboxRepository.UpdateProcessed(row.Id);
                     _logger.LogInformation("Outbox message published with success with id {id}.", row.Id);
                 }
                 catch (Exception exception)

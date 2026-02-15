@@ -5,6 +5,7 @@ using Ingestion.Application.Events;
 using Ingestion.Application.Handlers;
 using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.Providers;
+using Ingestion.Application.Services;
 using Ingestion.Domain.AggregateRoots;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Interfaces.Repositories;
@@ -29,6 +30,7 @@ public class RegisterSensorCollectionHandlerTests
     private readonly Mock<ReadDbContext> _mockReadDbContext;
     private readonly Mock<IConfiguration> _mockConfiguration;
     private readonly Mock<ILogger<RegisterSensorCollectionHandler>> _mockLogger;
+    private readonly Mock<IGeospatialValidationService> _mockGeospatialValidationService;
     private readonly RegisterSensorCollectionHandler _handler;
 
     public RegisterSensorCollectionHandlerTests()
@@ -39,6 +41,7 @@ public class RegisterSensorCollectionHandlerTests
         _mockEventDeduplicator = new Mock<IEventDeduplicator>();
         _mockMinioProvider = new Mock<IObjectStorageProvider>();
         _mockOutboxRepository = new Mock<IOutboxRepository>();
+        _mockGeospatialValidationService = new Mock<IGeospatialValidationService>();
         _mockLogger = new Mock<ILogger<RegisterSensorCollectionHandler>>();
 
         var configData = new Dictionary<string, string?>
@@ -64,6 +67,7 @@ public class RegisterSensorCollectionHandlerTests
             _mockOutboxRepository.Object,
             _mockReadDbContext.Object,
             _mockConfiguration.Object,
+            _mockGeospatialValidationService.Object,
             _mockLogger.Object
         );
     }

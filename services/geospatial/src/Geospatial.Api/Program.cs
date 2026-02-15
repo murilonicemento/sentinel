@@ -1,17 +1,15 @@
 using Geospatial.Api.Middlewares;
-using Geospatial.Application.Interfaces.Repositories;
 using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.UseCases;
-using Geospatial.Domain.Services;
-using Geospatial.Infrastructure.Elasticsearch;
-using Geospatial.Infrastructure.GeometryEngine;
-using Geospatial.Infrastructure.Repositories;
-using Nest;
+using Geospatial.Infrastructure;
+using Geospatial.Infrastructure.Options;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 
 var builder = WebApplication.CreateBuilder(args);
+
+Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
@@ -40,17 +38,21 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
 });
-builder.Services.AddOpenApi();
 
-builder.Services.AddElasticsearch(builder.Configuration);
-builder.Services.AddScoped<IGeospatialEventRepository, ElasticsearchGeospatialEventRepository>();
+builder.Services
+    .AddOpenApi()
+    .AddInfrastructureWriteServiceCollection(builder.Configuration);
 
-builder.Services.AddScoped<IBatchEvaluateUseCase, BatchEvaluateUseCase>();
-builder.Services.AddScoped<IWithinRadiusUseCase, WithinRadiusUseCase>();
-builder.Services.AddScoped<IIntersectsUseCase, IntersectsUseCase>();
-builder.Services.AddScoped<IDistanceUseCase, DistanceUseCase>();
-builder.Services.AddScoped<IContainsPointUseCase, ContainsPointUseCase>();
-builder.Services.AddScoped<IGeospatialCalculator, NetTopologyGeospatialCalculator>();
+builder.Services
+    .Configure<ElasticsearchOptions>(builder.Configuration.GetSection("Elasticsearch"))
+    .Configure<KafkaConsumerOptions>(builder.Configuration.GetSection("KafkaConsumerOptions"));
+
+builder.Services
+    .AddScoped<IBatchEvaluateUseCase, BatchEvaluateUseCase>()
+    .AddScoped<IWithinRadiusUseCase, WithinRadiusUseCase>()
+    .AddScoped<IIntersectsUseCase, IntersectsUseCase>()
+    .AddScoped<IDistanceUseCase, DistanceUseCase>()
+    .AddScoped<IContainsPointUseCase, ContainsPointUseCase>();
 
 var app = builder.Build();
 
@@ -66,9 +68,6 @@ if (app.Environment.IsDevelopment())
             .WithTheme(ScalarTheme.DeepSpace)
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
     });
-
-    var client = app.Services.GetRequiredService<IElasticClient>();
-    await ElasticsearchExtensions.EnsureIndexExistsAsync(client);
 }
 
 app.UseHttpsRedirection();
@@ -79,6 +78,7 @@ try
 {
     Log.Information("Geospatial API starting");
     app.Run();
+    Log.Information("Geospatial API started successfully");
 }
 catch (Exception ex)
 {

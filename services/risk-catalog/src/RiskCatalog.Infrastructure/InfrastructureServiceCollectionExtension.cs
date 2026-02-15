@@ -1,4 +1,5 @@
 ﻿using Confluent.Kafka;
+using Ingestion.Infrastructure.Write.HttpClients;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,7 +24,8 @@ public static class InfrastructureServiceCollectionExtension
             })
             .AddRedisCache(configuration)
             .AddKafkaPublisher(configuration)
-            .AddRepositories();
+            .AddRepositories()
+            .AddGeospatialClient(configuration);
 
     private static IServiceCollection AddRedisCache(this IServiceCollection services, IConfiguration configuration)
     {
@@ -79,4 +81,20 @@ public static class InfrastructureServiceCollectionExtension
             .AddScoped<IRegionalParameterRepository, RegionalParameterRepository>()
             .AddScoped<IRiskMatrixRepository, RiskMatrixRepository>()
             .AddScoped<ISeverityRepository, SeverityRepository>();
+
+    private static IServiceCollection AddGeospatialClient(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var geospatialUrl = configuration["Geospatial:BaseUrl"]
+                            ?? throw new InvalidOperationException("Geospatial:BaseUrl configuration is required");
+
+        services.AddHttpClient<IGeospatialClient, GeospatialClient>(client =>
+        {
+            client.BaseAddress = new Uri(geospatialUrl);
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        return services;
+    }
 }

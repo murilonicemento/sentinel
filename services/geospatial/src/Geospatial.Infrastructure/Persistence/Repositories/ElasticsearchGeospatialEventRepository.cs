@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 using Nest;
 using GeoLocation = Geospatial.Application.Models.GeoLocation;
 
-namespace Geospatial.Infrastructure.Repositories;
+namespace Geospatial.Infrastructure.Persistence.Repositories;
 
 public class ElasticsearchGeospatialEventRepository : IGeospatialEventRepository
 {

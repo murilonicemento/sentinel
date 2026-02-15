@@ -1,4 +1,4 @@
-namespace Geospatial.Infrastructure.Elasticsearch;
+namespace Geospatial.Infrastructure.Options;
 
 public class ElasticsearchOptions
 {

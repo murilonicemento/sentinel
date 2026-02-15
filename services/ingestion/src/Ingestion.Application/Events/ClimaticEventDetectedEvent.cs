@@ -4,7 +4,7 @@ namespace Ingestion.Application.Events;
 
 public record ClimaticEventDetectedEvent(
     Guid EventId,
-    ClimaticEventEnum EventType,
+    string EventType,
     double Intensity,
     double Latitude,
     double Longitude,

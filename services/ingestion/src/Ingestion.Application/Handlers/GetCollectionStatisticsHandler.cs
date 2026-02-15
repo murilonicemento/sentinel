@@ -40,7 +40,7 @@ public class
                 g => new CollectionStatisticsResponseDTO
                 {
                     TotalEvents = g.Count(),
-                    TotalByTypeRaw = g.Select(x => x.EventType).ToList(),
+                    TotalByTypeRaw = g.Select(x => Enum.Parse<ClimaticEventEnum>(x.EventType)).ToList(),
                     MinIntensity = g.Min(x => x.Intensity),
                     MaxIntensity = g.Max(x => x.Intensity),
                     AverageIntensity = g.Average(x => x.Intensity)

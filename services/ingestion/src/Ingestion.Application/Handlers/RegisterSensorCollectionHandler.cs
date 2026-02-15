@@ -1,9 +1,11 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Ingestion.Application.Commands;
 using Ingestion.Application.Events;
 using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.Providers;
+using Ingestion.Application.Services;
 using Ingestion.Domain.Aggregates;
+using Ingestion.Domain.Enums;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Outbox;
 using Ingestion.Domain.Repositories;
@@ -25,6 +27,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
     private readonly IOutboxRepository _outboxRepository;
     private readonly ReadDbContext _readDbContext;
     private readonly IConfiguration _configuration;
+    private readonly IGeospatialValidationService _geospatialValidationService;
     private readonly ILogger<RegisterSensorCollectionHandler> _logger;
 
     public RegisterSensorCollectionHandler(
@@ -36,6 +39,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         IOutboxRepository outboxRepository,
         ReadDbContext readDbContext,
         IConfiguration configuration,
+        IGeospatialValidationService geospatialValidationService,
         ILogger<RegisterSensorCollectionHandler> logger)
     {
         _dataSourceRepository = dataSourceRepository;
@@ -46,6 +50,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         _outboxRepository = outboxRepository;
         _readDbContext = readDbContext;
         _configuration = configuration;
+        _geospatialValidationService = geospatialValidationService;
         _logger = logger;
     }
 
@@ -92,17 +97,17 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
         var deduplicateKey = $"ing:{request.TenantId}:{request.DatasourceId}:{request.CollectedAt:yyyyMMddHHmmss}";
         var isDuplicate = await _eventDeduplicator.IsDuplicateAsync(deduplicateKey);
 
-        if (isDuplicate)
-        {
-            _logger.LogInformation("Event duplicated. DeduplicateKey: {deduplicateKey}", deduplicateKey);
-            return dataSource.Id;
-        }
+        // if (isDuplicate)
+        // {
+        //     _logger.LogInformation("Event duplicated. DeduplicateKey: {deduplicateKey}", deduplicateKey);
+        //     return dataSource.Id;
+        // }
 
         var collectionId = Guid.NewGuid();
         var objectName = $"raw/{collectionId}.json";
-        
+
         _logger.LogInformation("MinIO Object Name: {objectName}", objectName);
-        
+
         var putObjectResponse = await _minioProvider.UploadJsonAsync(
             _configuration["MinIO:BucketName"]!,
             objectName,
@@ -122,6 +127,20 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
 
         foreach (var sampleSensorDto in request.SampleSensors)
         {
+            var isValidCoordinates = await _geospatialValidationService.ValidateCoordinatesAsync(
+                sampleSensorDto.Latitude,
+                sampleSensorDto.Longitude,
+                cancellationToken);
+
+            if (!isValidCoordinates)
+            {
+                _logger.LogWarning(
+                    "Invalid coordinates detected. Skipping sensor sample. Latitude: {Latitude}, Longitude: {Longitude}",
+                    sampleSensorDto.Latitude,
+                    sampleSensorDto.Longitude);
+                continue;
+            }
+
             var sampleSensor = new SampleSensor(
                 Guid.NewGuid(),
                 collectionId,
@@ -140,7 +159,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
             var eventType = dataSource.MapValueToEventType(sampleSensorDto.SensorValue);
             var climaticEventDetectedEvent = new ClimaticEventDetectedEvent(
                 collectionId,
-                eventType,
+                eventType.GetDisplayName(),
                 intensity,
                 sampleSensorDto.Latitude,
                 sampleSensorDto.Longitude,

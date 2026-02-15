@@ -28,6 +28,7 @@ services:
       - MinIO__Port=${MinIO__Port}
       - MinIO__AccessKey=${MINIO_ROOT_USER}
       - MinIO__SecretKey=${MINIO_ROOT_PASSWORD}
+      - Geospatial__BaseUrl=http://geospatial:8080
     ports:
       - "7001:8080"
     depends_on:
@@ -37,6 +38,7 @@ services:
       - redis
       - minio
       - kafka
+      - geospatial
     restart: unless-stopped
     networks:
       - sentinel-network
@@ -53,6 +55,7 @@ services:
       - ConnectionStrings__Kafka=${ConnectionStrings__Kafka}
       - Redis__MaxMemory=256mb
       - Redis__EvictionPolicy=allkeys-lru
+      - GEOSPATIAL_SERVICE_URL=http://geospatial:8080
     ports:
       - "7002:8080"
     depends_on:
@@ -60,6 +63,7 @@ services:
       - elasticsearch
       - redis
       - kafka
+      - geospatial
     restart: unless-stopped
     networks:
       - sentinel-network
@@ -72,12 +76,15 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - Elasticsearch__Url=http://elasticsearch:9200
+      - Elasticsearch__DefaultIndex=geospatial-events
       - Loki__Url=http://loki:3100
+      - ConnectionStrings__Kafka=kafka:9092
     ports:
       - "7003:8080"
     depends_on:
       - elasticsearch
       - loki
+      - kafka
     restart: unless-stopped
     networks:
       - sentinel-network

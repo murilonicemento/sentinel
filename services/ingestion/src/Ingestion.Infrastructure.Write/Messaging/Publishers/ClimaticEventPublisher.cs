@@ -4,12 +4,12 @@ using Microsoft.Extensions.Logging;
 
 namespace Ingestion.Infrastructure.Write.Messaging.Publishers;
 
-public class KafkaPublisher : IPublisher
+public class ClimaticEventPublisher : IPublisher
 {
     private readonly IProducer<Null, string> _producer;
-    private readonly ILogger<KafkaPublisher> _logger;
+    private readonly ILogger<ClimaticEventPublisher> _logger;
 
-    public KafkaPublisher(IProducer<Null, string> producer, ILogger<KafkaPublisher> logger)
+    public ClimaticEventPublisher(IProducer<Null, string> producer, ILogger<ClimaticEventPublisher> logger)
     {
         _producer = producer;
         _logger = logger;

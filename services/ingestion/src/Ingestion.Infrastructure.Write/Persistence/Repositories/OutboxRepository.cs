@@ -28,12 +28,4 @@ public class OutboxRepository : IOutboxRepository
     public async Task<IEnumerable<OutboxRow>> GetPending() =>
         await _writeDbContext.Connection.QueryAsync<OutboxRow>(
             "SELECT id, outbox_type, payload FROM outbox WHERE processed = false LIMIT 50 FOR UPDATE SKIP LOCKED");
-
-    public async Task<bool> UpdateProcessed(Guid id)
-    {
-        var affectedRows = await _writeDbContext.Connection.ExecuteAsync(
-            "UPDATE outbox SET processed = true, processed_at = now() WHERE id = @Id", new { id });
-
-        return affectedRows > 0;
-    }
 }

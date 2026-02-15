@@ -1,11 +1,13 @@
 ﻿using Confluent.Kafka;
 using Ingestion.Application.Interfaces.Deduplicators;
+using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Application.Interfaces.Providers;
 using Ingestion.Application.Interfaces.Publishers;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Repositories;
 using Ingestion.Infrastructure.Write.Cache.Deduplicators;
 using Ingestion.Infrastructure.Write.HostedServices;
+using Ingestion.Infrastructure.Write.HttpClients;
 using Ingestion.Infrastructure.Write.Messaging.Publishers;
 using Ingestion.Infrastructure.Write.Persistence.DbContext;
 using Ingestion.Infrastructure.Write.Persistence.Postgres.Repositories;
@@ -29,7 +31,8 @@ public static class InfrastructureWriteServiceCollectionExtension
             .AddProviders(configuration)
             .AddPublishers(configuration)
             .AddEvents(configuration)
-            .AddHostedServices();
+            .AddHostedServices()
+            .AddGeospatialClient(configuration);
 
 
     private static IServiceCollection AddRepositories(this IServiceCollection services) =>
@@ -65,7 +68,7 @@ public static class InfrastructureWriteServiceCollectionExtension
 
                 return new ProducerBuilder<Null, string>(config).Build();
             })
-            .AddSingleton<IPublisher, KafkaPublisher>();
+            .AddSingleton<IPublisher, ClimaticEventPublisher>();
 
 
     private static IServiceCollection AddEvents(this IServiceCollection services, IConfiguration configuration) =>
@@ -81,4 +84,20 @@ public static class InfrastructureWriteServiceCollectionExtension
 
     private static IServiceCollection AddHostedServices(this IServiceCollection services) =>
         services.AddHostedService<OutboxHostedService>();
+
+    private static IServiceCollection AddGeospatialClient(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var geospatialUrl = configuration["Geospatial:BaseUrl"]
+                            ?? throw new InvalidOperationException("Geospatial:BaseUrl configuration is required");
+
+        services.AddHttpClient<IGeospatialClient, GeospatialClient>(client =>
+        {
+            client.BaseAddress = new Uri(geospatialUrl);
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        return services;
+    }
 }

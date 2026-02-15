@@ -19,6 +19,7 @@ public class RiskModelServiceTests
     private readonly Mock<IRegionalParameterRepository> _regionalParameterRepositoryMock;
     private readonly Mock<ICacheService> _cacheServiceMock;
     private readonly Mock<IPublisher> _publisherMock;
+    private readonly Mock<IGeospatialValidationService> _geospatialValidationServiceMock;
     private readonly Mock<ILogger<RiskModelService>> _loggerMock;
     private readonly RiskModelService _riskModelService;
 
@@ -30,6 +31,7 @@ public class RiskModelServiceTests
         _regionalParameterRepositoryMock = new Mock<IRegionalParameterRepository>();
         _cacheServiceMock = new Mock<ICacheService>();
         _publisherMock = new Mock<IPublisher>();
+        _geospatialValidationServiceMock = new Mock<IGeospatialValidationService>();
         _loggerMock = new Mock<ILogger<RiskModelService>>();
 
         _riskModelService = new RiskModelService(
@@ -39,6 +41,7 @@ public class RiskModelServiceTests
             _regionalParameterRepositoryMock.Object,
             _cacheServiceMock.Object,
             _publisherMock.Object,
+            _geospatialValidationServiceMock.Object,
             _loggerMock.Object);
     }
 
