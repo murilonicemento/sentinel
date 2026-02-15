@@ -15,6 +15,8 @@ using Ingestion.Infrastructure.Write.Providers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Minio;
+using Polly;
+using Polly.Extensions.Http;
 using StackExchange.Redis;
 
 namespace Ingestion.Infrastructure.Write;
@@ -92,12 +94,27 @@ public static class InfrastructureWriteServiceCollectionExtension
         var geospatialUrl = configuration["Geospatial:BaseUrl"]
                             ?? throw new InvalidOperationException("Geospatial:BaseUrl configuration is required");
 
-        services.AddHttpClient<IGeospatialClient, GeospatialClient>(client =>
-        {
-            client.BaseAddress = new Uri(geospatialUrl);
-            client.Timeout = TimeSpan.FromSeconds(30);
-        });
+        services
+            .AddHttpClient<IGeospatialClient, GeospatialClient>(client =>
+            {
+                client.BaseAddress = new Uri(geospatialUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddPolicyHandler(CreateGeospatialRetryPolicy());
 
         return services;
+
+        static IAsyncPolicy<HttpResponseMessage> CreateGeospatialRetryPolicy() =>
+            HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .OrResult(r => (int)r.StatusCode == 429)
+                .WaitAndRetryAsync(
+                    retryCount: 3,
+                    sleepDurationProvider: retryAttempt =>
+                    {
+                        var backoff = TimeSpan.FromMilliseconds(200 * Math.Pow(2, retryAttempt - 1));
+                        var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 250));
+                        return backoff + jitter;
+                    });
     }
 }

@@ -8,10 +8,21 @@
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003AStackFrameIterator_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003FAppData_003FRoaming_003FJetBrains_003FRider2025_002E2_003Fresharper_002Dhost_003FSourcesCache_003F2854ce6d56c18d0d837d3a3ef9c4f2c7c77691fa3528c8394986ac7ce7719_003FStackFrameIterator_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
 	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=51c5617e_002D2665_002D4484_002Db080_002D11529016e530/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="All tests from &amp;lt;services&amp;gt;\&amp;lt;ingestion&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;Ingestion.UnitTests&amp;gt;" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
   &lt;Or&gt;&#xD;
-    &lt;Project Location="C:\Users\muril\Projects\sentinel\services\ingestion\tests\Ingestion.UnitTests" Presentation="&amp;lt;services&amp;gt;\&amp;lt;ingestion&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;Ingestion.UnitTests&amp;gt;" /&gt;&#xD;
-    &lt;Project Location="C:\Users\muril\Projects\sentinel\services\ingestion\tests\Ingestion.IntegrationTests" Presentation="&amp;lt;services&amp;gt;\&amp;lt;ingestion&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;Ingestion.IntegrationTests&amp;gt;" /&gt;&#xD;
-    &lt;Project Location="C:\Users\muril\Projects\sentinel\services\risk-catalog\tests\RiskCatalog.IntegrationTests" Presentation="&amp;lt;services&amp;gt;\&amp;lt;risk-catalog&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;RiskCatalog.IntegrationTests&amp;gt;" /&gt;&#xD;
-    &lt;Project Location="C:\Users\muril\Projects\sentinel\services\geospatial\tests\Geospatial.UnitTests" Presentation="&amp;lt;services&amp;gt;\&amp;lt;geospatial&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;Geospatial.UnitTests&amp;gt;" /&gt;&#xD;
+    &lt;And&gt;&#xD;
+      &lt;Or&gt;&#xD;
+        &lt;Project Location="C:\Users\muril\Projects\sentinel\services\ingestion\tests\Ingestion.UnitTests" Presentation="&amp;lt;services&amp;gt;\&amp;lt;ingestion&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;Ingestion.UnitTests&amp;gt;" /&gt;&#xD;
+        &lt;Project Location="C:\Users\muril\Projects\sentinel\services\ingestion\tests\Ingestion.IntegrationTests" Presentation="&amp;lt;services&amp;gt;\&amp;lt;ingestion&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;Ingestion.IntegrationTests&amp;gt;" /&gt;&#xD;
+        &lt;Project Location="C:\Users\muril\Projects\sentinel\services\risk-catalog\tests\RiskCatalog.IntegrationTests" Presentation="&amp;lt;services&amp;gt;\&amp;lt;risk-catalog&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;RiskCatalog.IntegrationTests&amp;gt;" /&gt;&#xD;
+        &lt;Project Location="C:\Users\muril\Projects\sentinel\services\geospatial\tests\Geospatial.UnitTests" Presentation="&amp;lt;services&amp;gt;\&amp;lt;geospatial&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;Geospatial.UnitTests&amp;gt;" /&gt;&#xD;
+      &lt;/Or&gt;&#xD;
+      &lt;Not&gt;&#xD;
+        &lt;Or&gt;&#xD;
+          &lt;Project Location="C:\Users\muril\Projects\sentinel\services\ingestion\tests\Ingestion.IntegrationTests" Presentation="&amp;lt;services&amp;gt;\&amp;lt;ingestion&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;Ingestion.IntegrationTests&amp;gt;" /&gt;&#xD;
+          &lt;Project Location="C:\Users\muril\Projects\sentinel\services\risk-catalog\tests\RiskCatalog.IntegrationTests" Presentation="&amp;lt;services&amp;gt;\&amp;lt;risk-catalog&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;RiskCatalog.IntegrationTests&amp;gt;" /&gt;&#xD;
+        &lt;/Or&gt;&#xD;
+      &lt;/Not&gt;&#xD;
+    &lt;/And&gt;&#xD;
+    &lt;Project Location="C:\Users\muril\Projects\sentinel\services\risk-catalog\tests\RiskCatalog.UnitTests" Presentation="&amp;lt;services&amp;gt;\&amp;lt;risk-catalog&amp;gt;\&amp;lt;tests&amp;gt;\&amp;lt;RiskCatalog.UnitTests&amp;gt;" /&gt;&#xD;
   &lt;/Or&gt;&#xD;
 &lt;/SessionState&gt;</s:String>
 	
