@@ -1,4 +1,5 @@
 ﻿using Confluent.Kafka;
+using Ingestion.Application.Events;
 using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Application.Interfaces.Providers;
@@ -10,18 +11,19 @@ using Ingestion.Infrastructure.Write.HostedServices;
 using Ingestion.Infrastructure.Write.HttpClients;
 using Ingestion.Infrastructure.Write.Messaging.Publishers;
 using Ingestion.Infrastructure.Write.Persistence.DbContext;
-using Ingestion.Infrastructure.Write.Persistence.Postgres.Repositories;
+using Ingestion.Infrastructure.Write.Persistence.Repositories;
 using Ingestion.Infrastructure.Write.Providers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Minio;
 using Polly;
 using Polly.Extensions.Http;
+using Polly.Retry;
 using StackExchange.Redis;
 
 namespace Ingestion.Infrastructure.Write;
 
-public static class InfrastructureWriteServiceCollectionExtension
+public static class ServiceCollectionExtension
 {
     public static IServiceCollection AddInfrastructureWriteServiceCollection(
         this IServiceCollection services,
@@ -34,11 +36,12 @@ public static class InfrastructureWriteServiceCollectionExtension
             .AddPublishers(configuration)
             .AddEvents(configuration)
             .AddHostedServices()
-            .AddGeospatialClient(configuration);
+            .AddHttpClients(configuration);
 
 
     private static IServiceCollection AddRepositories(this IServiceCollection services) =>
         services
+            .AddScoped<ITenantRepository, TenantRepository>()
             .AddScoped<IDataSourceRepository, DataSourceRepository>()
             .AddScoped<IDataCollectionRepository, DataCollectionRepository>()
             .AddScoped<ISampleSensorRepository, SampleSensorRepository>()
@@ -70,7 +73,7 @@ public static class InfrastructureWriteServiceCollectionExtension
 
                 return new ProducerBuilder<Null, string>(config).Build();
             })
-            .AddSingleton<IPublisher, ClimaticEventPublisher>();
+            .AddSingleton<IPublisher, SensorEventDetectedPublisher>();
 
 
     private static IServiceCollection AddEvents(this IServiceCollection services, IConfiguration configuration) =>
@@ -85,36 +88,55 @@ public static class InfrastructureWriteServiceCollectionExtension
             .AddScoped<IEventDeduplicator, RedisEventDeduplicator>();
 
     private static IServiceCollection AddHostedServices(this IServiceCollection services) =>
-        services.AddHostedService<OutboxHostedService>();
+        services
+            .AddHostedService<OutboxHostedService>()
+            .AddHostedService<SensorPollingHostedService>();
 
-    private static IServiceCollection AddGeospatialClient(
-        this IServiceCollection services,
-        IConfiguration configuration)
+    private static IServiceCollection AddHttpClients(this IServiceCollection services, IConfiguration configuration)
     {
         var geospatialUrl = configuration["Geospatial:BaseUrl"]
                             ?? throw new InvalidOperationException("Geospatial:BaseUrl configuration is required");
+        var fireSensorPollingUrl = configuration["Polling:Fire:BaseUrl"]
+                                   ?? throw new InvalidOperationException(
+                                       "SensorPolling:BaseUrl configuration is required");
+        var earthquakeSensorPollingUrl = configuration["Polling:Earthquake:BaseUrl"]
+                                         ?? throw new InvalidOperationException(
+                                             "SensorPolling:BaseUrl configuration is required");
 
         services
             .AddHttpClient<IGeospatialClient, GeospatialClient>(client =>
             {
                 client.BaseAddress = new Uri(geospatialUrl);
                 client.Timeout = TimeSpan.FromSeconds(30);
+            });
+        services
+            .AddHttpClient<ISensorPollingClient, FirePollingHttpClient>(client =>
+            {
+                client.BaseAddress = new Uri(fireSensorPollingUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
             })
-            .AddPolicyHandler(CreateGeospatialRetryPolicy());
+            .AddPolicyHandler(CreateRetryPolicy());
+        services
+            .AddHttpClient<ISensorPollingClient, EarthquakePollingHttpClient>(client =>
+            {
+                client.BaseAddress = new Uri(earthquakeSensorPollingUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddPolicyHandler(CreateRetryPolicy());
 
         return services;
-
-        static IAsyncPolicy<HttpResponseMessage> CreateGeospatialRetryPolicy() =>
-            HttpPolicyExtensions
-                .HandleTransientHttpError()
-                .OrResult(r => (int)r.StatusCode == 429)
-                .WaitAndRetryAsync(
-                    retryCount: 3,
-                    sleepDurationProvider: retryAttempt =>
-                    {
-                        var backoff = TimeSpan.FromMilliseconds(200 * Math.Pow(2, retryAttempt - 1));
-                        var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 250));
-                        return backoff + jitter;
-                    });
     }
+
+    private static AsyncRetryPolicy<HttpResponseMessage> CreateRetryPolicy() =>
+        HttpPolicyExtensions
+            .HandleTransientHttpError()
+            .OrResult(r => (int)r.StatusCode == 429)
+            .WaitAndRetryAsync(
+                retryCount: 3,
+                sleepDurationProvider: retryAttempt =>
+                {
+                    var backoff = TimeSpan.FromMilliseconds(200 * Math.Pow(2, retryAttempt - 1));
+                    var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 250));
+                    return backoff + jitter;
+                });
 }

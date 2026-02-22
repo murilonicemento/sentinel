@@ -1,6 +1,7 @@
 using System.Drawing;
 using Ingestion.Application.DTO;
 using Ingestion.Application.Interfaces.HttpClients;
+using Ingestion.Application.Interfaces.Services;
 using Microsoft.Extensions.Logging;
 
 namespace Ingestion.Application.Services;

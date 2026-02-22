@@ -40,7 +40,7 @@ public class DistanceUseCase : IDistanceUseCase
 
         var evt = new GeospatialOperationEvent
         {
-            EventId = Guid.NewGuid(),
+            CollectionId = Guid.NewGuid(),
             OperationType = "distance",
             Payload = payload,
             Result = result,

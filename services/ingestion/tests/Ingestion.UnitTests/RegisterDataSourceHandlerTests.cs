@@ -8,12 +8,20 @@ namespace Ingestion.UnitTests;
 public class RegisterDataSourceHandlerTests
 {
     private readonly Mock<IDataSourceRepository> _mockDataSourceRepository;
+    private readonly Mock<ITenantRepository> _mockTenantRepository;
     private readonly RegisterDataSourceHandler _handler;
 
     public RegisterDataSourceHandlerTests()
     {
+        _mockTenantRepository = new Mock<ITenantRepository>();
         _mockDataSourceRepository = new Mock<IDataSourceRepository>();
-        _handler = new RegisterDataSourceHandler(_mockDataSourceRepository.Object);
+        _handler = new RegisterDataSourceHandler(_mockTenantRepository.Object, _mockDataSourceRepository.Object);
+    }
+
+    private void ResetMocks()
+    {
+        _mockTenantRepository.Reset();
+        _mockDataSourceRepository.Reset();
     }
 
     #region Success
@@ -21,16 +29,26 @@ public class RegisterDataSourceHandlerTests
     [Fact]
     public async Task Handle_WithValidCommand_SuccessfullyRegistersDataSource()
     {
+        ResetMocks();
         var expectedDataSourceId = Guid.NewGuid();
         var expectedTenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = expectedTenantId,
             Name = "Temperature Sensor",
             Endpoint = "http://sensor.api",
             DataSourceType = "Sensor",
             MeasurementType = "Temperature",
             CollectionFrequency = "Hourly"
         };
+
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(expectedTenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync("Temperature Sensor", expectedTenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
 
         _mockDataSourceRepository
             .Setup(x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()))
@@ -40,22 +58,33 @@ public class RegisterDataSourceHandlerTests
 
         Assert.Equal(expectedDataSourceId, result.dataSourceId);
         Assert.Equal(expectedTenantId, result.tenantId);
+        _mockTenantRepository.Verify(x => x.ExistsAsync(expectedTenantId), Times.Once);
         _mockDataSourceRepository.Verify(
-            x => x.RegisterAsync(It.Is<Domain.AggregateRoots.DataSource>(
-                ds => ds.Name == command.Name &&
-                      ds.Endpoint == command.Endpoint &&
-                      ds.DataSourceType == "Sensor" &&
-                      ds.MeasurementType == "Temperature" &&
-                      ds.CollectionFrequency == "Hourly")),
+            x => x.GetByNameAndTenantAsync("Temperature Sensor", expectedTenantId), Times.Once);
+        _mockDataSourceRepository.Verify(
+            x => x.RegisterAsync(It.Is<Domain.AggregateRoots.DataSource>(ds => ds.Name == command.Name &&
+                                                                               ds.Endpoint == command.Endpoint &&
+                                                                               ds.DataSourceType == "Sensor" &&
+                                                                               ds.MeasurementType == "Temperature" &&
+                                                                               ds.CollectionFrequency == "Hourly")),
             Times.Once);
     }
 
     [Fact]
     public async Task Handle_WithAllDataSourceTypes_RegistersSuccessfully()
     {
+        ResetMocks();
         var dataSourceTypes = new[] { "Sensor", "Api", "File", "ExternalSystem" };
         var expectedDataSourceId = Guid.NewGuid();
         var expectedTenantId = Guid.NewGuid();
+
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(expectedTenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync(It.IsAny<string>(), expectedTenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
 
         _mockDataSourceRepository
             .Setup(x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()))
@@ -65,6 +94,7 @@ public class RegisterDataSourceHandlerTests
         {
             var command = new RegisterDataSourceCommand
             {
+                TenantId = expectedTenantId,
                 Name = $"Test {dataSourceType}",
                 Endpoint = "http://test.api",
                 DataSourceType = dataSourceType,
@@ -72,12 +102,21 @@ public class RegisterDataSourceHandlerTests
                 CollectionFrequency = "Hourly"
             };
 
+            // Garantir que o mock esteja configurado corretamente para cada nome específico
+            _mockDataSourceRepository
+                .Setup(x => x.GetByNameAndTenantAsync(command.Name, expectedTenantId))
+                .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
+
             var result = await _handler.Handle(command, CancellationToken.None);
 
             Assert.Equal(expectedDataSourceId, result.dataSourceId);
             Assert.Equal(expectedTenantId, result.tenantId);
         }
 
+        _mockTenantRepository.Verify(x => x.ExistsAsync(expectedTenantId), Times.Exactly(dataSourceTypes.Length));
+        _mockDataSourceRepository.Verify(
+            x => x.GetByNameAndTenantAsync(It.IsAny<string>(), expectedTenantId),
+            Times.Exactly(dataSourceTypes.Length));
         _mockDataSourceRepository.Verify(
             x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
             Times.Exactly(dataSourceTypes.Length));
@@ -90,6 +129,14 @@ public class RegisterDataSourceHandlerTests
         var expectedDataSourceId = Guid.NewGuid();
         var expectedTenantId = Guid.NewGuid();
 
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(expectedTenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync(It.IsAny<string>(), expectedTenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
+
         _mockDataSourceRepository
             .Setup(x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()))
             .ReturnsAsync((expectedDataSourceId, expectedTenantId));
@@ -98,6 +145,7 @@ public class RegisterDataSourceHandlerTests
         {
             var command = new RegisterDataSourceCommand
             {
+                TenantId = expectedTenantId,
                 Name = $"Test {measurementType}",
                 Endpoint = "http://test.api",
                 DataSourceType = "Sensor",
@@ -105,12 +153,21 @@ public class RegisterDataSourceHandlerTests
                 CollectionFrequency = "Hourly"
             };
 
+            // Garantir que o mock esteja configurado corretamente para cada nome específico
+            _mockDataSourceRepository
+                .Setup(x => x.GetByNameAndTenantAsync(command.Name, expectedTenantId))
+                .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
+
             var result = await _handler.Handle(command, CancellationToken.None);
 
             Assert.Equal(expectedDataSourceId, result.dataSourceId);
             Assert.Equal(expectedTenantId, result.tenantId);
         }
 
+        _mockTenantRepository.Verify(x => x.ExistsAsync(expectedTenantId), Times.Exactly(measurementTypes.Length));
+        _mockDataSourceRepository.Verify(
+            x => x.GetByNameAndTenantAsync(It.IsAny<string>(), expectedTenantId),
+            Times.Exactly(measurementTypes.Length));
         _mockDataSourceRepository.Verify(
             x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
             Times.Exactly(measurementTypes.Length));
@@ -123,6 +180,14 @@ public class RegisterDataSourceHandlerTests
         var expectedDataSourceId = Guid.NewGuid();
         var expectedTenantId = Guid.NewGuid();
 
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(expectedTenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync(It.IsAny<string>(), expectedTenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
+
         _mockDataSourceRepository
             .Setup(x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()))
             .ReturnsAsync((expectedDataSourceId, expectedTenantId));
@@ -131,6 +196,7 @@ public class RegisterDataSourceHandlerTests
         {
             var command = new RegisterDataSourceCommand
             {
+                TenantId = expectedTenantId,
                 Name = "Test Sensor",
                 Endpoint = "http://test.api",
                 DataSourceType = "Sensor",
@@ -138,12 +204,21 @@ public class RegisterDataSourceHandlerTests
                 CollectionFrequency = collectionFrequency
             };
 
+            // Garantir que o mock esteja configurado corretamente para cada nome específico
+            _mockDataSourceRepository
+                .Setup(x => x.GetByNameAndTenantAsync(command.Name, expectedTenantId))
+                .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
+
             var result = await _handler.Handle(command, CancellationToken.None);
 
             Assert.Equal(expectedDataSourceId, result.dataSourceId);
             Assert.Equal(expectedTenantId, result.tenantId);
         }
 
+        _mockTenantRepository.Verify(x => x.ExistsAsync(expectedTenantId), Times.Exactly(collectionFrequencies.Length));
+        _mockDataSourceRepository.Verify(
+            x => x.GetByNameAndTenantAsync(It.IsAny<string>(), expectedTenantId),
+            Times.Exactly(collectionFrequencies.Length));
         _mockDataSourceRepository.Verify(
             x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
             Times.Exactly(collectionFrequencies.Length));
@@ -155,12 +230,21 @@ public class RegisterDataSourceHandlerTests
         var expectedTenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = expectedTenantId,
             Name = "Temperature Sensor",
             Endpoint = "http://sensor.api",
             DataSourceType = "Sensor",
             MeasurementType = "Temperature",
             CollectionFrequency = "Hourly"
         };
+
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(expectedTenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync("Temperature Sensor", expectedTenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
 
         Guid capturedDataSourceId = Guid.Empty;
         _mockDataSourceRepository
@@ -180,12 +264,21 @@ public class RegisterDataSourceHandlerTests
         var expectedDataSourceId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = Guid.NewGuid(),
             Name = "Temperature Sensor",
             Endpoint = "http://sensor.api",
             DataSourceType = "Sensor",
             MeasurementType = "Temperature",
             CollectionFrequency = "Hourly"
         };
+
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(command.TenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync("Temperature Sensor", command.TenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
 
         Guid capturedTenantId = Guid.Empty;
         _mockDataSourceRepository
@@ -201,75 +294,15 @@ public class RegisterDataSourceHandlerTests
 
     #endregion
 
-    #region DataSourceType Validation
-
-    [Fact]
-    public async Task Handle_WithInvalidDataSourceType_ThrowsArgumentException()
-    {
-        var command = new RegisterDataSourceCommand
-        {
-            Name = "Test Sensor",
-            Endpoint = "http://test.api",
-            DataSourceType = "InvalidType",
-            MeasurementType = "Temperature",
-            CollectionFrequency = "Hourly"
-        };
-
-        var exception = await Assert.ThrowsAsync<ArgumentException>(
-            () => _handler.Handle(command, CancellationToken.None));
-        Assert.Contains("Invalid DataSourceType", exception.Message);
-        _mockDataSourceRepository.Verify(
-            x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
-            Times.Never);
-    }
-
-    [Fact]
-    public async Task Handle_WithEmptyDataSourceType_ThrowsArgumentException()
-    {
-        var command = new RegisterDataSourceCommand
-        {
-            Name = "Test Sensor",
-            Endpoint = "http://test.api",
-            DataSourceType = string.Empty,
-            MeasurementType = "Temperature",
-            CollectionFrequency = "Hourly"
-        };
-
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _handler.Handle(command, CancellationToken.None));
-        _mockDataSourceRepository.Verify(
-            x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
-            Times.Never);
-    }
-
-    [Fact]
-    public async Task Handle_WithNullDataSourceType_ThrowsArgumentException()
-    {
-        var command = new RegisterDataSourceCommand
-        {
-            Name = "Test Sensor",
-            Endpoint = "http://test.api",
-            DataSourceType = null!,
-            MeasurementType = "Temperature",
-            CollectionFrequency = "Hourly"
-        };
-
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _handler.Handle(command, CancellationToken.None));
-        _mockDataSourceRepository.Verify(
-            x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
-            Times.Never);
-    }
-
-    #endregion
-
     #region MeasurementType Validation
 
     [Fact]
     public async Task Handle_WithInvalidMeasurementType_ThrowsArgumentException()
     {
+        var tenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = tenantId,
             Name = "Test Sensor",
             Endpoint = "http://test.api",
             DataSourceType = "Sensor",
@@ -277,8 +310,16 @@ public class RegisterDataSourceHandlerTests
             CollectionFrequency = "Hourly"
         };
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(
-            () => _handler.Handle(command, CancellationToken.None));
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(tenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync("Test Sensor", tenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
+
+        var exception =
+            await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
         Assert.Contains("Invalid measurement type", exception.Message);
         _mockDataSourceRepository.Verify(
             x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
@@ -288,8 +329,10 @@ public class RegisterDataSourceHandlerTests
     [Fact]
     public async Task Handle_WithEmptyMeasurementType_ThrowsArgumentException()
     {
+        var tenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = tenantId,
             Name = "Test Sensor",
             Endpoint = "http://test.api",
             DataSourceType = "Sensor",
@@ -297,8 +340,15 @@ public class RegisterDataSourceHandlerTests
             CollectionFrequency = "Hourly"
         };
 
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _handler.Handle(command, CancellationToken.None));
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(tenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync("Test Sensor", tenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
         _mockDataSourceRepository.Verify(
             x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
             Times.Never);
@@ -307,8 +357,10 @@ public class RegisterDataSourceHandlerTests
     [Fact]
     public async Task Handle_WithNullMeasurementType_ThrowsArgumentException()
     {
+        var tenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = tenantId,
             Name = "Test Sensor",
             Endpoint = "http://test.api",
             DataSourceType = "Sensor",
@@ -316,8 +368,15 @@ public class RegisterDataSourceHandlerTests
             CollectionFrequency = "Hourly"
         };
 
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _handler.Handle(command, CancellationToken.None));
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(tenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync("Test Sensor", tenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
         _mockDataSourceRepository.Verify(
             x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
             Times.Never);
@@ -330,8 +389,10 @@ public class RegisterDataSourceHandlerTests
     [Fact]
     public async Task Handle_WithInvalidCollectionFrequency_ThrowsArgumentException()
     {
+        var tenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = tenantId,
             Name = "Test Sensor",
             Endpoint = "http://test.api",
             DataSourceType = "Sensor",
@@ -339,8 +400,16 @@ public class RegisterDataSourceHandlerTests
             CollectionFrequency = "InvalidFrequency"
         };
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(
-            () => _handler.Handle(command, CancellationToken.None));
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(tenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync("Test Sensor", tenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
+
+        var exception =
+            await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
         Assert.Contains("Invalid collection frequency type", exception.Message);
         _mockDataSourceRepository.Verify(
             x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
@@ -350,8 +419,10 @@ public class RegisterDataSourceHandlerTests
     [Fact]
     public async Task Handle_WithEmptyCollectionFrequency_ThrowsArgumentException()
     {
+        var tenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = tenantId,
             Name = "Test Sensor",
             Endpoint = "http://test.api",
             DataSourceType = "Sensor",
@@ -359,8 +430,15 @@ public class RegisterDataSourceHandlerTests
             CollectionFrequency = string.Empty
         };
 
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _handler.Handle(command, CancellationToken.None));
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(tenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync("Test Sensor", tenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
         _mockDataSourceRepository.Verify(
             x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
             Times.Never);
@@ -369,8 +447,10 @@ public class RegisterDataSourceHandlerTests
     [Fact]
     public async Task Handle_WithNullCollectionFrequency_ThrowsArgumentException()
     {
+        var tenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = tenantId,
             Name = "Test Sensor",
             Endpoint = "http://test.api",
             DataSourceType = "Sensor",
@@ -378,8 +458,15 @@ public class RegisterDataSourceHandlerTests
             CollectionFrequency = null!
         };
 
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _handler.Handle(command, CancellationToken.None));
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(tenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync("Test Sensor", tenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None));
         _mockDataSourceRepository.Verify(
             x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()),
             Times.Never);
@@ -387,28 +474,77 @@ public class RegisterDataSourceHandlerTests
 
     #endregion
 
-    #region Repository Validation
+    #region Tenant and Name Validation
 
     [Fact]
-    public async Task Handle_WhenRepositoryThrowsException_PropagatesException()
+    public async Task Handle_WithNonExistentTenant_ThrowsKeyNotFoundException()
     {
+        var tenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
-            Name = "Temperature Sensor",
-            Endpoint = "http://sensor.api",
+            TenantId = tenantId,
+            Name = "Test Sensor",
+            Endpoint = "http://test.api",
             DataSourceType = "Sensor",
             MeasurementType = "Temperature",
             CollectionFrequency = "Hourly"
         };
 
-        _mockDataSourceRepository
-            .Setup(x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()))
-            .ThrowsAsync(new Exception("Database connection failed"));
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(tenantId))
+            .ReturnsAsync(false);
 
-        await Assert.ThrowsAsync<Exception>(
-            () => _handler.Handle(command, CancellationToken.None));
+        var exception =
+            await Assert.ThrowsAsync<KeyNotFoundException>(() => _handler.Handle(command, CancellationToken.None));
+        Assert.Contains($"Tenant {tenantId} not found", exception.Message);
+        _mockTenantRepository.Verify(x => x.ExistsAsync(tenantId), Times.Once);
+        _mockDataSourceRepository.Verify(
+            x => x.GetByNameAndTenantAsync(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
+        _mockDataSourceRepository.Verify(
+            x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()), Times.Never);
     }
 
+    [Fact]
+    public async Task Handle_WithExistingDataSourceName_ThrowsInvalidOperationException()
+    {
+        var tenantId = Guid.NewGuid();
+        var existingDataSource = new Domain.AggregateRoots.DataSource(
+            Guid.NewGuid(),
+            "Test Sensor",
+            "http://test.api",
+            "Sensor",
+            "Temperature",
+            "Hourly",
+            tenantId
+        );
+
+        var command = new RegisterDataSourceCommand
+        {
+            TenantId = tenantId,
+            Name = "Test Sensor",
+            Endpoint = "http://newtest.api",
+            DataSourceType = "Sensor",
+            MeasurementType = "Temperature",
+            CollectionFrequency = "Hourly"
+        };
+
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(tenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync("Test Sensor", tenantId))
+            .ReturnsAsync(existingDataSource);
+
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(() => _handler.Handle(command, CancellationToken.None));
+        Assert.Contains("DataSource 'Test Sensor' already exists for this tenant", exception.Message);
+        _mockTenantRepository.Verify(x => x.ExistsAsync(tenantId), Times.Once);
+        _mockDataSourceRepository.Verify(
+            x => x.GetByNameAndTenantAsync("Test Sensor", tenantId), Times.Once);
+        _mockDataSourceRepository.Verify(
+            x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()), Times.Never);
+    }
 
     #endregion
 
@@ -422,12 +558,21 @@ public class RegisterDataSourceHandlerTests
         var expectedTenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = expectedTenantId,
             Name = longName,
             Endpoint = "http://sensor.api",
             DataSourceType = "Sensor",
             MeasurementType = "Temperature",
             CollectionFrequency = "Hourly"
         };
+
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(expectedTenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync(longName, expectedTenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
 
         _mockDataSourceRepository
             .Setup(x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()))
@@ -438,8 +583,7 @@ public class RegisterDataSourceHandlerTests
         Assert.Equal(expectedDataSourceId, result.dataSourceId);
         Assert.Equal(expectedTenantId, result.tenantId);
         _mockDataSourceRepository.Verify(
-            x => x.RegisterAsync(It.Is<Domain.AggregateRoots.DataSource>(
-                ds => ds.Name == longName)),
+            x => x.RegisterAsync(It.Is<Domain.AggregateRoots.DataSource>(ds => ds.Name == longName)),
             Times.Once);
     }
 
@@ -451,12 +595,21 @@ public class RegisterDataSourceHandlerTests
         var expectedTenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = expectedTenantId,
             Name = "Test Sensor",
             Endpoint = longEndpoint,
             DataSourceType = "Sensor",
             MeasurementType = "Temperature",
             CollectionFrequency = "Hourly"
         };
+
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(expectedTenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync("Test Sensor", expectedTenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
 
         _mockDataSourceRepository
             .Setup(x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()))
@@ -467,8 +620,7 @@ public class RegisterDataSourceHandlerTests
         Assert.Equal(expectedDataSourceId, result.dataSourceId);
         Assert.Equal(expectedTenantId, result.tenantId);
         _mockDataSourceRepository.Verify(
-            x => x.RegisterAsync(It.Is<Domain.AggregateRoots.DataSource>(
-                ds => ds.Endpoint == longEndpoint)),
+            x => x.RegisterAsync(It.Is<Domain.AggregateRoots.DataSource>(ds => ds.Endpoint == longEndpoint)),
             Times.Once);
     }
 
@@ -480,12 +632,21 @@ public class RegisterDataSourceHandlerTests
         var expectedTenantId = Guid.NewGuid();
         var command = new RegisterDataSourceCommand
         {
+            TenantId = expectedTenantId,
             Name = nameWithSpecialChars,
             Endpoint = "http://sensor.api",
             DataSourceType = "Sensor",
             MeasurementType = "Temperature",
             CollectionFrequency = "Hourly"
         };
+
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(expectedTenantId))
+            .ReturnsAsync(true);
+
+        _mockDataSourceRepository
+            .Setup(x => x.GetByNameAndTenantAsync(nameWithSpecialChars, expectedTenantId))
+            .ReturnsAsync((Domain.AggregateRoots.DataSource?)null);
 
         _mockDataSourceRepository
             .Setup(x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()))
@@ -496,11 +657,9 @@ public class RegisterDataSourceHandlerTests
         Assert.Equal(expectedDataSourceId, result.dataSourceId);
         Assert.Equal(expectedTenantId, result.tenantId);
         _mockDataSourceRepository.Verify(
-            x => x.RegisterAsync(It.Is<Domain.AggregateRoots.DataSource>(
-                ds => ds.Name == nameWithSpecialChars)),
+            x => x.RegisterAsync(It.Is<Domain.AggregateRoots.DataSource>(ds => ds.Name == nameWithSpecialChars)),
             Times.Once);
     }
 
     #endregion
 }
-

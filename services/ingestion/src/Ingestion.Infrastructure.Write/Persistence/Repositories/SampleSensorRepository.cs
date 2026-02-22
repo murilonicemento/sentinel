@@ -3,7 +3,7 @@ using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Repositories;
 using Ingestion.Infrastructure.Write.Persistence.DbContext;
 
-namespace Ingestion.Infrastructure.Write.Persistence.Postgres.Repositories;
+namespace Ingestion.Infrastructure.Write.Persistence.Repositories;
 
 public class SampleSensorRepository : ISampleSensorRepository
 {

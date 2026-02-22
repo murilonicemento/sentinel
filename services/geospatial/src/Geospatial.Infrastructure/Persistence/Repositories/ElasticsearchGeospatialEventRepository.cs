@@ -27,12 +27,12 @@ public class ElasticsearchGeospatialEventRepository : IGeospatialEventRepository
         var doc = MapToDocument(evt);
         var response = await _client.IndexAsync(
             doc,
-            i => i.Index(IndexName).Id(evt.EventId),
+            i => i.Index(IndexName).Id(evt.CollectionId),
             cancellationToken);
 
         if (!response.IsValid)
         {
-            _logger.LogError(response.OriginalException, "Failed to index geospatial event {EventId}", evt.EventId);
+            _logger.LogError(response.OriginalException, "Failed to index geospatial event {EventId}", evt.CollectionId);
             throw new InvalidOperationException($"Elasticsearch index failed: {response.OriginalException?.Message}");
         }
     }
@@ -78,7 +78,7 @@ public class ElasticsearchGeospatialEventRepository : IGeospatialEventRepository
 
         return new GeospatialEventDocument
         {
-            EventId = evt.EventId,
+            EventId = evt.CollectionId,
             OperationType = evt.OperationType,
             Payload = evt.Payload != null ? JsonSerializer.Serialize(evt.Payload) : null,
             Result = evt.Result != null ? JsonSerializer.Serialize(evt.Result) : null,
@@ -91,7 +91,7 @@ public class ElasticsearchGeospatialEventRepository : IGeospatialEventRepository
     {
         return docs.Select(d => new GeospatialOperationEvent
         {
-            EventId = d.EventId,
+            CollectionId = d.EventId,
             OperationType = d.OperationType,
             Payload = !string.IsNullOrEmpty(d.Payload) ? JsonSerializer.Deserialize<object>(d.Payload) : null,
             Result = !string.IsNullOrEmpty(d.Result) ? JsonSerializer.Deserialize<object>(d.Result) : null,

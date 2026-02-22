@@ -8,7 +8,7 @@ namespace Ingestion.Application.Handlers;
 
 public class
     GetLatestDetectedEventsHandler : IRequestHandler<GetLatestDetectedEventsQuery,
-    IEnumerable<ClimaticEventDetectedEvent>>
+    IEnumerable<SensorEventDetected>>
 {
     private readonly ReadDbContext _context;
 
@@ -17,11 +17,11 @@ public class
         _context = context;
     }
 
-    public async Task<IEnumerable<ClimaticEventDetectedEvent>> Handle(
+    public async Task<IEnumerable<SensorEventDetected>> Handle(
         GetLatestDetectedEventsQuery request,
         CancellationToken cancellationToken)
     {
-        var collection = _context.GetCollection<ClimaticEventDetectedEvent>("events");
+        var collection = _context.GetCollection<SensorEventDetected>("events");
 
         return await collection
             .Find(_ => true)

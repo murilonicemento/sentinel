@@ -2,9 +2,9 @@
 
 namespace Ingestion.Application.Attributes;
 
-public class FutureDate : ValidationAttribute
+public class NotInFuture : ValidationAttribute
 {
-    public FutureDate()
+    public NotInFuture()
     {
         ErrorMessage = "Date can't be in future.";
     }

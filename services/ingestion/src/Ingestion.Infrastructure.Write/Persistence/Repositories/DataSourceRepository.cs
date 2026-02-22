@@ -4,7 +4,7 @@ using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Infrastructure.Write.Persistence.DbContext;
 
-namespace Ingestion.Infrastructure.Write.Persistence.Postgres.Repositories;
+namespace Ingestion.Infrastructure.Write.Persistence.Repositories;
 
 public class DataSourceRepository : IDataSourceRepository
 {
@@ -28,14 +28,42 @@ public class DataSourceRepository : IDataSourceRepository
                         created_at
                     FROM 
                         data_source 
+                    INNER JOIN tenant ON tenant.id = data_source.tenant_id
                     WHERE 
-                        id = @Id AND tenant_id = @TenantId";
+                        data_source.id = @Id AND tenant_id = @TenantId AND tenant.is_active = 1";
 
         var dataSource =
             _writeDbContext.Connection.QueryFirstOrDefault<DataSource>(query, new { Id = id, TenantId = tenantId });
 
         if (dataSource is not null)
             dataSource.DataCollections = GetDataCollectionByDataSourceId(id);
+
+        return dataSource;
+    }
+
+    public async Task<DataSource?> GetByNameAndTenantAsync(string name, Guid tenantId)
+    {
+        var query = @"SELECT 
+                        id,
+                        name,
+                        data_source_type,
+                        measurement_type,
+                        endpoint,
+                        collection_frequency,
+                        tenant_id,
+                        created_at
+                    FROM 
+                        data_source 
+                    INNER JOIN tenant ON tenant.id = data_source.tenant_id
+                    WHERE 
+                        data_source.name = @Name AND data_source.tenant_id = @TenantId AND tenant.is_active = 1";
+
+        var dataSource =
+            await _writeDbContext.Connection.QueryFirstOrDefaultAsync<DataSource>(query,
+                new { Name = name, TenantId = tenantId });
+
+        if (dataSource is not null)
+            dataSource.DataCollections = GetDataCollectionByDataSourceId(dataSource.Id);
 
         return dataSource;
     }

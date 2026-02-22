@@ -22,17 +22,17 @@ public class
     public async Task<CollectionStatisticsResponseDTO> Handle(GetCollectionStatisticsQuery request,
         CancellationToken cancellationToken)
     {
-        var collection = _context.GetCollection<ClimaticEventDetectedEvent>("events");
+        var collection = _context.GetCollection<SensorEventDetected>("events");
         var aggregation = collection.Aggregate();
 
         if (request.InitialDate.HasValue)
             aggregation =
                 aggregation.Match(
-                    Builders<ClimaticEventDetectedEvent>.Filter.Gte(x => x.CollectedAt, request.InitialDate.Value));
+                    Builders<SensorEventDetected>.Filter.Gte(x => x.CollectedAt, request.InitialDate.Value));
         if (request.EndDate.HasValue)
             aggregation =
                 aggregation.Match(
-                    Builders<ClimaticEventDetectedEvent>.Filter.Lte(x => x.CollectedAt, request.EndDate.Value));
+                    Builders<SensorEventDetected>.Filter.Lte(x => x.CollectedAt, request.EndDate.Value));
 
         return await aggregation
             .Group(

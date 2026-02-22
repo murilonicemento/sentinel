@@ -45,7 +45,7 @@ public class IntersectsUseCase : IIntersectsUseCase
 
         var evt = new GeospatialOperationEvent
         {
-            EventId = Guid.NewGuid(),
+            CollectionId = Guid.NewGuid(),
             OperationType = "intersects",
             Payload = payload,
             Result = result,

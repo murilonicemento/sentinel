@@ -5,6 +5,7 @@ using Geospatial.Domain.Services;
 using Geospatial.Infrastructure.Elasticsearch;
 using Geospatial.Infrastructure.GeometryEngine;
 using Geospatial.Infrastructure.Messaging.Consumers;
+using Geospatial.Infrastructure.Messaging.Events;
 using Geospatial.Infrastructure.Options;
 using Geospatial.Infrastructure.Persistence.DbContext;
 using Geospatial.Infrastructure.Persistence.Repositories;
@@ -14,7 +15,7 @@ using Nest;
 
 namespace Geospatial.Infrastructure;
 
-public static class InfrastructureServiceCollectionExtension
+public static class ServiceCollectionExtension
 {
     public static IServiceCollection AddInfrastructureWriteServiceCollection(
         this IServiceCollection services,
@@ -42,7 +43,8 @@ public static class InfrastructureServiceCollectionExtension
     }
 
     private static IServiceCollection AddHostedServices(this IServiceCollection services) =>
-        services.AddHostedService<ClimaticEventConsumer>();
+        services
+            .AddHostedService<SensorEventDetectedConsumer>();
 
     private static IServiceCollection AddRepositories(this IServiceCollection services) =>
         services

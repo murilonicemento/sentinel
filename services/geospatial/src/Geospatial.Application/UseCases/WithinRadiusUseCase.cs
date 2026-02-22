@@ -47,7 +47,7 @@ public class WithinRadiusUseCase : IWithinRadiusUseCase
 
         var evt = new GeospatialOperationEvent
         {
-            EventId = Guid.NewGuid(),
+            CollectionId = Guid.NewGuid(),
             OperationType = "within-radius",
             Payload = payload,
             Result = result,

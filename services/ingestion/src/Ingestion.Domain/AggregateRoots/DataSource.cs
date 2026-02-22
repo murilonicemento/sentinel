@@ -14,6 +14,7 @@ public class DataSource
     public Guid TenantId { get; }
     public DateTime CreatedAt { get; } = DateTime.Now;
     public IEnumerable<DataCollection> DataCollections { get; set; } = [];
+    public IEnumerable<EventTypePermission> EventPermissions { get; set; } = [];
 
     public DataSource()
     {
@@ -49,5 +50,12 @@ public class DataSource
             "Pressure" when Math.Abs(value - baseline) > 20 => ClimaticEventEnum.PressureChange,
             _ => ClimaticEventEnum.Normal
         };
+    }
+
+    public bool CanSendEvent(string eventDomain, string eventType)
+    {
+        return EventPermissions.Any(p =>
+            p.EventDomain.Equals(eventDomain, StringComparison.OrdinalIgnoreCase) &&
+            p.EventType.Equals(eventType, StringComparison.OrdinalIgnoreCase));
     }
 }

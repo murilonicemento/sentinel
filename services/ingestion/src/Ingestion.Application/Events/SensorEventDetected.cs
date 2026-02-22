@@ -2,8 +2,8 @@
 
 namespace Ingestion.Application.Events;
 
-public record ClimaticEventDetectedEvent(
-    Guid EventId,
+public record SensorEventDetected(
+    Guid CollectionId,
     string EventType,
     double Intensity,
     double Latitude,

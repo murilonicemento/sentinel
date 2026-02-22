@@ -2,7 +2,7 @@ namespace Geospatial.Application.Models;
 
 public class GeospatialOperationEvent
 {
-    public Guid EventId { get; set; }
+    public Guid CollectionId { get; set; }
     public string OperationType { get; set; } = string.Empty;
     public object? Payload { get; set; }
     public object? Result { get; set; }

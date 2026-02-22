@@ -1,7 +1,7 @@
 ﻿namespace Geospatial.Infrastructure.Messaging.Events;
 
-public record ClimaticEventDetectedEvent(
-    Guid EventId,
+public record SensorEventDetected(
+    Guid CollectionId,
     string EventType,
     double Intensity,
     double Latitude,

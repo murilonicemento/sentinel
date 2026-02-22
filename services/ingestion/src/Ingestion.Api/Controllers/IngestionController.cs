@@ -19,7 +19,7 @@ public class IngestionController : ControllerBase
     }
 
     [HttpGet("last-detected-events")]
-    public async Task<ActionResult<ResponseBaseDTO<IEnumerable<ClimaticEventDetectedEvent>>>> GetLastDetectedEvents(
+    public async Task<ActionResult<ResponseBaseDTO<IEnumerable<SensorEventDetected>>>> GetLastDetectedEvents(
         [FromQuery] int limit = 50)
     {
         var query = new GetLatestDetectedEventsQuery { Limit = limit };
@@ -51,12 +51,21 @@ public class IngestionController : ControllerBase
         );
     }
 
-    [HttpPost("sensor-collection")]
-    public async Task<ActionResult<ResponseBaseDTO<Guid>>> RegisterSensorCollection(
-        [FromBody] RegisterSensorCollectionCommand command)
+    [HttpPost("climatic")]
+    public async Task<ActionResult<ResponseBaseDTO<Guid>>> RegisterClimaticEvent(
+        [FromBody] RegisterClimaticEventCommand command)
     {
-        var sensorCollectionId = await _mediator.Send(command);
+        var climaticEventId = await _mediator.Send(command);
 
-        return Created("api/ingestion/sensor-collection", new { sensorCollectionId });
+        return Created("api/ingestion/climatic", new { ClimaticEventId = climaticEventId });
+    }
+
+    [HttpPost("disaster")]
+    public async Task<ActionResult<ResponseBaseDTO<Guid>>> RegisterDisasterEvent(
+        [FromBody] RegisterDisasterEventCommand command)
+    {
+        var disasterEventId = await _mediator.Send(command);
+
+        return Created("api/ingestion/disaster", new { DisasterEventId = disasterEventId });
     }
 }

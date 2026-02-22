@@ -41,7 +41,7 @@ public class ContainsPointUseCase : IContainsPointUseCase
 
         var evt = new GeospatialOperationEvent
         {
-            EventId = Guid.NewGuid(),
+            CollectionId = Guid.NewGuid(),
             OperationType = "contains-point",
             Payload = payload,
             Result = result,
