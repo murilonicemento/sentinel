@@ -18,19 +18,19 @@ public class DataSourceRepository : IDataSourceRepository
     public DataSource? GetByIdAndTenantId(Guid id, Guid tenantId)
     {
         var query = @"SELECT 
-                        id,
-                        name,
-                        data_source_type,
-                        measurement_type,
-                        endpoint,
-                        collection_frequency,
-                        tenant_id,
-                        created_at
+                        data_source.id AS id,
+                        data_source.name AS name,
+                        data_source.data_source_type AS data_source_type,
+                        data_source.measurement_type AS measurement_type,
+                        data_source.endpoint AS endpoint,
+                        data_source.collection_frequency AS collection_frequency,
+                        data_source.tenant_id AS tenant_id,
+                        data_source.created_at AS created_at
                     FROM 
                         data_source 
                     INNER JOIN tenant ON tenant.id = data_source.tenant_id
                     WHERE 
-                        data_source.id = @Id AND tenant_id = @TenantId AND tenant.is_active = 1";
+                        data_source.id = @Id AND tenant_id = @TenantId AND tenant.is_active = true";
 
         var dataSource =
             _writeDbContext.Connection.QueryFirstOrDefault<DataSource>(query, new { Id = id, TenantId = tenantId });

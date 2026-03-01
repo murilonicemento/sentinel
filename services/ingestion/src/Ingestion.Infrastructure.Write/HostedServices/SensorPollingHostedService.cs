@@ -1,5 +1,6 @@
 ﻿using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Application.Interfaces.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -7,19 +8,19 @@ namespace Ingestion.Infrastructure.Write.HostedServices;
 
 public class SensorPollingHostedService : BackgroundService
 {
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ISensorPollingClient _sensorPollingClient;
-    private readonly ISensorCollectionService _sensorCollectionService;
     private readonly ILogger<SensorPollingHostedService> _logger;
     private readonly TimeSpan _interval = TimeSpan.FromSeconds(30);
 
     public SensorPollingHostedService(
+        IServiceScopeFactory scopeFactory,
         ISensorPollingClient sensorPollingClient,
-        ISensorCollectionService collectionService,
         ILogger<SensorPollingHostedService> logger
     )
     {
+        _scopeFactory = scopeFactory;
         _sensorPollingClient = sensorPollingClient;
-        _sensorCollectionService = collectionService;
         _logger = logger;
     }
 
@@ -35,12 +36,15 @@ public class SensorPollingHostedService : BackgroundService
 
                 if (collections.Count > 0)
                 {
+                    using var scope = _scopeFactory.CreateScope();
+                    var sensorCollectionService = scope.ServiceProvider.GetRequiredService<ISensorCollectionService>();
+
                     foreach (var result in collections)
                     {
-                        await _sensorCollectionService.ProcessSensorCollection<object>(
+                        await sensorCollectionService.ProcessSensorCollection<object>(
                             result.DataSourceId,
                             result.TenantId,
-                            result.CollectedAt,
+                            result.CollectedAt.GetValueOrDefault(DateTime.UtcNow),
                             result.Payload,
                             result.Samples,
                             result.Domain.ToString(),

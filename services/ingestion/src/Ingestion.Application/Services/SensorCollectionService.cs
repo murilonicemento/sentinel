@@ -59,7 +59,7 @@ public class SensorCollectionService : ISensorCollectionService
 
         var dataSource = _dataSourceRepository.GetByIdAndTenantId(dataSourceId, tenantId)
                          ?? throw new KeyNotFoundException(
-                             $"DataSource or tenant not found. Id: {dataSourceId}, TenantId: {tenantId}");
+                             $"DataSource or tenant not found. DataSource Id: {dataSourceId}, TenantId: {tenantId}");
 
         _logger.LogInformation("Datasource info. Id: {id}; TenantId: {tenantId}", dataSource.Id, dataSource.TenantId);
 
@@ -118,18 +118,20 @@ public class SensorCollectionService : ISensorCollectionService
                 continue;
             }
 
-            if (!dataSource.CanSendEvent(domain, dataSource.MapValueToEventType(sample.SensorValue).ToString()))
+            var eventType = domain == "Climatic"
+                ? dataSource.MapValueToEventType<ClimaticEventEnum>(sample.SensorValue).ToString()
+                : dataSource.MapValueToEventType<DisasterEventEnum>(sample.SensorValue).ToString();
+
+            if (!dataSource.CanSendEvent(domain, eventType))
             {
                 _logger.LogWarning("DataSource {DataSourceId} not authorized for event. Ignoring.", dataSource.Id);
                 continue;
             }
 
             var intensity = MeasurementType.From(dataSource.MeasurementType).CalculateIntensity(sample.SensorValue);
-            var eventType = dataSource.MapValueToEventType(sample.SensorValue);
-
             var evt = Activator.CreateInstance(typeof(TEvent),
                 collectionGuid,
-                eventType.GetDisplayName(),
+                eventType,
                 intensity,
                 sample.Latitude,
                 sample.Longitude,

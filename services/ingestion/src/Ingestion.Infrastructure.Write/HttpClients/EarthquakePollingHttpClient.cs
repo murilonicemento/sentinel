@@ -24,13 +24,7 @@ public class EarthquakePollingHttpClient : ISensorPollingClient
                                       throw new ArgumentException("DataSourceId is required in config"));
         var tenantId = Guid.Parse(_configuration["Polling:Earthquake:TenantId"] ??
                                   throw new ArgumentException("TenantId is required in config"));
-        var startTimeString = _configuration["Polling:Earthquake:StartTime"] ??
-                              throw new ArgumentException("StartTime is required in config");
-
-        if (!DateTime.TryParseExact(startTimeString, "yyyy-MM-dd",
-                CultureInfo.InvariantCulture, DateTimeStyles.None, out var startTime))
-            throw new ArgumentException("StartTime has invalid format, expected MM/dd/yyyy");
-
+        var startTime = DateTime.UtcNow.AddDays(-7).ToString("yyyy-MM-dd");
         var endTime = DateTime.UtcNow.ToString("yyyy-MM-dd");
         var response =
             await _httpClient.GetAsync($"fdsnws/event/1/query?format=geojson&starttime={startTime}&endtime={endTime}",
@@ -40,7 +34,8 @@ public class EarthquakePollingHttpClient : ISensorPollingClient
             return [];
 
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
-        var featureCollection = JsonSerializer.Deserialize<EarthquakeFeatureCollection>(json);
+        var featureCollection = JsonSerializer.Deserialize<EarthquakeFeatureCollection>(json,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         if (featureCollection?.Features is null)
             return [];
@@ -49,7 +44,9 @@ public class EarthquakePollingHttpClient : ISensorPollingClient
         {
             DataSourceId = dataSourceId,
             TenantId = tenantId,
-            CollectedAt = DateTimeOffset.FromUnixTimeMilliseconds(f.Properties.Time).UtcDateTime,
+            CollectedAt = f.Properties.Time is not null
+                ? DateTimeOffset.FromUnixTimeMilliseconds(f.Properties.Time.Value).UtcDateTime
+                : null,
             Domain = SensorDomainEnum.Disaster,
             DisasterType = DisasterEventEnum.Earthquake,
             Payload = JsonSerializer.Serialize(f),
@@ -57,11 +54,12 @@ public class EarthquakePollingHttpClient : ISensorPollingClient
             [
                 new SampleSensorDTO
                 {
-                    SensorValue = f.Properties.Mag,
+                    SensorValue = f.Properties.Mag ?? 0,
                     Unit = f.Properties.MagType,
                     Latitude = f.Geometry.Coordinates[1],
                     Longitude = f.Geometry.Coordinates[0],
-                    RecordedAt = DateTimeOffset.FromUnixTimeMilliseconds(f.Properties.Time).UtcDateTime
+                    RecordedAt = DateTimeOffset.FromUnixTimeMilliseconds(f.Properties.Time.GetValueOrDefault(
+                        new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds())).UtcDateTime
                 }
             ]
         }).ToList();

@@ -5,5 +5,6 @@ public enum DisasterEventEnum
     Wildfire,
     Earthquake,
     Flood,
-    Landslide
+    Landslide,
+    Normal
 }
