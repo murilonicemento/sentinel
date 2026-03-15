@@ -1,5 +1,6 @@
-using Geospatial.Application.Interfaces.Repositories;
 using Geospatial.Application.UseCases;
+using Geospatial.Domain.Events;
+using Geospatial.Domain.Repositories;
 using Geospatial.Domain.Services;
 using Geospatial.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
@@ -18,7 +19,7 @@ public class WithinRadiusUseCaseTests
     {
         _mockCalculator = new Mock<IGeospatialCalculator>();
         _mockEventRepository = new Mock<IGeospatialEventRepository>();
-        _mockEventRepository.Setup(x => x.IndexAsync(It.IsAny<Geospatial.Application.Models.GeospatialOperationEvent>(), It.IsAny<CancellationToken>()))
+        _mockEventRepository.Setup(x => x.IndexAsync(It.IsAny<GeospatialOperationEvent>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         _mockLogger = new Mock<ILogger<WithinRadiusUseCase>>();
         _sut = new WithinRadiusUseCase(_mockCalculator.Object, _mockEventRepository.Object, _mockLogger.Object);

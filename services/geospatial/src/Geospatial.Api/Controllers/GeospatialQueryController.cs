@@ -1,6 +1,6 @@
 using Geospatial.Application.DTOs;
-using Geospatial.Application.Interfaces.Repositories;
-using Geospatial.Application.Models;
+using Geospatial.Domain.Events;
+using Geospatial.Domain.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Geospatial.Api.Controllers;

@@ -1,4 +1,4 @@
-namespace Geospatial.Application.Models;
+namespace Geospatial.Domain.Events;
 
 public class GeospatialOperationEvent
 {
@@ -8,10 +8,4 @@ public class GeospatialOperationEvent
     public object? Result { get; set; }
     public DateTimeOffset Timestamp { get; set; }
     public GeoLocation? MainPoint { get; set; }
-}
-
-public class GeoLocation
-{
-    public double Lat { get; set; }
-    public double Lon { get; set; }
 }

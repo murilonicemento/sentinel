@@ -1,11 +1,9 @@
 ﻿using Confluent.Kafka;
-using Geospatial.Application.Interfaces.Repositories;
 using Geospatial.Domain.Repositories;
 using Geospatial.Domain.Services;
 using Geospatial.Infrastructure.Elasticsearch;
 using Geospatial.Infrastructure.GeometryEngine;
 using Geospatial.Infrastructure.Messaging.Consumers;
-using Geospatial.Infrastructure.Messaging.Events;
 using Geospatial.Infrastructure.Options;
 using Geospatial.Infrastructure.Persistence.DbContext;
 using Geospatial.Infrastructure.Persistence.Repositories;
@@ -48,8 +46,7 @@ public static class ServiceCollectionExtension
 
     private static IServiceCollection AddRepositories(this IServiceCollection services) =>
         services
-            .AddSingleton<IGeospatialEventRepository, ElasticsearchGeospatialEventRepository>()
-            .AddSingleton<IOutboxRepository, OutboxRepository>();
+            .AddSingleton<IGeospatialEventRepository, ElasticsearchGeospatialEventRepository>() ;
 
     private static IServiceCollection AddGeospatialCalculator(this IServiceCollection services) =>
         services.AddScoped<IGeospatialCalculator, NetTopologyGeospatialCalculator>();

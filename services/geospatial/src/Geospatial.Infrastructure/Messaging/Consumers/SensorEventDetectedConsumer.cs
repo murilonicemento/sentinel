@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Confluent.Kafka;
-using Geospatial.Application.Interfaces.Repositories;
-using Geospatial.Application.Models;
+using Geospatial.Domain.Events;
 using Geospatial.Domain.Repositories;
 using Geospatial.Infrastructure.Messaging.Events;
 using Geospatial.Infrastructure.Options;
@@ -16,7 +15,6 @@ public sealed class SensorEventDetectedConsumer : BackgroundService
     private readonly IConsumer<Null, string> _consumer;
     private readonly IProducer<Null, string> _producer;
     private readonly IGeospatialEventRepository _repository;
-    private readonly IOutboxRepository _outboxRepository;
     private readonly KafkaConsumerOptions _options;
     private readonly ILogger<SensorEventDetectedConsumer> _logger;
     private readonly TimeSpan _interval = TimeSpan.FromSeconds(10);
@@ -26,14 +24,12 @@ public sealed class SensorEventDetectedConsumer : BackgroundService
         IConsumer<Null, string> consumer,
         IProducer<Null, string> producer,
         IGeospatialEventRepository repository,
-        IOutboxRepository outboxRepository,
         IOptions<KafkaConsumerOptions> options,
         ILogger<SensorEventDetectedConsumer> logger)
     {
         _consumer = consumer;
         _producer = producer;
         _repository = repository;
-        _outboxRepository = outboxRepository;
         _options = options.Value;
         _logger = logger;
     }
@@ -102,7 +98,6 @@ public sealed class SensorEventDetectedConsumer : BackgroundService
             };
 
             await _repository.IndexAsync(geospatialEvent, cancellationToken);
-            await _outboxRepository.UpdateProcessed(evt.CollectionId);
 
             return true;
         }

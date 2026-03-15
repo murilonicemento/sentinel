@@ -1,10 +1,10 @@
 using System.Text.Json;
-using Geospatial.Application.Interfaces.Repositories;
-using Geospatial.Application.Models;
+using Geospatial.Domain.Events;
+using Geospatial.Domain.Repositories;
 using Geospatial.Infrastructure.Elasticsearch;
 using Microsoft.Extensions.Logging;
 using Nest;
-using GeoLocation = Geospatial.Application.Models.GeoLocation;
+using GeoLocation = Geospatial.Domain.Events.GeoLocation;
 
 namespace Geospatial.Infrastructure.Persistence.Repositories;
 

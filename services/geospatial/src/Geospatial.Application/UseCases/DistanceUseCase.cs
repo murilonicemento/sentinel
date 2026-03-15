@@ -1,6 +1,6 @@
-using Geospatial.Application.Interfaces.Repositories;
 using Geospatial.Application.Interfaces.UseCases;
-using Geospatial.Application.Models;
+using Geospatial.Domain.Events;
+using Geospatial.Domain.Repositories;
 using Geospatial.Domain.Services;
 using Geospatial.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
