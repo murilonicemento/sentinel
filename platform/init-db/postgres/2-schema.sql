@@ -1,15 +1,16 @@
 ﻿-- INGESTION SERVICE DATABASE SCHEMA
 
-\c ingestion;
+\c
+ingestion;
 
 CREATE TABLE tenant
 (
-    id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id         uuid PRIMARY KEY      DEFAULT gen_random_uuid(),
     name       varchar(100) NOT NULL,
-    is_active  boolean NOT NULL DEFAULT true,
-    created_at timestamptz NOT NULL DEFAULT now()
+    is_active  boolean      NOT NULL DEFAULT true,
+    created_at timestamptz  NOT NULL DEFAULT now()
 );
-   
+
 CREATE TABLE data_source
 (
     id                   uuid PRIMARY KEY,
@@ -24,11 +25,11 @@ CREATE TABLE data_source
 
 CREATE TABLE event_type_permission
 (
-    id            uuid PRIMARY KEY,
-    data_source_id uuid NOT NULL REFERENCES data_source (id),
-    event_domain  varchar(20) NOT NULL, -- "Climatic" ou "Disaster"
-    event_type    varchar(50) NOT NULL, -- "TemperatureAnomaly", "WindGust", "Wildfire", etc
-    UNIQUE(data_source_id, event_domain, event_type)
+    id             uuid PRIMARY KEY,
+    data_source_id uuid        NOT NULL REFERENCES data_source (id),
+    event_domain   varchar(20) NOT NULL, -- "Climatic" ou "Disaster"
+    event_type     varchar(50) NOT NULL, -- "TemperatureAnomaly", "WindGust", "Wildfire", etc
+    UNIQUE (data_source_id, event_domain, event_type)
 );
 
 CREATE TABLE data_collection
@@ -39,7 +40,6 @@ CREATE TABLE data_collection
     payload        jsonb       NOT NULL,
     tenant_id      uuid NULL,
     created_at     timestamptz not null default now(),
-    CONSTRAINT uq_datasource_collectedat UNIQUE (data_source_id, collected_at)
 );
 
 CREATE TABLE sensor_sample
@@ -67,7 +67,8 @@ CREATE INDEX idx_outbox_processed ON outbox (processed) WHERE processed = false;
 
 -- RISK CATALOG SERVICE DATABASE SCHEMA
 
-\c risk_catalog;
+\c
+risk_catalog;
 
 CREATE TABLE event_type
 (

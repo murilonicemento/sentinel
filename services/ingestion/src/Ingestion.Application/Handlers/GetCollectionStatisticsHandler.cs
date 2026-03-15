@@ -10,7 +10,7 @@ using MongoDB.Driver;
 namespace Ingestion.Application.Handlers;
 
 public class
-    GetCollectionStatisticsHandler : IRequestHandler<GetCollectionStatisticsQuery, CollectionStatisticsResponseDTO>
+    GetCollectionStatisticsHandler : IRequestHandler<GetCollectionStatisticsQuery, CollectionStatisticsResponseDTO?>
 {
     private readonly ReadDbContext _context;
 
@@ -19,7 +19,7 @@ public class
         _context = context;
     }
 
-    public async Task<CollectionStatisticsResponseDTO> Handle(GetCollectionStatisticsQuery request,
+    public async Task<CollectionStatisticsResponseDTO?> Handle(GetCollectionStatisticsQuery request,
         CancellationToken cancellationToken)
     {
         var collection = _context.GetCollection<SensorEventDetected>("events");
@@ -33,6 +33,9 @@ public class
             aggregation =
                 aggregation.Match(
                     Builders<SensorEventDetected>.Filter.Lte(x => x.CollectedAt, request.EndDate.Value));
+
+        if (!await aggregation.AnyAsync(cancellationToken: cancellationToken))
+            return null;
 
         return await aggregation
             .Group(

@@ -12,4 +12,6 @@ public record RegisterDataSourceCommand : IRequest<(Guid dataSourceId, Guid tena
     [Required] public string MeasurementType { get; set; } = string.Empty;
     [Required] public string Endpoint { get; set; } = string.Empty;
     [Required] public string CollectionFrequency { get; set; } = string.Empty;
+    [Required] public List<string> Domains { get; set; } = [];
+    [Required] public List<string> EventsType { get; set; } = [];
 }

@@ -44,19 +44,19 @@ public class DataSourceRepository : IDataSourceRepository
     public async Task<DataSource?> GetByNameAndTenantAsync(string name, Guid tenantId)
     {
         var query = @"SELECT 
-                        id,
-                        name,
-                        data_source_type,
-                        measurement_type,
-                        endpoint,
-                        collection_frequency,
-                        tenant_id,
-                        created_at
+                        data_source.id,
+                        data_source.name,
+                        data_source.data_source_type,
+                        data_source.measurement_type,
+                        data_source.endpoint,
+                        data_source.collection_frequency,
+                        data_source.tenant_id,
+                        data_source.created_at
                     FROM 
                         data_source 
                     INNER JOIN tenant ON tenant.id = data_source.tenant_id
                     WHERE 
-                        data_source.name = @Name AND data_source.tenant_id = @TenantId AND tenant.is_active = 1";
+                        data_source.name = @Name AND data_source.tenant_id = @TenantId AND tenant.is_active = true";
 
         var dataSource =
             await _writeDbContext.Connection.QueryFirstOrDefaultAsync<DataSource>(query,

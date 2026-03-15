@@ -10,7 +10,7 @@ public class ReadDbContext
     public ReadDbContext(IConfiguration configuration)
     {
         var client = new MongoClient(configuration.GetConnectionString("IngestionReadDatabase"));
-        _database = client.GetDatabase("IngestionReadModel");
+        _database = client.GetDatabase("IngestionReadDatabase");
     }
 
     public virtual IMongoCollection<T> GetCollection<T>(string name)

@@ -85,12 +85,12 @@ public class SensorCollectionService : ISensorCollectionService
                 throw new ArgumentException($"Collection frequency mismatch: {dataSource.CollectionFrequency}");
         }
 
-        var dedupKey = $"ing:{tenantId}:{dataSourceId}:{collectedAt:yyyyMMddHHmmss}";
-        if (await _eventDeduplicator.IsDuplicateAsync(dedupKey))
-        {
-            _logger.LogInformation("Event duplicated. Key: {dedupKey}", dedupKey);
-            return dataSourceId;
-        }
+        // var dedupKey = $"ing:{tenantId}:{dataSourceId}:{collectedAt:yyyyMMddHHmmss}";
+        // if (await _eventDeduplicator.IsDuplicateAsync(dedupKey))
+        // {
+        //     _logger.LogInformation("Event duplicated. Key: {dedupKey}", dedupKey);
+        //     return dataSourceId;
+        // }
 
         // Upload payload to MinIO
         var collectionGuid = Guid.NewGuid();
@@ -150,7 +150,7 @@ public class SensorCollectionService : ISensorCollectionService
             await _outboxRepository.RegisterAsync(outbox);
         }
 
-        await _eventDeduplicator.MarkAsProcessedAsync(dedupKey, TimeSpan.FromMinutes(5));
+        // await _eventDeduplicator.MarkAsProcessedAsync(dedupKey, TimeSpan.FromMinutes(5));
         return dataSourceId;
     }
 }

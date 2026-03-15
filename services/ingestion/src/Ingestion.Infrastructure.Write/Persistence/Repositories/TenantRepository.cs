@@ -16,7 +16,7 @@ public class TenantRepository : ITenantRepository
 
     public async Task<bool> ExistsAsync(Guid tenantId)
     {
-        var query = @"SELECT 1 FROM tenant WHERE id = @TenantId AND is_active = 1";
+        var query = @"SELECT 1 FROM tenant WHERE id = @TenantId AND is_active = true";
         var result =
             await _writeDbContext.Connection.QueryFirstOrDefaultAsync<int?>(query, new { TenantId = tenantId });
         return result.HasValue;
@@ -26,7 +26,7 @@ public class TenantRepository : ITenantRepository
     {
         var query = @"SELECT id, name, is_active, created_at 
                           FROM tenant 
-                          WHERE id = @TenantId AND is_active = 1";
+                          WHERE id = @TenantId AND is_active = true";
 
         return await _writeDbContext.Connection.QueryFirstOrDefaultAsync<Tenant>(query, new { TenantId = tenantId });
     }

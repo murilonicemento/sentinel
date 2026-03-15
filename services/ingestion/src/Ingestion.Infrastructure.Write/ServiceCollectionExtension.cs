@@ -89,8 +89,8 @@ public static class ServiceCollectionExtension
 
     private static IServiceCollection AddHostedServices(this IServiceCollection services) =>
         services
-            .AddHostedService<OutboxHostedService>()
-            .AddHostedService<SensorPollingHostedService>();
+            .AddHostedService<OutboxHostedService>();
+            // .AddHostedService<SensorPollingHostedService>();
 
     private static IServiceCollection AddHttpClients(this IServiceCollection services, IConfiguration configuration)
     {

@@ -21,13 +21,13 @@ public class FirePollingHttpClient : ISensorPollingClient
 
     public async Task<List<SensorCollectionDTO>> FetchAsync(CancellationToken cancellationToken)
     {
-        var mapKey = _configuration["Polling:Fire:DataSourceId"] ??
+        var mapKey = _configuration["Polling:Fire:MapKey"] ??
                      throw new ArgumentException("MapKey is required in config");
         var dataSourceId = Guid.Parse(_configuration["Polling:Fire:DataSourceId"] ??
                                       throw new ArgumentException("DataSourceId is required in config"));
         var tenantId = Guid.Parse(_configuration["Polling:Fire:TenantId"] ??
                                   throw new ArgumentException("TenantId is required in config"));
-        var area = _configuration["Polling:Fire:Area"]! ?? throw new ArgumentException("Days is required in config");
+        var area = _configuration["Polling:Fire:Area"]! ?? throw new ArgumentException("Area is required in config");
         var days = _configuration["Polling:Fire:Days"]! ?? throw new ArgumentException("Days is required in config");
         var date = _configuration["Polling:Fire:Date"]! ?? throw new ArgumentException("Date is required in config");
         var response =

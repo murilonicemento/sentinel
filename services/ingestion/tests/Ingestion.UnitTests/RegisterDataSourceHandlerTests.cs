@@ -10,12 +10,18 @@ public class RegisterDataSourceHandlerTests
     private readonly Mock<IDataSourceRepository> _mockDataSourceRepository;
     private readonly Mock<ITenantRepository> _mockTenantRepository;
     private readonly RegisterDataSourceHandler _handler;
+    private readonly Mock<IEventTypePermissionRepository> _mockEventTypePermissionRepository;
 
     public RegisterDataSourceHandlerTests()
     {
         _mockTenantRepository = new Mock<ITenantRepository>();
         _mockDataSourceRepository = new Mock<IDataSourceRepository>();
-        _handler = new RegisterDataSourceHandler(_mockTenantRepository.Object, _mockDataSourceRepository.Object);
+        _mockEventTypePermissionRepository = new Mock<IEventTypePermissionRepository>();
+        _handler = new RegisterDataSourceHandler(
+            _mockTenantRepository.Object,
+            _mockDataSourceRepository.Object,
+            _mockEventTypePermissionRepository.Object
+        );
     }
 
     private void ResetMocks()
