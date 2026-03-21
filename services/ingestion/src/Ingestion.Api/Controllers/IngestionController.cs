@@ -75,4 +75,14 @@ public class IngestionController : ControllerBase
 
         return Created("api/ingestion/disaster", new { DisasterEventId = disasterEventId });
     }
+
+    // [HttpPost("sensor-collection")]
+    // [Authorize(Policy = "IngestionWrite")]
+    // public async Task<ActionResult<ResponseBaseDTO<Guid>>> RegisterSensorCollection(
+    //     [FromBody] RegisterSensorCollectionCommand command)
+    // {
+    //     var sensorCollectionId = await _mediator.Send(command);
+
+    //     return Created("api/ingestion/sensor-collection", new { SensorCollectionId = sensorCollectionId });
+    // }
 }
