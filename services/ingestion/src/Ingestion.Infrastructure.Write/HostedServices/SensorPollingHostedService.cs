@@ -1,6 +1,7 @@
 ﻿using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Application.Interfaces.Services;
 using Ingestion.Application.Services;
+using Ingestion.Infrastructure.Write.HttpClients;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -16,12 +17,12 @@ public class SensorPollingHostedService : BackgroundService
 
     public SensorPollingHostedService(
         IServiceScopeFactory scopeFactory,
-        IEnumerable<ISensorPollingClient> sensorPollingClients,
+        ISensorPollingClientFactory sensorPollingClientFactory,
         ILogger<SensorPollingHostedService> logger
     )
     {
         _scopeFactory = scopeFactory;
-        _sensorPollingClients = sensorPollingClients;
+        _sensorPollingClients = sensorPollingClientFactory.GetAllClients();
         _logger = logger;
     }
 
