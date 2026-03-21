@@ -1,5 +1,4 @@
 ﻿using Confluent.Kafka;
-using Ingestion.Application.Events;
 using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Application.Interfaces.Providers;
@@ -89,8 +88,8 @@ public static class ServiceCollectionExtension
 
     private static IServiceCollection AddHostedServices(this IServiceCollection services) =>
         services
-            .AddHostedService<OutboxHostedService>();
-            // .AddHostedService<SensorPollingHostedService>();
+            .AddHostedService<OutboxHostedService>()
+            .AddHostedService<SensorPollingHostedService>();
 
     private static IServiceCollection AddHttpClients(this IServiceCollection services, IConfiguration configuration)
     {
@@ -102,11 +101,35 @@ public static class ServiceCollectionExtension
         var earthquakeSensorPollingUrl = configuration["Polling:Earthquake:BaseUrl"]
                                          ?? throw new InvalidOperationException(
                                              "SensorPolling:BaseUrl configuration is required");
+        var floodSensorPollingUrl = configuration["Polling:Flood:BaseUrl"]
+                                    ?? throw new InvalidOperationException(
+                                        "Polling:Flood:BaseUrl configuration is required");
+        var landslideSensorPollingUrl = configuration["Polling:Landslide:BaseUrl"]
+                                        ?? throw new InvalidOperationException(
+                                            "Polling:Landslide:BaseUrl configuration is required");
+        var temperatureAnomalySensorPollingUrl = configuration["Polling:TemperatureAnomaly:BaseUrl"]
+                                                 ?? throw new InvalidOperationException(
+                                                     "Polling:TemperatureAnomaly:BaseUrl configuration is required");
+        var humidityAnomalySensorPollingUrl = configuration["Polling:HumidityAnomaly:BaseUrl"]
+                                              ?? throw new InvalidOperationException(
+                                                  "Polling:HumidityAnomaly:BaseUrl configuration is required");
+        var windGustSensorPollingUrl = configuration["Polling:WindGust:BaseUrl"]
+                                       ?? throw new InvalidOperationException(
+                                           "Polling:WindGust:BaseUrl configuration is required");
+        var rainfallSensorPollingUrl = configuration["Polling:Rainfall:BaseUrl"]
+                                       ?? throw new InvalidOperationException(
+                                           "Polling:Rainfall:BaseUrl configuration is required");
+        var pressureChangeSensorPollingUrl = configuration["Polling:PressureChange:BaseUrl"]
+                                             ?? throw new InvalidOperationException(
+                                                 "Polling:PressureChange:BaseUrl configuration is required");
 
         services
             .AddHttpClient<IGeospatialClient, GeospatialClient>(client =>
             {
+                var apiKey = configuration["Geospatial:APIKey"] ??
+                             throw new ArgumentException("APIKey is required in config");
                 client.BaseAddress = new Uri(geospatialUrl);
+                client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
                 client.Timeout = TimeSpan.FromSeconds(30);
             });
         services
@@ -120,6 +143,73 @@ public static class ServiceCollectionExtension
             .AddHttpClient<ISensorPollingClient, EarthquakePollingHttpClient>(client =>
             {
                 client.BaseAddress = new Uri(earthquakeSensorPollingUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddPolicyHandler(CreateRetryPolicy());
+        services
+            .AddHttpClient<ISensorPollingClient, FloodPollingHttpClient>(client =>
+            {
+                var token = configuration["Polling:HumidityAnomaly:Token"] ??
+                            throw new ArgumentException("Token is required in config");
+                client.BaseAddress = new Uri(floodSensorPollingUrl);
+                client.DefaultRequestHeaders.Add("token", token);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddPolicyHandler(CreateRetryPolicy());
+        services
+            .AddHttpClient<ISensorPollingClient, LandslidePollingHttpClient>(client =>
+            {
+                client.BaseAddress = new Uri(landslideSensorPollingUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddPolicyHandler(CreateRetryPolicy());
+        services
+            .AddHttpClient<ISensorPollingClient, TemperatureAnomalyPollingHttpClient>(client =>
+            {
+                var token = configuration["Polling:HumidityAnomaly:Token"] ??
+                            throw new ArgumentException("Token is required in config");
+                client.BaseAddress = new Uri(temperatureAnomalySensorPollingUrl);
+                client.DefaultRequestHeaders.Add("token", token);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddPolicyHandler(CreateRetryPolicy());
+        services
+            .AddHttpClient<ISensorPollingClient, HumidityAnomalyPollingHttpClient>(client =>
+            {
+                var token = configuration["Polling:HumidityAnomaly:Token"] ??
+                            throw new ArgumentException("Token is required in config");
+                client.BaseAddress = new Uri(humidityAnomalySensorPollingUrl);
+                client.DefaultRequestHeaders.Add("token", token);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddPolicyHandler(CreateRetryPolicy());
+        services
+            .AddHttpClient<ISensorPollingClient, WindGustPollingHttpClient>(client =>
+            {
+                var apiKey = configuration["Polling:WindGust:APIKey"] ??
+                             throw new ArgumentException("APIKey is required in config");
+                client.BaseAddress = new Uri(windGustSensorPollingUrl);
+                client.DefaultRequestHeaders.Add("Authorization", apiKey);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddPolicyHandler(CreateRetryPolicy());
+        services
+            .AddHttpClient<ISensorPollingClient, RainfallPollingHttpClient>(client =>
+            {
+                var apiKey = configuration["Polling:Rainfall:APIKey"] ??
+                             throw new ArgumentException("APIKey is required in config");
+                client.BaseAddress = new Uri(rainfallSensorPollingUrl);
+                client.DefaultRequestHeaders.Add("Authorization", apiKey);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddPolicyHandler(CreateRetryPolicy());
+        services
+            .AddHttpClient<ISensorPollingClient, PressureChangePollingHttpClient>(client =>
+            {
+                var apiKey = configuration["Polling:PressureChange:APIKey"] ??
+                             throw new ArgumentException("APIKey is required in config");
+                client.BaseAddress = new Uri(pressureChangeSensorPollingUrl);
+                client.DefaultRequestHeaders.Add("Authorization", apiKey);
                 client.Timeout = TimeSpan.FromSeconds(30);
             })
             .AddPolicyHandler(CreateRetryPolicy());

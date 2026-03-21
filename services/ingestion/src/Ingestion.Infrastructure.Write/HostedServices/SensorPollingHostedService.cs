@@ -1,5 +1,6 @@
 ﻿using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Application.Interfaces.Services;
+using Ingestion.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -9,33 +10,35 @@ namespace Ingestion.Infrastructure.Write.HostedServices;
 public class SensorPollingHostedService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ISensorPollingClient _sensorPollingClient;
+    private readonly IEnumerable<ISensorPollingClient> _sensorPollingClients;
     private readonly ILogger<SensorPollingHostedService> _logger;
     private readonly TimeSpan _interval = TimeSpan.FromSeconds(30);
 
     public SensorPollingHostedService(
         IServiceScopeFactory scopeFactory,
-        ISensorPollingClient sensorPollingClient,
+        IEnumerable<ISensorPollingClient> sensorPollingClients,
         ILogger<SensorPollingHostedService> logger
     )
     {
         _scopeFactory = scopeFactory;
-        _sensorPollingClient = sensorPollingClient;
+        _sensorPollingClients = sensorPollingClients;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Sensor Polling Worker iniciado.");
+        _logger.LogInformation("Sensor Polling Worker started.");
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                var collections = await _sensorPollingClient.FetchAsync(stoppingToken);
-
-                if (collections.Count > 0)
+                foreach (var client in _sensorPollingClients)
                 {
+                    var collections = await client.FetchAsync(stoppingToken);
+
+                    if (collections.Count <= 0) continue;
+
                     using var scope = _scopeFactory.CreateScope();
                     var sensorCollectionService = scope.ServiceProvider.GetRequiredService<ISensorCollectionService>();
 

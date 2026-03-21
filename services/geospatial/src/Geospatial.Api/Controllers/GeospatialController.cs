@@ -1,12 +1,16 @@
+using Geospatial.Api.Attributes;
 using Geospatial.Application.DTOs;
 using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.Mappers;
+using Geospatial.Domain.Events;
+using Geospatial.Domain.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Geospatial.Api.Controllers;
 
 [ApiController]
 [Route("api/geospatial")]
+[ApiKeyAuth]
 public class GeospatialController : ControllerBase
 {
     private readonly IContainsPointUseCase _containsPointUseCase;
@@ -14,24 +18,57 @@ public class GeospatialController : ControllerBase
     private readonly IIntersectsUseCase _intersectsUseCase;
     private readonly IDistanceUseCase _distanceUseCase;
     private readonly IBatchEvaluateUseCase _batchEvaluateUseCase;
+    private readonly IGeospatialEventRepository _repository;
 
     public GeospatialController(
         IContainsPointUseCase containsPointUseCase,
         IWithinRadiusUseCase withinRadiusUseCase,
         IIntersectsUseCase intersectsUseCase,
         IDistanceUseCase distanceUseCase,
-        IBatchEvaluateUseCase batchEvaluateUseCase)
+        IBatchEvaluateUseCase batchEvaluateUseCase,
+        IGeospatialEventRepository repository)
     {
         _containsPointUseCase = containsPointUseCase;
         _withinRadiusUseCase = withinRadiusUseCase;
         _intersectsUseCase = intersectsUseCase;
         _distanceUseCase = distanceUseCase;
         _batchEvaluateUseCase = batchEvaluateUseCase;
+        _repository = repository;
     }
 
+    [HttpPost("query/search-by-radius")]
+    public async Task<ActionResult<IReadOnlyList<GeospatialOperationEvent>>> SearchByRadius(
+        [FromBody] SearchByRadiusRequestDTO request,
+        CancellationToken cancellationToken)
+    {
+        var events = await _repository.SearchByPointAsync(
+            request.Center.Latitude,
+            request.Center.Longitude,
+            request.RadiusMeters,
+            cancellationToken);
+
+        return Ok(events);
+    }
+
+    [HttpPost("query/search-by-polygon")]
+    public async Task<ActionResult<IReadOnlyList<GeospatialOperationEvent>>> SearchByPolygon(
+        [FromBody] SearchByPolygonRequestDTO request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Polygon.Count < 3)
+        {
+            return BadRequest("Polygon must have at least 3 points");
+        }
+
+        var polygon = request.Polygon.Select(p => (p.Latitude, p.Longitude)).ToList();
+        var events = await _repository.SearchByPolygonAsync(polygon, cancellationToken);
+
+        return Ok(events);
+    }
 
     [HttpPost("contains-point")]
-    public async Task<IActionResult> ContainsPoint([FromBody] ContainsPointRequestDTO request, CancellationToken cancellationToken)
+    public async Task<IActionResult> ContainsPoint([FromBody] ContainsPointRequestDTO request,
+        CancellationToken cancellationToken)
     {
         var area = GeoPolygonMapper.ToDomain(request.Area);
         var point = GeoPointMapper.ToDomain(request.Point);
@@ -40,9 +77,9 @@ public class GeospatialController : ControllerBase
         return Ok(new { contains });
     }
 
-
     [HttpPost("within-radius")]
-    public async Task<IActionResult> WithinRadius([FromBody] WithinRadiusRequestDTO request, CancellationToken cancellationToken)
+    public async Task<IActionResult> WithinRadius([FromBody] WithinRadiusRequestDTO request,
+        CancellationToken cancellationToken)
     {
         var center = GeoPointMapper.ToDomain(request.Center);
         var target = GeoPointMapper.ToDomain(request.Point);
@@ -57,7 +94,8 @@ public class GeospatialController : ControllerBase
     }
 
     [HttpPost("intersects")]
-    public async Task<IActionResult> Intersects([FromBody] IntersectsRequestDTO request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Intersects([FromBody] IntersectsRequestDTO request,
+        CancellationToken cancellationToken)
     {
         var polygonA = GeoPolygonMapper.ToDomain(request.PolygonA);
         var polygonB = GeoPolygonMapper.ToDomain(request.PolygonB);
@@ -67,7 +105,8 @@ public class GeospatialController : ControllerBase
     }
 
     [HttpPost("distance")]
-    public async Task<IActionResult> Distance([FromBody] DistanceRequestDTO request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Distance([FromBody] DistanceRequestDTO request,
+        CancellationToken cancellationToken)
     {
         var from = GeoPointMapper.ToDomain(request.From);
         var to = GeoPointMapper.ToDomain(request.To);
@@ -76,9 +115,9 @@ public class GeospatialController : ControllerBase
         return Ok(new { distance });
     }
 
-
     [HttpPost("evaluate-batch")]
-    public async Task<IActionResult> EvaluateBatch([FromBody] BatchRequestDTO request, CancellationToken cancellationToken)
+    public async Task<IActionResult> EvaluateBatch([FromBody] BatchRequestDTO request,
+        CancellationToken cancellationToken)
     {
         var response = await _batchEvaluateUseCase.ExecuteAsync(request, cancellationToken);
 

@@ -3,12 +3,14 @@ using Ingestion.Application.DTO;
 using Ingestion.Application.Events;
 using Ingestion.Application.Queries;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingestion.Api.Controllers;
 
 [Route("api/ingestion")]
 [ApiController]
+[Authorize]
 public class IngestionController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -19,6 +21,7 @@ public class IngestionController : ControllerBase
     }
 
     [HttpGet("last-detected-events")]
+    [Authorize(Policy = "IngestionRead")]
     public async Task<ActionResult<ResponseBaseDTO<IEnumerable<SensorEventDetected>>>> GetLastDetectedEvents(
         [FromQuery] int limit = 50)
     {
@@ -29,6 +32,7 @@ public class IngestionController : ControllerBase
     }
 
     [HttpGet("collection-statistics")]
+    [Authorize(Policy = "IngestionRead")]
     public async Task<ActionResult<ResponseBaseDTO<CollectionStatisticsResponseDTO>>> GetCollectionStatistics(
         [FromQuery] DateTime? initialDate = null,
         [FromQuery] DateTime? endDate = null)
@@ -40,6 +44,7 @@ public class IngestionController : ControllerBase
     }
 
     [HttpPost("data-source")]
+    [Authorize(Policy = "IngestionWrite")]
     public async Task<ActionResult<ResponseBaseDTO<RegisterDatasourceResponseDTO>>> RegisterDatasource(
         [FromBody] RegisterDataSourceCommand command)
     {
@@ -52,6 +57,7 @@ public class IngestionController : ControllerBase
     }
 
     [HttpPost("climatic")]
+    [Authorize(Policy = "IngestionWrite")]
     public async Task<ActionResult<ResponseBaseDTO<Guid>>> RegisterClimaticEvent(
         [FromBody] RegisterClimaticEventCommand command)
     {
@@ -61,6 +67,7 @@ public class IngestionController : ControllerBase
     }
 
     [HttpPost("disaster")]
+    [Authorize(Policy = "IngestionWrite")]
     public async Task<ActionResult<ResponseBaseDTO<Guid>>> RegisterDisasterEvent(
         [FromBody] RegisterDisasterEventCommand command)
     {

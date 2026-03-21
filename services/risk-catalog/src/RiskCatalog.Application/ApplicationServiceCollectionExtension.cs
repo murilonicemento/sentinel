@@ -8,7 +8,6 @@ public static class ApplicationServiceCollectionExtension
 {
     public static IServiceCollection AddApplicationServiceCollection(this IServiceCollection services) =>
         services
-            .AddScoped<IJwtService, JwtService>()
             .AddScoped<IRiskModelService, RiskModelService>()
             .AddScoped<IEventTypeService, EventTypeService>()
             .AddScoped<IGeospatialValidationService, GeospatialValidationService>();
