@@ -14,6 +14,7 @@ public class DataSource
     public Guid TenantId { get; }
     public DateTime CreatedAt { get; } = DateTime.Now;
     public IEnumerable<DataCollection> DataCollections { get; set; } = [];
+    public IEnumerable<EventTypePermission> EventPermissions { get; set; } = [];
 
     public DataSource()
     {
@@ -38,16 +39,47 @@ public class DataSource
         TenantId = tenantId;
     }
 
-    public ClimaticEventEnum MapValueToEventType(double value, double baseline = 1013)
+    public TEvent MapValueToEventType<TEvent>(double value, double baseline = 1013) where TEvent : Enum
     {
-        return MeasurementType switch
+        // Dicionário que liga MeasurementType a função que retorna o enum
+        var mapping = new Dictionary<string, Func<double, double, TEvent>>
         {
-            "Temperature" when value > 40 => ClimaticEventEnum.TemperatureAnomaly,
-            "Humidity" when value < 20 => ClimaticEventEnum.HumidityAnomaly,
-            "WindSpeed" when value > 80 => ClimaticEventEnum.WindGust,
-            "Rainfall" when value > 50 => ClimaticEventEnum.Rainfall,
-            "Pressure" when Math.Abs(value - baseline) > 20 => ClimaticEventEnum.PressureChange,
-            _ => ClimaticEventEnum.Normal
+            // Climatic
+            {
+                "Temperature",
+                (v, b) => (TEvent)(object)(v > 40 ? ClimaticEventEnum.TemperatureAnomaly : ClimaticEventEnum.Normal)
+            },
+            {
+                "Humidity",
+                (v, b) => (TEvent)(object)(v < 20 ? ClimaticEventEnum.HumidityAnomaly : ClimaticEventEnum.Normal)
+            },
+            { "WindSpeed", (v, b) => (TEvent)(object)(v > 80 ? ClimaticEventEnum.WindGust : ClimaticEventEnum.Normal) },
+            { "Rainfall", (v, b) => (TEvent)(object)(v > 50 ? ClimaticEventEnum.Rainfall : ClimaticEventEnum.Normal) },
+            {
+                "Pressure",
+                (v, b) => (TEvent)(object)((Math.Abs(v - b) > 20)
+                    ? ClimaticEventEnum.PressureChange
+                    : ClimaticEventEnum.Normal)
+            },
+
+            // Disaster
+            { "Fire", (v, b) => (TEvent)(object)(v > 100 ? DisasterEventEnum.Wildfire : DisasterEventEnum.Normal) },
+            {
+                "Earthquake",
+                (v, b) => (TEvent)(object)(v >= 4.0 ? DisasterEventEnum.Earthquake : DisasterEventEnum.Normal)
+            },
         };
+
+        if (!mapping.ContainsKey(MeasurementType))
+            throw new ArgumentException($"Invalid measurement type: {MeasurementType}");
+
+        return mapping[MeasurementType](value, baseline);
+    }
+
+    public bool CanSendEvent(string eventDomain, string eventType)
+    {
+        return EventPermissions.Any(p =>
+            p.EventDomain.Equals(eventDomain, StringComparison.OrdinalIgnoreCase) &&
+            p.EventType.Equals(eventType, StringComparison.OrdinalIgnoreCase));
     }
 }

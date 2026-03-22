@@ -1,4 +1,5 @@
 ﻿using Confluent.Kafka;
+using Ingestion.Infrastructure.Write.HttpClients;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,6 +9,8 @@ using RiskCatalog.Infrastructure.Cache;
 using RiskCatalog.Infrastructure.DatabaseContext;
 using RiskCatalog.Infrastructure.Messaging;
 using RiskCatalog.Infrastructure.Repositories;
+using Polly;
+using Polly.Extensions.Http;
 using StackExchange.Redis;
 
 namespace RiskCatalog.Infrastructure;
@@ -23,7 +26,8 @@ public static class InfrastructureServiceCollectionExtension
             })
             .AddRedisCache(configuration)
             .AddKafkaPublisher(configuration)
-            .AddRepositories();
+            .AddRepositories()
+            .AddGeospatialClient(configuration);
 
     private static IServiceCollection AddRedisCache(this IServiceCollection services, IConfiguration configuration)
     {
@@ -79,4 +83,35 @@ public static class InfrastructureServiceCollectionExtension
             .AddScoped<IRegionalParameterRepository, RegionalParameterRepository>()
             .AddScoped<IRiskMatrixRepository, RiskMatrixRepository>()
             .AddScoped<ISeverityRepository, SeverityRepository>();
+
+    private static IServiceCollection AddGeospatialClient(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var geospatialUrl = configuration["Geospatial:BaseUrl"]
+                            ?? throw new InvalidOperationException("Geospatial:BaseUrl configuration is required");
+
+        services
+            .AddHttpClient<IGeospatialClient, GeospatialClient>(client =>
+            {
+                client.BaseAddress = new Uri(geospatialUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddPolicyHandler(CreateGeospatialRetryPolicy());
+
+        return services;
+
+        static IAsyncPolicy<HttpResponseMessage> CreateGeospatialRetryPolicy() =>
+            HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .OrResult(r => (int)r.StatusCode == 429)
+                .WaitAndRetryAsync(
+                    retryCount: 3,
+                    sleepDurationProvider: retryAttempt =>
+                    {
+                        var backoff = TimeSpan.FromMilliseconds(200 * Math.Pow(2, retryAttempt - 1));
+                        var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 250));
+                        return backoff + jitter;
+                    });
+    }
 }

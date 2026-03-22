@@ -3,7 +3,7 @@ using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Outbox;
 using Ingestion.Infrastructure.Write.Persistence.DbContext;
 
-namespace Ingestion.Infrastructure.Write.Persistence.Postgres.Repositories;
+namespace Ingestion.Infrastructure.Write.Persistence.Repositories;
 
 public class OutboxRepository : IOutboxRepository
 {
@@ -25,14 +25,15 @@ public class OutboxRepository : IOutboxRepository
         return outboxMessage.Id;
     }
 
-    public async Task<IEnumerable<OutboxRow>> GetPending() =>
+    public async Task<IEnumerable<OutboxRow>> GetPendingAsync() =>
         await _writeDbContext.Connection.QueryAsync<OutboxRow>(
             "SELECT id, outbox_type, payload FROM outbox WHERE processed = false LIMIT 50 FOR UPDATE SKIP LOCKED");
-
-    public async Task<bool> UpdateProcessed(Guid id)
+    
+    public async Task<bool> UpdateProcessedAsync(Guid id)
     {
         var affectedRows = await _writeDbContext.Connection.ExecuteAsync(
-            "UPDATE outbox SET processed = true, processed_at = now() WHERE id = @Id", new { id });
+            "UPDATE outbox SET processed = true, processed_at = now() WHERE aggregate_id  = @AggregateId",
+            new { AggregateId = id });
 
         return affectedRows > 0;
     }

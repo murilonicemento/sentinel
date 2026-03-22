@@ -27,14 +27,14 @@ public class OutboxHostedService : BackgroundService
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            var pending = await _outboxRepository.GetPending();
+            var pending = await _outboxRepository.GetPendingAsync();
 
             foreach (var row in pending)
             {
                 try
                 {
                     await _kafkaPublisher.PublishAsync(row.OutboxType, row.Payload, cancellationToken);
-                    await _outboxRepository.UpdateProcessed(row.Id);
+                    await _outboxRepository.UpdateProcessedAsync(row.Id);
                     _logger.LogInformation("Outbox message published with success with id {id}.", row.Id);
                 }
                 catch (Exception exception)

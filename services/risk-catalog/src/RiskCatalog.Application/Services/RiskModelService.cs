@@ -7,6 +7,7 @@ using RiskCatalog.Application.Services.Interfaces;
 using RiskCatalog.Domain.Enums;
 using RiskCatalog.Domain.IRepositories;
 using RiskCatalog.Domain.RiskModels;
+using PolygonDTO = RiskCatalog.Application.DTO.PolygonDTO;
 
 namespace RiskCatalog.Application.Services;
 
@@ -18,6 +19,7 @@ public class RiskModelService : IRiskModelService
     private readonly IRegionalParameterRepository _regionalParameterRepository;
     private readonly ICacheService _cacheService;
     private readonly IPublisher _publisher;
+    private readonly IGeospatialValidationService _geospatialValidationService;
     private readonly ILogger<RiskModelService> _logger;
     private const string RiskMatrixCachePrefix = "risk-matrix";
     private const string IDFCurveCachePrefix = "idf-curve";
@@ -31,6 +33,7 @@ public class RiskModelService : IRiskModelService
         IRegionalParameterRepository regionalParameterRepository,
         ICacheService cacheService,
         IPublisher publisher,
+        IGeospatialValidationService geospatialValidationService,
         ILogger<RiskModelService> logger)
     {
         _eventTypeRepository = eventTypeRepository;
@@ -39,6 +42,7 @@ public class RiskModelService : IRiskModelService
         _regionalParameterRepository = regionalParameterRepository;
         _cacheService = cacheService;
         _publisher = publisher;
+        _geospatialValidationService = geospatialValidationService;
         _logger = logger;
     }
 
@@ -181,11 +185,28 @@ public class RiskModelService : IRiskModelService
             return null;
         }
 
+        PolygonDTO? regionBounds = null;
+        if (!string.IsNullOrEmpty(regionalParameter.RegionBoundsJson))
+        {
+            try
+            {
+                regionBounds = System.Text.Json.JsonSerializer.Deserialize<PolygonDTO>(regionalParameter.RegionBoundsJson);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to deserialize region bounds for RegionId: {regionId}", regionId);
+            }
+        }
+
         var result = new RegionalRiskParametersDTO
         {
             RegionId = regionalParameter.Id,
             AdjustmentFactor = regionalParameter.AdjustmentFactor,
-            Description = regionalParameter.Description
+            Description = regionalParameter.Description,
+            CenterLatitude = regionalParameter.CenterLatitude,
+            CenterLongitude = regionalParameter.CenterLongitude,
+            RegionBounds = regionBounds,
+            CoverageRadiusKm = regionalParameter.CoverageRadiusKm
         };
 
         await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromHours(1), cancellationToken);
@@ -353,10 +374,42 @@ public class RiskModelService : IRiskModelService
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation(
-            "Creating regional risk parameters. Adjustment factor: {adjustmentFactor}, Description: {aescription}",
+            "Creating regional risk parameters. Adjustment factor: {adjustmentFactor}, Description: {description}",
             regionalRiskParametersDto.AdjustmentFactor,
             regionalRiskParametersDto.Description
         );
+
+        // Validate geospatial coordinates if provided
+        if (regionalRiskParametersDto.CenterLatitude.HasValue && regionalRiskParametersDto.CenterLongitude.HasValue)
+        {
+            var isValidCoordinates = await _geospatialValidationService.ValidateCoordinatesAsync(
+                regionalRiskParametersDto.CenterLatitude.Value,
+                regionalRiskParametersDto.CenterLongitude.Value,
+                cancellationToken);
+
+            if (!isValidCoordinates)
+            {
+                _logger.LogWarning(
+                    "Invalid coordinates provided. Latitude: {latitude}, Longitude: {longitude}",
+                    regionalRiskParametersDto.CenterLatitude.Value,
+                    regionalRiskParametersDto.CenterLongitude.Value);
+                throw new ArgumentException("Invalid coordinates provided for regional parameters.");
+            }
+        }
+
+        // Validate region bounds if provided
+        if (regionalRiskParametersDto.RegionBounds != null)
+        {
+            var isValidBounds = await _geospatialValidationService.ValidateRegionBoundsAsync(
+                regionalRiskParametersDto.RegionBounds,
+                cancellationToken);
+
+            if (!isValidBounds)
+            {
+                _logger.LogWarning("Invalid region bounds provided");
+                throw new ArgumentException("Invalid region bounds provided for regional parameters.");
+            }
+        }
 
         var regionalParameterExist = await _regionalParameterRepository.GetByAdjustmentFactorAsync(
             regionalRiskParametersDto.AdjustmentFactor,
@@ -365,17 +418,25 @@ public class RiskModelService : IRiskModelService
         if (regionalParameterExist)
         {
             _logger.LogWarning(
-                "Failed to create regional risk parameters. Regional risk parameters already exist. RegionId: {adjustmentFactor}",
+                "Failed to create regional risk parameters. Regional risk parameters already exist. AdjustmentFactor: {adjustmentFactor}",
                 regionalRiskParametersDto.AdjustmentFactor);
 
             throw new ArgumentException(
                 "Regional risk parameters already exist for the given region.");
         }
 
+        var regionBoundsJson = regionalRiskParametersDto.RegionBounds != null 
+            ? System.Text.Json.JsonSerializer.Serialize(regionalRiskParametersDto.RegionBounds) 
+            : null;
+
         var regionalParameter = new RegionalParameter
         {
             AdjustmentFactor = regionalRiskParametersDto.AdjustmentFactor,
-            Description = regionalRiskParametersDto.Description
+            Description = regionalRiskParametersDto.Description,
+            CenterLatitude = regionalRiskParametersDto.CenterLatitude,
+            CenterLongitude = regionalRiskParametersDto.CenterLongitude,
+            RegionBoundsJson = regionBoundsJson,
+            CoverageRadiusKm = regionalRiskParametersDto.CoverageRadiusKm
         };
 
         var isCreated =

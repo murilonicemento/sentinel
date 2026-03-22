@@ -5,6 +5,6 @@ namespace Ingestion.Domain.Interfaces.Repositories;
 public interface IOutboxRepository
 {
     public Task<Guid> RegisterAsync(OutboxMessage outboxMessage);
-    public Task<IEnumerable<OutboxRow>> GetPending();
-    public Task<bool> UpdateProcessed(Guid id);
+    public Task<IEnumerable<OutboxRow>> GetPendingAsync();
+    public Task<bool> UpdateProcessedAsync(Guid id);
 }

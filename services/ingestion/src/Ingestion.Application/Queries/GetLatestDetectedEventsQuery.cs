@@ -4,7 +4,7 @@ using MediatR;
 
 namespace Ingestion.Application.Queries;
 
-public record GetLatestDetectedEventsQuery : IRequest<IEnumerable<ClimaticEventDetectedEvent>>
+public record GetLatestDetectedEventsQuery : IRequest<IEnumerable<SensorEventDetected>>
 {
     public int Limit { get; set; }
 }

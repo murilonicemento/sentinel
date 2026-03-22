@@ -9,6 +9,7 @@ namespace RiskCatalog.Api.Controllers;
 
 [Route("api/risk-model")]
 [ApiController]
+[Authorize]
 public class RiskModelController : ControllerBase
 {
     private readonly IRiskModelService _riskModelService;
@@ -19,6 +20,7 @@ public class RiskModelController : ControllerBase
     }
 
     [HttpGet("risk-matrix")]
+    [Authorize(Policy = "RiskCatalogRead")]
     public async Task<ActionResult<RiskMatrixDTO>> GetRiskMatrixForEventType(
         [FromQuery] string eventTypeCode,
         [FromQuery] string severityLevel,
@@ -34,6 +36,7 @@ public class RiskModelController : ControllerBase
     }
 
     [HttpGet("idf-curves")]
+    [Authorize(Policy = "RiskCatalogRead")]
     public async Task<ActionResult<List<IDFCurvesDTO>>> GetIDFCurvesForEventType(
         [FromQuery] string eventTypeCode,
         [FromQuery] int? returnPeriodYears
@@ -47,6 +50,7 @@ public class RiskModelController : ControllerBase
     }
 
     [HttpGet("regional-risk-parameters")]
+    [Authorize(Policy = "RiskCatalogRead")]
     public async Task<ActionResult<RegionalRiskParametersDTO>> GetRegionalRiskParameters([FromQuery] Guid regionId)
     {
         var regionParameter = await _riskModelService.GetRegionalRiskParametersAsync(regionId);

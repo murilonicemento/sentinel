@@ -10,7 +10,7 @@ using MongoDB.Driver;
 namespace Ingestion.Application.Handlers;
 
 public class
-    GetCollectionStatisticsHandler : IRequestHandler<GetCollectionStatisticsQuery, CollectionStatisticsResponseDTO>
+    GetCollectionStatisticsHandler : IRequestHandler<GetCollectionStatisticsQuery, CollectionStatisticsResponseDTO?>
 {
     private readonly ReadDbContext _context;
 
@@ -19,20 +19,23 @@ public class
         _context = context;
     }
 
-    public async Task<CollectionStatisticsResponseDTO> Handle(GetCollectionStatisticsQuery request,
+    public async Task<CollectionStatisticsResponseDTO?> Handle(GetCollectionStatisticsQuery request,
         CancellationToken cancellationToken)
     {
-        var collection = _context.GetCollection<ClimaticEventDetectedEvent>("events");
+        var collection = _context.GetCollection<SensorEventDetected>("events");
         var aggregation = collection.Aggregate();
 
         if (request.InitialDate.HasValue)
             aggregation =
                 aggregation.Match(
-                    Builders<ClimaticEventDetectedEvent>.Filter.Gte(x => x.CollectedAt, request.InitialDate.Value));
+                    Builders<SensorEventDetected>.Filter.Gte(x => x.CollectedAt, request.InitialDate.Value));
         if (request.EndDate.HasValue)
             aggregation =
                 aggregation.Match(
-                    Builders<ClimaticEventDetectedEvent>.Filter.Lte(x => x.CollectedAt, request.EndDate.Value));
+                    Builders<SensorEventDetected>.Filter.Lte(x => x.CollectedAt, request.EndDate.Value));
+
+        if (!await aggregation.AnyAsync(cancellationToken: cancellationToken))
+            return null;
 
         return await aggregation
             .Group(
@@ -40,7 +43,7 @@ public class
                 g => new CollectionStatisticsResponseDTO
                 {
                     TotalEvents = g.Count(),
-                    TotalByTypeRaw = g.Select(x => x.EventType).ToList(),
+                    TotalByTypeRaw = g.Select(x => Enum.Parse<ClimaticEventEnum>(x.EventType)).ToList(),
                     MinIntensity = g.Min(x => x.Intensity),
                     MaxIntensity = g.Max(x => x.Intensity),
                     AverageIntensity = g.Average(x => x.Intensity)

@@ -7,6 +7,7 @@ namespace RiskCatalog.Api.Controllers;
 
 [Route("api/event-types")]
 [ApiController]
+[Authorize]
 public class EventTypeController : ControllerBase
 {
     private readonly IEventTypeService _eventTypeService;
@@ -17,6 +18,7 @@ public class EventTypeController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "RiskCatalogRead")]
     public async Task<ActionResult<List<EventTypeDTO>>> GetEventTypes([FromQuery] bool? isActive)
     {
         var eventTypes = await _eventTypeService.GetEventTypesAsync(isActive);
@@ -25,6 +27,7 @@ public class EventTypeController : ControllerBase
     }
 
     [HttpGet("event-type-by-code")]
+    [Authorize(Policy = "RiskCatalogRead")]
     public async Task<ActionResult<EventTypeDTO>> GetEventTypeByCode([FromQuery] string eventTypeCode)
     {
         var eventType = await _eventTypeService.GetEventTypeByCodeAsync(eventTypeCode);
@@ -33,6 +36,7 @@ public class EventTypeController : ControllerBase
     }
 
     [HttpGet("severity-criterion")]
+    [Authorize(Policy = "RiskCatalogRead")]
     public async Task<ActionResult<List<SeverityCriterionDTO>>> GetSeverityCriterionForEventType(
         [FromQuery] string eventTypeCode,
         [FromQuery] int? version

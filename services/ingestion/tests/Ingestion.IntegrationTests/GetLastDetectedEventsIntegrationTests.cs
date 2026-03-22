@@ -80,7 +80,7 @@ public class GetLastDetectedEventsIntegrationTests : IClassFixture<IngestionWebA
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var content = await response.Content.ReadAsStringAsync();
-        var responseData = JsonSerializer.Deserialize<ResponseBaseDTO<IEnumerable<ClimaticEventDetectedEvent>>>(content, _jsonOptions);
+        var responseData = JsonSerializer.Deserialize<ResponseBaseDTO<IEnumerable<SensorEventDetected>>>(content, _jsonOptions);
         
         Assert.NotNull(responseData);
         Assert.True(responseData.Success);
@@ -100,7 +100,7 @@ public class GetLastDetectedEventsIntegrationTests : IClassFixture<IngestionWebA
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var content = await response.Content.ReadAsStringAsync();
-        var responseData = JsonSerializer.Deserialize<ResponseBaseDTO<IEnumerable<ClimaticEventDetectedEvent>>>(content, _jsonOptions);
+        var responseData = JsonSerializer.Deserialize<ResponseBaseDTO<IEnumerable<SensorEventDetected>>>(content, _jsonOptions);
         
         Assert.NotNull(responseData);
         Assert.True(responseData.Success);
@@ -114,7 +114,7 @@ public class GetLastDetectedEventsIntegrationTests : IClassFixture<IngestionWebA
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var content = await response.Content.ReadAsStringAsync();
-        var responseData = JsonSerializer.Deserialize<ResponseBaseDTO<IEnumerable<ClimaticEventDetectedEvent>>>(content, _jsonOptions);
+        var responseData = JsonSerializer.Deserialize<ResponseBaseDTO<IEnumerable<SensorEventDetected>>>(content, _jsonOptions);
         
         Assert.NotNull(responseData);
         Assert.True(responseData.Success);
@@ -134,7 +134,7 @@ public class GetLastDetectedEventsIntegrationTests : IClassFixture<IngestionWebA
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var content = await response.Content.ReadAsStringAsync();
-        var responseData = JsonSerializer.Deserialize<ResponseBaseDTO<IEnumerable<ClimaticEventDetectedEvent>>>(content, _jsonOptions);
+        var responseData = JsonSerializer.Deserialize<ResponseBaseDTO<IEnumerable<SensorEventDetected>>>(content, _jsonOptions);
         
         Assert.NotNull(responseData);
         Assert.True(responseData.Success);

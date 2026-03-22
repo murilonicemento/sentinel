@@ -1,4 +1,4 @@
-﻿services:
+services:
   api-gateway:
     image: api-gateway
     build:
@@ -28,6 +28,7 @@
       - MinIO__Port=${MinIO__Port}
       - MinIO__AccessKey=${MINIO_ROOT_USER}
       - MinIO__SecretKey=${MINIO_ROOT_PASSWORD}
+      - Geospatial__BaseUrl=http://geospatial:8080
     ports:
       - "7001:8080"
     depends_on:
@@ -37,6 +38,7 @@
       - redis
       - minio
       - kafka
+      - geospatial
     restart: unless-stopped
     networks:
       - sentinel-network
@@ -53,12 +55,35 @@
       - ConnectionStrings__Kafka=${ConnectionStrings__Kafka}
       - Redis__MaxMemory=256mb
       - Redis__EvictionPolicy=allkeys-lru
+      - GEOSPATIAL_SERVICE_URL=http://geospatial:8080
     ports:
       - "7002:8080"
     depends_on:
       - postgres
       - elasticsearch
       - redis
+      - kafka
+      - geospatial
+    restart: unless-stopped
+    networks:
+      - sentinel-network
+  geospatial:
+    image: geospatial
+    build:
+      context: ../services/geospatial
+      dockerfile: Dockerfile
+    container_name: geospatial
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Elasticsearch__Url=http://elasticsearch:9200
+      - Elasticsearch__DefaultIndex=geospatial-events
+      - Loki__Url=http://loki:3100
+      - ConnectionStrings__Kafka=kafka:9092
+    ports:
+      - "7003:8080"
+    depends_on:
+      - elasticsearch
+      - loki
       - kafka
     restart: unless-stopped
     networks:
@@ -183,7 +208,18 @@
     depends_on:
       - elasticsearch
     environment:
-      - ELASTICSEARCH_HOSTS=${ElasticSearch_URI}
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - sentinel-network
+    restart: unless-stopped
+  loki:
+    container_name: loki
+    image: grafana/loki:2.9.3
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki-data:/loki
     networks:
       - sentinel-network
     restart: unless-stopped
@@ -193,6 +229,7 @@ volumes:
   redis-data:
   minio-data:
   elasticsearch-data:
+  loki-data:
 networks:
   sentinel-network:
   
