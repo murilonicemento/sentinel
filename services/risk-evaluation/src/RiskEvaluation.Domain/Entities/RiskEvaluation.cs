@@ -9,9 +9,7 @@ public class RiskEvaluationEntity
     public DateTime Timestamp { get; private set; }
     public double Score { get; private set; }
     public RiskLevel Level { get; private set; }
-
-    private RiskEvaluationEntity() { } // For EF or serialization
-
+    
     public RiskEvaluationEntity(string location, double score, RiskLevel level)
     {
         Id = Guid.NewGuid();

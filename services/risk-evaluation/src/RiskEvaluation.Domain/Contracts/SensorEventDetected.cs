@@ -2,7 +2,7 @@ using MediatR;
 
 namespace RiskEvaluation.Domain.Contracts;
 
-public class WeatherDataUpdated : INotification
+public class SensorEventDetected : INotification
 {
     public string Location { get; set; }
     public double Gust { get; set; }

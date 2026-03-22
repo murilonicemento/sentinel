@@ -1,70 +1,58 @@
-using RiskEvaluation.Api;
-using RiskEvaluation.Application.Interfaces;
-using RiskEvaluation.Application.Services;
-using RiskEvaluation.Domain.Services;
-using RiskEvaluation.Infrastructure.Messaging;
-using RiskEvaluation.Infrastructure.Persistence;
-using MediatR;
-using MongoDB.Driver;
+using System.Net;
+using RiskEvaluation.Application;
+using RiskEvaluation.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
+using RiskEvaluation.Api.Filters;
+using RiskEvaluation.Api.Middlewares;
 using Scalar.AspNetCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
 builder.Services.AddOpenApi();
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var errors = context.ModelState
+            .Values
+            .SelectMany(v => v.Errors)
+            .Select(e => e.ErrorMessage)
+            .ToList();
 
+        var responseObj = new
+        {
+            title = "One or more validation errors occurred.",
+            type = "RequestFormat",
+            statusCode = HttpStatusCode.BadRequest,
+            success = false,
+            errors = new
+            {
+                messages = errors
+            }
+        };
+
+        return new BadRequestObjectResult(responseObj);
+    };
+});
 // Logging
-builder.Host.UseSerilog((context, config) =>
-{
-    config.ReadFrom.Configuration(context.Configuration);
-});
+// builder.Host.UseSerilog((context, config) => { config.ReadFrom.Configuration(context.Configuration); });
 
-// MongoDB
-builder.Services.AddSingleton<IMongoClient>(sp =>
-{
-    var connectionString = builder.Configuration.GetConnectionString("MongoDb");
-    return new MongoClient(connectionString);
-});
+// MongoDB Serialization
+BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
 
-builder.Services.AddScoped(sp =>
-{
-    var client = sp.GetRequiredService<IMongoClient>();
-    return client.GetDatabase("RiskEvaluationDb");
-});
-
-// Repositories
-builder.Services.AddScoped<IRiskEvaluationRepository, RiskEvaluationRepository>();
-
-// Domain Services
-builder.Services.AddScoped<RiskCalculationService>();
-
-// Application Services
-builder.Services.AddScoped<IRiskEvaluationService, RiskEvaluationService>();
-
-// Messaging
-builder.Services.AddSingleton<IEventPublisher>(sp =>
-{
-    var bootstrapServers = builder.Configuration["Kafka:BootstrapServers"];
-    var topic = builder.Configuration["Kafka:Topic"];
-    return new KafkaEventPublisher(bootstrapServers!, topic!);
-});
-
-builder.Services.AddSingleton<IMessageConsumer>(sp =>
-{
-    var bootstrapServers = builder.Configuration["Kafka:BootstrapServers"];
-    var groupId = builder.Configuration["Kafka:GroupId"];
-    var mediator = sp.GetRequiredService<IMediator>();
-    return new KafkaMessageConsumer(bootstrapServers!, groupId!, mediator);
-});
-
-// MediatR
-builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+// Layered Service Registration
+builder.Services
+    .AddApplicationServiceCollection()
+    .AddInfrastructureServiceCollection(builder.Configuration);
 
 // Hosted Service for Consumer
-builder.Services.AddHostedService<MessageConsumerHostedService>();
+// builder.Services.AddHostedService<MessageConsumerHostedService>();
 
 var app = builder.Build();
 
@@ -72,11 +60,19 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.MapScalarApiReference();
+    app.MapScalarApiReference(options =>
+    {
+        options
+            .WithTitle("Sentinel - Risk Evaluation API")
+            .WithTheme(ScalarTheme.DeepSpace)
+            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.MapControllers();
 
 app.Run();

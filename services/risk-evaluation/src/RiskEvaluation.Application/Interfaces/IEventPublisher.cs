@@ -2,5 +2,5 @@ namespace RiskEvaluation.Application.Interfaces;
 
 public interface IEventPublisher
 {
-    Task PublishAsync<T>(T @event) where T : class;
+    public Task PublishAsync<T>(T @event) where T : class;
 }

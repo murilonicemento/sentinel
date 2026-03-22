@@ -2,6 +2,7 @@ using RiskEvaluation.Application.Interfaces;
 using RiskEvaluation.Domain.Services;
 using RiskEvaluation.Domain.Events;
 using RiskEvaluation.Domain.Enums;
+using RiskEvaluation.Domain.Repositories;
 
 namespace RiskEvaluation.Application.Services;
 
@@ -21,9 +22,10 @@ public class RiskEvaluationService : IRiskEvaluationService
         _calculationService = calculationService;
     }
 
-    public async Task<RiskEvaluationEntity> EvaluateRiskAsync(string location, double gust, double precipitation, double pressure)
+    public async Task<RiskEvaluationEntity> EvaluateRiskAsync(string location, double gust, double precipitation,
+        double pressure)
     {
-        double score = _calculationService.CalculateRiskScore(gust, precipitation, pressure);
+        var score = _calculationService.CalculateRiskScore(gust, precipitation, pressure);
         var level = _calculationService.ClassifyRiskLevel(score);
 
         var evaluation = new RiskEvaluationEntity(location, score, level);
@@ -40,17 +42,16 @@ public class RiskEvaluationService : IRiskEvaluationService
 
         await _eventPublisher.PublishAsync(riskEvaluatedEvent);
 
-        if (level == Domain.Enums.RiskLevel.High || level == Domain.Enums.RiskLevel.Critical)
-        {
-            var highRiskEvent = new HighRiskDetectedEvent(
-                evaluation.Id,
-                evaluation.Location,
-                evaluation.Score,
-                evaluation.Level.ToString(),
-                evaluation.Timestamp);
+        if (level != RiskLevel.High && level != RiskLevel.Critical) return evaluation;
 
-            await _eventPublisher.PublishAsync(highRiskEvent);
-        }
+        var highRiskEvent = new HighRiskDetectedEvent(
+            evaluation.Id,
+            evaluation.Location,
+            evaluation.Score,
+            evaluation.Level.ToString(),
+            evaluation.Timestamp);
+
+        await _eventPublisher.PublishAsync(highRiskEvent);
 
         return evaluation;
     }

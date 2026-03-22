@@ -8,11 +8,11 @@
 
 Plataforma distribuída para **detecção, análise e alerta de eventos naturais**, com:
 
-- Eventos: chuvas extremas, enchentes, deslizamentos, incêndios, sismos  
-- Arquitetura: **Microsserviços, CQRS, DDD, Clean Architecture**  
-- Processamento em tempo real de múltiplas fontes (APIs, IoT, satélites)  
-- Alertas multicanal: SMS, push, WhatsApp, IoT/sirene  
-- Suporte **multi-tenant** com trilha auditável  
+- Eventos: chuvas extremas, enchentes, deslizamentos, incêndios, sismos
+- Arquitetura: **Microsserviços, CQRS, DDD, Clean Architecture**
+- Processamento em tempo real de múltiplas fontes (APIs, IoT, satélites)
+- Alertas multicanal: SMS, push, WhatsApp, IoT/sirene
+- Suporte **multi-tenant** com trilha auditável
 
 ## Documentação
 
@@ -30,7 +30,7 @@ sentinel/
 │  │   └─ tests/{UnitTests,IntegrationTests}
 │  ├─ risk-catalog/...
 │  ├─ geospatial/...
-│  ├─ risk-scoring/...
+│  ├─ risk-evaluation/...
 │  ├─ alert-orchestrator/...
 │  ├─ channels/...
 │  ├─ reporting/...
@@ -50,20 +50,20 @@ sentinel/
 │  └─ diagrams/{architecture.mmd,classDiagram.mmd}
 └─ README.md
 
-````
+```
 
 ## Como rodar localmente
 
 ### Pré-requisitos
 
-- Docker  
-- Docker Compose  
+- Docker
+- Docker Compose
 
 ### Subindo a stack mínima
 
 ```bash
 docker compose up -d
-````
+```
 
 ### Parando e removendo containers
 
@@ -73,13 +73,13 @@ docker compose down
 
 ### Serviços inclusos
 
-* Kafka + Zookeeper
-* PostgreSQL
-* MongoDB
-* Redis
-* MinIO
-* Elasticsearch + Kibana
-* Grafana + Prometheus + Loki
+- Kafka + Zookeeper
+- PostgreSQL
+- MongoDB
+- Redis
+- MinIO
+- Elasticsearch + Kibana
+- Grafana + Prometheus + Loki
 
 ## Roadmap Resumido
 
@@ -92,16 +92,15 @@ docker compose down
 
 ## Testes
 
-* Unitários: regras de domínio
-* Contract Tests: Pact
-* Integração: Testcontainers
-* E2E em Kubernetes (kind/minikube)
+- Unitários: regras de domínio
+- Contract Tests: Pact
+- Integração: Testcontainers
+- E2E em Kubernetes (kind/minikube)
 
 ## Diferenciais
 
-* Reprodutibilidade via event sourcing e auditoria legal
-* Geoprocessamento real com PostGIS e Elasticsearch
-* Escalonamento orientado a eventos com KEDA
-* Multi-tenant completo com limites e billing
-* Integração IoT com sirenes físicas
-
+- Reprodutibilidade via event sourcing e auditoria legal
+- Geoprocessamento real com PostGIS e Elasticsearch
+- Escalonamento orientado a eventos com KEDA
+- Multi-tenant completo com limites e billing
+- Integração IoT com sirenes físicas

@@ -3,6 +3,15 @@
 db.createCollection("climaticEvents");
 db.createCollection("disasterEvents");
 
+// Risk Evaluation database schema
+bdr = db.getSiblingDB("RiskEvaluationDatabase");
+
+bdr.createCollection("RiskEvaluations");
+
+bdr.RiskEvaluations.createIndex({ Id: 1 }, { unique: true });
+bdr.RiskEvaluations.createIndex({ Location: 1 });
+bdr.RiskEvaluations.createIndex({ Timestamp: -1 });
+
 db.climaticEvents.createIndex({EventId: 1}, {unique: true});
 db.climaticEvents.createIndex({EventType: 1});
 db.climaticEvents.createIndex({CollectedAt: -1});

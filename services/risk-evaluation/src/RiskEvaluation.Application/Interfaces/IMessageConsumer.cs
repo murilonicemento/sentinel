@@ -1,6 +1,6 @@
 namespace RiskEvaluation.Application.Interfaces;
 
-public interface IMessageConsumer
+public interface IMessageConsumer : IAsyncDisposable
 {
-    Task StartConsumingAsync(CancellationToken cancellationToken);
+    public Task StartConsumingAsync(CancellationToken cancellationToken);
 }
