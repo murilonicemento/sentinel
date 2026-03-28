@@ -46,9 +46,9 @@ public class KafkaMessageConsumer : IMessageConsumer
                         var sensorEvent = JsonSerializer.Deserialize<SensorEventDetected>(consumeResult.Message.Value);
                         if (sensorEvent != null)
                         {
-                            _logger.LogInformation("Processing sensor event for location: {Location}", sensorEvent.Location);
+                            _logger.LogInformation("Processing sensor event for Lat: {Latitude}, Lon: {Longitude}", sensorEvent.Latitude, sensorEvent.Longitude);
                             await _mediator.Publish(sensorEvent, cancellationToken);
-                            _logger.LogInformation("Sensor event processed successfully for location: {Location}", sensorEvent.Location);
+                            _logger.LogInformation("Sensor event processed successfully for Lat: {Latitude}, Lon: {Longitude}", sensorEvent.Latitude, sensorEvent.Longitude);
                         }
 
                         break;

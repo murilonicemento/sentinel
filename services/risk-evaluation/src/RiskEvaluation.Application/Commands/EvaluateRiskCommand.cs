@@ -1,10 +1,13 @@
 using MediatR;
+using RiskEvaluation.Domain.ValueObjects;
 
 namespace RiskEvaluation.Application.Commands;
 
 public class EvaluateRiskCommand : IRequest<EvaluateRiskResponse>
 {
-    public string Location { get; set; } = string.Empty;
+    public int Latitude { get; set; }
+    public int Longitude { get; set; }
     public DateTime Timestamp { get; set; }
-    public Dictionary<string, double> Metrics { get; set; } = new();
+    public RiskMetrics Metrics { get; set; } = new();
+    public RiskEvents Events { get; set; } = new();
 }

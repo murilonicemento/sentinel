@@ -6,6 +6,6 @@ public interface IRiskEvaluationRepository
 {
     public Task AddAsync(RiskEvaluationEntity evaluation);
     public Task<RiskEvaluationEntity?> GetByIdAsync(Guid id);
-    public Task<List<RiskEvaluationEntity>> GetByLocationAsync(string location);
+    public Task<List<RiskEvaluationEntity>> GetByLocationAsync(int latitude, int longitude);
     public Task UpdateAsync(RiskEvaluationEntity evaluation);
 }

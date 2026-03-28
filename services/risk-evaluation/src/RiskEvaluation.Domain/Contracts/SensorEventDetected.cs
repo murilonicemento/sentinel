@@ -4,7 +4,8 @@ namespace RiskEvaluation.Domain.Contracts;
 
 public class SensorEventDetected : INotification
 {
-    public string Location { get; set; }
+    public int Latitude { get; set; }
+    public int Longitude { get; set; }
     public double Gust { get; set; }
     public double Precipitation { get; set; }
     public double Pressure { get; set; }

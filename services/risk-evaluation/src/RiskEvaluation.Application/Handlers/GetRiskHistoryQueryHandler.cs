@@ -20,16 +20,18 @@ public class GetRiskHistoryQueryHandler : IRequestHandler<GetRiskHistoryQuery, L
 
     public async Task<List<RiskEvaluationDto>> Handle(GetRiskHistoryQuery request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Fetching risk history for location: {Location}", request.Location);
+        var evaluations = await _repository.GetByLocationAsync(request.Latitude, request.Longitude);
 
-        var evaluations = await _repository.GetByLocationAsync(request.Location);
-
-        _logger.LogInformation("Retrieved {Count} risk evaluations for location: {Location}", evaluations.Count, request.Location);
+        if (evaluations.Count == 0)
+        {
+            _logger.LogWarning("No risk history found for {Latitude},{Longitude}", request.Latitude, request.Longitude);
+        }
 
         return evaluations.Select(e => new RiskEvaluationDto
         {
             Id = e.Id,
-            Location = e.Location,
+            Latitude = e.Latitude,
+            Longitude = e.Longitude,
             Score = e.Score,
             Level = e.Level.ToString(),
             Timestamp = e.Timestamp

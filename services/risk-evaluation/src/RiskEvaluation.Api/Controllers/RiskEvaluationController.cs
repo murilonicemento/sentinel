@@ -22,49 +22,71 @@ public class RiskEvaluationController : ControllerBase
     [HttpPost("evaluate")]
     public async Task<ActionResult<EvaluateRiskResponse>> EvaluateRisk([FromBody] EvaluateRiskRequest request)
     {
-        _logger.LogInformation("Received risk evaluation request for location: {Location}", request.Location);
+        _logger.LogInformation("Received risk evaluation request for latitude: {Latitude}; longitude: {Longitude}",
+            request.Latitude, request.Longitude);
 
-        if (string.IsNullOrEmpty(request.Location))
+        if (request.Latitude == 0)
         {
-            _logger.LogWarning("Risk evaluation request rejected: Location is required");
-            return BadRequest("Location is required");
+            _logger.LogWarning("Risk evaluation request rejected: Latitude is required");
+            return BadRequest("Latitude is required");
         }
 
-        if (request.Metrics == null || !request.Metrics.Any())
+        if (request.Longitude == 0)
         {
-            _logger.LogWarning("Risk evaluation request rejected: Metrics are required for location: {Location}", request.Location);
+            _logger.LogWarning("Risk evaluation request rejected: Longitude is required");
+            return BadRequest("Longitude is required");
+        }
+
+        if (request.Metrics == null)
+        {
+            _logger.LogWarning(
+                "Risk evaluation request rejected: Metrics are required for latitude: {Latitude}; longitude: {Longitude}",
+                request.Latitude, request.Longitude);
             return BadRequest("Metrics are required");
         }
 
         var command = new EvaluateRiskCommand
         {
-            Location = request.Location,
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
             Timestamp = request.Timestamp,
-            Metrics = request.Metrics
+            Metrics = request.Metrics,
+            Events = request.Events
         };
 
         var result = await _mediator.Send(command);
-        _logger.LogInformation("Risk evaluation completed for location: {Location}, Risk Level: {RiskLevel}, Score: {Score}",
-            result.Location, result.Level, result.Score);
+        _logger.LogInformation(
+            "Risk evaluation completed for latitude: {Latitude}; longitude: {Longitude}, Risk Level: {RiskLevel}, Score: {Score}",
+            result.Latitude, result.Longitude, result.Level, result.Score);
 
         return Ok(result);
     }
 
     [HttpGet("history")]
-    public async Task<ActionResult<List<RiskEvaluationDto>>> GetRiskHistory([FromQuery] string location)
+    public async Task<ActionResult<List<RiskEvaluationDto>>> GetRiskHistory(
+        [FromQuery] int latitude,
+        [FromQuery] int longitude)
     {
-        _logger.LogInformation("Fetching risk history for location: {Location}", location);
+        _logger.LogInformation("Fetching risk history for location: {Latitude}, {Longitude}", latitude, longitude);
 
-        if (string.IsNullOrEmpty(location))
+        if (latitude == 0)
         {
-            _logger.LogWarning("Risk history request rejected: Location is required");
-            return BadRequest("Location is required");
+            _logger.LogWarning("Risk history request rejected: Latitude is required");
+            return BadRequest("Latitude is required");
         }
 
-        var query = new GetRiskHistoryQuery { Location = location };
+        if (longitude == 0)
+        {
+            _logger.LogWarning("Risk history request rejected: Longitude is required");
+            return BadRequest("Longitude is required");
+        }
+
+        var query = new GetRiskHistoryQuery { Latitude = latitude, Longitude = longitude };
         var result = await _mediator.Send(query);
 
-        _logger.LogInformation("Retrieved {Count} risk evaluation records for location: {Location}", result.Count, location);
+        _logger.LogInformation("Retrieved {Count} risk evaluation records for location: {Latitude}, {Longitude}",
+            result.Count,
+            latitude, longitude);
         return Ok(result);
     }
 
@@ -82,7 +104,8 @@ public class RiskEvaluationController : ControllerBase
             return NotFound();
         }
 
-        _logger.LogInformation("Retrieved risk evaluation for ID: {Id}, Location: {Location}", id, result.Location);
+        _logger.LogInformation("Retrieved risk evaluation for ID: {Id}, Location: {Latitude}, {Longitude}", id,
+            result.Latitude, result.Longitude);
         return Ok(result);
     }
 

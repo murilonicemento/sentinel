@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using RiskEvaluation.Application.Commands;
 using RiskEvaluation.Application.DTOs;
+using RiskEvaluation.Domain.Entities;
 
 namespace RiskEvaluation.Application.Handlers;
 
@@ -16,17 +17,62 @@ public class UpdateRiskModelCommandHandler : IRequestHandler<UpdateRiskModelComm
 
     public Task<UpdateRiskModelResponse> Handle(UpdateRiskModelCommand request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Updating risk model to version: {Version}", request.Version);
-
-        // TODO: Implement model update logic
-        // For now, just return success
-        _logger.LogInformation("Risk model updated successfully to version: {Version}", request.Version);
-
-        return Task.FromResult(new UpdateRiskModelResponse
+        if (request == null)
         {
-            Success = true,
-            Version = request.Version,
-            Message = $"Risk model updated to version {request.Version}"
-        });
+            return Task.FromResult(new UpdateRiskModelResponse
+            {
+                Success = false,
+                Version = string.Empty,
+                Message = "Request cannot be null"
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Version))
+        {
+            return Task.FromResult(new UpdateRiskModelResponse
+            {
+                Success = false,
+                Version = request.Version,
+                Message = "Version is required"
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Formula))
+        {
+            return Task.FromResult(new UpdateRiskModelResponse
+            {
+                Success = false,
+                Version = request.Version,
+                Message = "Formula is required"
+            });
+        }
+
+        try
+        {
+            var riskModel = new RiskModel(
+                request.Version,
+                request.Parameters ?? new Dictionary<string, double>(),
+                request.Formula);
+
+            _logger.LogInformation($"Risk model updated to version {riskModel.Version}");
+
+            return Task.FromResult(new UpdateRiskModelResponse
+            {
+                Success = true,
+                Version = riskModel.Version,
+                Message = $"Risk model updated to version {riskModel.Version}"
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Failed to update risk model. Version: {Version}", request.Version);
+
+            return Task.FromResult(new UpdateRiskModelResponse
+            {
+                Success = false,
+                Version = request.Version,
+                Message = $"Failed to update risk model: {ex.Message}"
+            });
+        }
     }
 }

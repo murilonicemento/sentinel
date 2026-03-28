@@ -20,21 +20,18 @@ public class GetRiskEvaluationByIdQueryHandler : IRequestHandler<GetRiskEvaluati
 
     public async Task<RiskEvaluationDto?> Handle(GetRiskEvaluationByIdQuery request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Fetching risk evaluation by ID: {Id}", request.Id);
-
         var evaluation = await _repository.GetByIdAsync(request.Id);
         if (evaluation == null)
         {
-            _logger.LogWarning("Risk evaluation not found for ID: {Id}", request.Id);
+            _logger.LogWarning("Risk evaluation not found: {Id}", request.Id);
             return null;
         }
-
-        _logger.LogInformation("Found risk evaluation for ID: {Id}, Location: {Location}", request.Id, evaluation.Location);
 
         return new RiskEvaluationDto
         {
             Id = evaluation.Id,
-            Location = evaluation.Location,
+            Latitude = evaluation.Latitude,
+            Longitude = evaluation.Longitude,
             Score = evaluation.Score,
             Level = evaluation.Level.ToString(),
             Timestamp = evaluation.Timestamp
