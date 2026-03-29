@@ -1,9 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using RiskCatalog.Domain.EventTypes;
 using RiskCatalog.Domain.IRepositories;
-using RiskCatalog.Infrastructure.DatabaseContext;
+using RiskCatalog.Infrastructure.Persistence.DatabaseContext;
 
-namespace RiskCatalog.Infrastructure.Repositories;
+namespace RiskCatalog.Infrastructure.Persistence.Repositories;
 
 public class EventTypeRepository : IEventTypeRepository
 {

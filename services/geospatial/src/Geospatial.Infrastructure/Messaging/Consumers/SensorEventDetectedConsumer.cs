@@ -17,7 +17,7 @@ public sealed class SensorEventDetectedConsumer : BackgroundService
     private readonly IGeospatialEventRepository _repository;
     private readonly KafkaConsumerOptions _options;
     private readonly ILogger<SensorEventDetectedConsumer> _logger;
-    private readonly TimeSpan _interval = TimeSpan.FromSeconds(10);
+    private readonly TimeSpan _interval = TimeSpan.FromSeconds(30);
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public SensorEventDetectedConsumer(
@@ -43,18 +43,19 @@ public sealed class SensorEventDetectedConsumer : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             ConsumeResult<Null, string>? result = null;
+
             try
             {
-                result = _consumer.Consume(stoppingToken);
+                result = _consumer.Consume(TimeSpan.FromSeconds(5));
 
-                if (result?.Message?.Value is null)
-                    continue;
+                if (result?.Message?.Value is not null)
+                {
+                    var processed = await ProcessMessageAsync(result.Message.Value, stoppingToken);
+                    if (!processed)
+                        await SendToDeadLetterAsync(result, stoppingToken);
 
-                var processed = await ProcessMessageAsync(result.Message.Value, stoppingToken);
-                if (!processed)
-                    await SendToDeadLetterAsync(result, stoppingToken);
-
-                _consumer.Commit(result);
+                    _consumer.Commit(result);
+                }
             }
             catch (ConsumeException ex)
             {

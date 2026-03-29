@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using RiskCatalog.Domain.Entities;
 
-namespace RiskCatalog.Infrastructure.DatabaseConfigurations;
+namespace RiskCatalog.Infrastructure.Persistence.DatabaseConfigurations;
 
 /// <summary>
 /// Entity Framework configuration for the User entity

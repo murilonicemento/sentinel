@@ -1,7 +1,5 @@
 using MediatR;
 using RiskEvaluation.Application.Interfaces;
-using RiskEvaluation.Domain.Contracts;
-using RiskEvaluation.Domain.ValueObjects;
 
 namespace RiskEvaluation.Application.Handlers;
 
@@ -16,21 +14,42 @@ public class SensorEventDetectedHandler : INotificationHandler<SensorEventDetect
 
     public async Task Handle(SensorEventDetected notification, CancellationToken cancellationToken)
     {
-        // Convert double lat/lon to int for service
         var latitude = (int)notification.Latitude;
         var longitude = (int)notification.Longitude;
-
-        // Map event type and intensity to RiskEvents
+        var metrics = MapEventTypeToRiskMetrics(notification.EventType, notification.Intensity);
         var events = MapEventTypeToRiskEvents(notification.EventType, notification.Intensity);
-
-        // Empty metrics since this is a disaster/climatic event notification
-        var metrics = new RiskMetrics();
 
         await _riskEvaluationService.EvaluateRiskAsync(
             latitude,
             longitude,
             metrics,
             events);
+    }
+
+    private static RiskMetrics MapEventTypeToRiskMetrics(string eventType, double intensity)
+    {
+        var events = new RiskMetrics();
+
+        switch (eventType.ToLowerInvariant())
+        {
+            case "temperatureAnomaly":
+                events.TemperatureAnomaly = intensity;
+                break;
+            case "humidityAnomaly":
+                events.HumidityAnomaly = intensity;
+                break;
+            case "windGust":
+                events.WindGust = intensity;
+                break;
+            case "rainfall":
+                events.Rainfall = intensity;
+                break;
+            case "pressureChange":
+                events.PressureChange = intensity;
+                break;
+        }
+
+        return events;
     }
 
     private static RiskEvents MapEventTypeToRiskEvents(string eventType, double intensity)

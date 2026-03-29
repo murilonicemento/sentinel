@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using RiskCatalog.Domain.RiskModels;
 
-namespace RiskCatalog.Infrastructure.DatabaseConfigurations;
+namespace RiskCatalog.Infrastructure.Persistence.DatabaseConfigurations;
 
 public class RiskMatrixConfiguration : IEntityTypeConfiguration<RiskMatrix>
 {

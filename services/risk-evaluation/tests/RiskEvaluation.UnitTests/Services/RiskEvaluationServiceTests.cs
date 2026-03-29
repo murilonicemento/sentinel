@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Moq;
-using RiskEvaluation.Application.IntegrationClients;
+using RiskEvaluation.Application.DTOs;
 using RiskEvaluation.Application.Services;
 using RiskEvaluation.Domain.Entities;
 using RiskEvaluation.Domain.Enums;
@@ -9,6 +9,7 @@ using RiskEvaluation.Domain.Interfaces;
 using RiskEvaluation.Domain.Repositories;
 using RiskEvaluation.Domain.Services;
 using RiskEvaluation.Application.Interfaces;
+using RiskEvaluation.Application.Interfaces.HttpClients;
 using RiskEvaluation.Domain.ValueObjects;
 
 namespace RiskEvaluation.UnitTests.Services;
@@ -59,12 +60,12 @@ public class RiskEvaluationServiceTests
         _cacheMock.Setup(x => x.GetAsync(latitude, longitude, It.IsAny<CancellationToken>()))
             .ReturnsAsync((RiskScoreCacheEntry?)null);
         _riskCatalogClientMock.Setup(x => x.GetLatestRiskWeightsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync((RiskWeightsDto?)null);
+            .ReturnsAsync((RiskWeightsDTO?)null);
         _geospatialClientMock.Setup(x => x.GetSpatialContextAsync(latitude, longitude, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((GeospatialContextDto?)null);
+            .ReturnsAsync((GeospatialContextDTO?)null);
         _calculationServiceMock.Setup(x => x.CalculateRiskScore(
             metrics, events, null, null, null)).Returns(score);
-        _calculationServiceMock.Setup(x => x.ClassifyRiskLevel(score)).Returns(level);
+        _calculationServiceMock.Setup(x => RiskCalculationService.ClassifyRiskLevel(score)).Returns(level);
 
         // Act
         var result = await _service.EvaluateRiskAsync(latitude, longitude, metrics, events);
@@ -101,12 +102,12 @@ public class RiskEvaluationServiceTests
         _cacheMock.Setup(x => x.GetAsync(latitude, longitude, It.IsAny<CancellationToken>()))
             .ReturnsAsync((RiskScoreCacheEntry?)null);
         _riskCatalogClientMock.Setup(x => x.GetLatestRiskWeightsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync((RiskWeightsDto?)null);
+            .ReturnsAsync((RiskWeightsDTO?)null);
         _geospatialClientMock.Setup(x => x.GetSpatialContextAsync(latitude, longitude, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((GeospatialContextDto?)null);
+            .ReturnsAsync((GeospatialContextDTO?)null);
         _calculationServiceMock.Setup(x => x.CalculateRiskScore(
             metrics, events, null, null, null)).Returns(score);
-        _calculationServiceMock.Setup(x => x.ClassifyRiskLevel(score)).Returns(level);
+        _calculationServiceMock.Setup(x => RiskCalculationService.ClassifyRiskLevel(score)).Returns(level);
 
         // Act
         var result = await _service.EvaluateRiskAsync(latitude, longitude, metrics, events);
@@ -137,12 +138,12 @@ public class RiskEvaluationServiceTests
         _cacheMock.Setup(x => x.GetAsync(latitude, longitude, It.IsAny<CancellationToken>()))
             .ReturnsAsync((RiskScoreCacheEntry?)null);
         _riskCatalogClientMock.Setup(x => x.GetLatestRiskWeightsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync((RiskWeightsDto?)null);
+            .ReturnsAsync((RiskWeightsDTO?)null);
         _geospatialClientMock.Setup(x => x.GetSpatialContextAsync(latitude, longitude, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((GeospatialContextDto?)null);
+            .ReturnsAsync((GeospatialContextDTO?)null);
         _calculationServiceMock.Setup(x => x.CalculateRiskScore(
             metrics, events, null, null, null)).Returns(score);
-        _calculationServiceMock.Setup(x => x.ClassifyRiskLevel(score)).Returns(level);
+        _calculationServiceMock.Setup(x => RiskCalculationService.ClassifyRiskLevel(score)).Returns(level);
 
         // Act
         var result = await _service.EvaluateRiskAsync(latitude, longitude, metrics, events);
@@ -175,12 +176,12 @@ public class RiskEvaluationServiceTests
         _cacheMock.Setup(x => x.GetAsync(latitude, longitude, It.IsAny<CancellationToken>()))
             .ReturnsAsync((RiskScoreCacheEntry?)null);
         _riskCatalogClientMock.Setup(x => x.GetLatestRiskWeightsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync((RiskWeightsDto?)null);
+            .ReturnsAsync((RiskWeightsDTO?)null);
         _geospatialClientMock.Setup(x => x.GetSpatialContextAsync(latitude, longitude, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((GeospatialContextDto?)null);
+            .ReturnsAsync((GeospatialContextDTO?)null);
         _calculationServiceMock.Setup(x => x.CalculateRiskScore(
             metrics, events, null, null, null)).Returns(score);
-        _calculationServiceMock.Setup(x => x.ClassifyRiskLevel(score)).Returns(level);
+        _calculationServiceMock.Setup(x => RiskCalculationService.ClassifyRiskLevel(score)).Returns(level);
 
         // Act
         var result = await _service.EvaluateRiskAsync(latitude, longitude, metrics, events);
@@ -214,12 +215,12 @@ public class RiskEvaluationServiceTests
         _cacheMock.Setup(x => x.GetAsync(latitude, longitude, It.IsAny<CancellationToken>()))
             .ReturnsAsync((RiskScoreCacheEntry?)null);
         _riskCatalogClientMock.Setup(x => x.GetLatestRiskWeightsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync((RiskWeightsDto?)null);
+            .ReturnsAsync((RiskWeightsDTO?)null);
         _geospatialClientMock.Setup(x => x.GetSpatialContextAsync(latitude, longitude, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((GeospatialContextDto?)null);
+            .ReturnsAsync((GeospatialContextDTO?)null);
         _calculationServiceMock.Setup(x => x.CalculateRiskScore(
             metrics, events, null, null, null)).Returns(score);
-        _calculationServiceMock.Setup(x => x.ClassifyRiskLevel(score)).Returns(RiskLevel.Medium);
+        _calculationServiceMock.Setup(x => RiskCalculationService.ClassifyRiskLevel(score)).Returns(RiskLevel.Medium);
 
         // Act
         var result1 = await _service.EvaluateRiskAsync(latitude, longitude, metrics, events);
@@ -245,12 +246,12 @@ public class RiskEvaluationServiceTests
         _cacheMock.Setup(x => x.GetAsync(latitude, longitude, It.IsAny<CancellationToken>()))
             .ReturnsAsync((RiskScoreCacheEntry?)null);
         _riskCatalogClientMock.Setup(x => x.GetLatestRiskWeightsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync((RiskWeightsDto?)null);
+            .ReturnsAsync((RiskWeightsDTO?)null);
         _geospatialClientMock.Setup(x => x.GetSpatialContextAsync(latitude, longitude, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((GeospatialContextDto?)null);
+            .ReturnsAsync((GeospatialContextDTO?)null);
         _calculationServiceMock.Setup(x => x.CalculateRiskScore(
             metrics, events, null, null, null)).Returns(score);
-        _calculationServiceMock.Setup(x => x.ClassifyRiskLevel(score)).Returns(RiskLevel.Low);
+        _calculationServiceMock.Setup(x => RiskCalculationService.ClassifyRiskLevel(score)).Returns(RiskLevel.Low);
 
         var beforeTest = DateTime.UtcNow.AddSeconds(-1);
 

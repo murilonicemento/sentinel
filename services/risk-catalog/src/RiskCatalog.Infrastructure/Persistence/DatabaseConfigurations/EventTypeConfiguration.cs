@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using RiskCatalog.Domain.EventTypes;
 
-namespace RiskCatalog.Infrastructure.DatabaseConfigurations;
+namespace RiskCatalog.Infrastructure.Persistence.DatabaseConfigurations;
 
 public class EventTypeConfiguration : IEntityTypeConfiguration<EventType>
 {

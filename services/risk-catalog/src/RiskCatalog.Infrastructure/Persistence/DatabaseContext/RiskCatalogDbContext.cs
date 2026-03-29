@@ -3,7 +3,7 @@ using RiskCatalog.Domain.Entities;
 using RiskCatalog.Domain.EventTypes;
 using RiskCatalog.Domain.RiskModels;
 
-namespace RiskCatalog.Infrastructure.DatabaseContext;
+namespace RiskCatalog.Infrastructure.Persistence.DatabaseContext;
 
 public class RiskCatalogDbContext : DbContext
 {

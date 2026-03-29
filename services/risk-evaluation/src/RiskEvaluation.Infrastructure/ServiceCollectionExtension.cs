@@ -3,15 +3,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using RiskEvaluation.Application.Interfaces;
-using RiskEvaluation.Application.IntegrationClients;
 using RiskEvaluation.Domain.Interfaces;
 using RiskEvaluation.Domain.Repositories;
 using RiskEvaluation.Domain.Services;
 using RiskEvaluation.Infrastructure.Caching;
-using RiskEvaluation.Infrastructure.IntegrationClients;
 using RiskEvaluation.Infrastructure.Messaging;
 using RiskEvaluation.Infrastructure.Persistence;
 using MediatR;
+using RiskEvaluation.Application.Interfaces.HttpClients;
+using RiskEvaluation.Infrastructure.HttpClients;
 using StackExchange.Redis;
 
 namespace RiskEvaluation.Infrastructure;
@@ -56,6 +56,7 @@ public static class ServiceCollectionExtension
         // Repositories
         services.AddScoped<IRiskEvaluationRepository, RiskEvaluationRepository>();
         services.AddScoped<IRiskModelRepository, RiskModelRepository>();
+        services.AddScoped<IRiskFactorRepository, RiskFactorRepository>();
 
         // Cache
         services.AddScoped<IRecentScoresCache, RedisRecentScoresCache>();
@@ -78,10 +79,10 @@ public static class ServiceCollectionExtension
         {
             var bootstrapServers = configuration["Kafka:BootstrapServers"];
             var groupId = configuration["Kafka:GroupId"];
-            var mediator = sp.GetRequiredService<IMediator>();
+            var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
             var logger = sp.GetRequiredService<ILogger<KafkaMessageConsumer>>();
             
-            return new KafkaMessageConsumer(bootstrapServers!, groupId!, mediator, logger);
+            return new KafkaMessageConsumer(bootstrapServers!, groupId!, scopeFactory, logger);
         });
 
         return services;

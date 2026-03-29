@@ -56,7 +56,7 @@ public class UpdateRiskModelCommandHandler : IRequestHandler<UpdateRiskModelComm
         {
             var riskModel = new RiskModel(
                 request.Version,
-                request.Parameters ?? new Dictionary<string, double>(),
+                request.Parameters,
                 request.Formula);
 
             await _riskModelRepository.SaveAsync(riskModel, cancellationToken);

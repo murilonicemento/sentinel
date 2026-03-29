@@ -1,10 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using RiskCatalog.Domain.Entities;
-using RiskCatalog.Domain.IRepositories;
 using RiskCatalog.Application.Interfaces;
-using RiskCatalog.Infrastructure.DatabaseContext;
+using RiskCatalog.Domain.Entities;
+using RiskCatalog.Infrastructure.Persistence.DatabaseContext;
 
-namespace RiskCatalog.Infrastructure.Repositories;
+namespace RiskCatalog.Infrastructure.Persistence.Repositories;
 
 /// <summary>
 /// Repository implementation for User entity

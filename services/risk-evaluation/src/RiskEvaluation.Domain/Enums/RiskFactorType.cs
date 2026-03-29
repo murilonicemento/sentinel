@@ -2,7 +2,14 @@ namespace RiskEvaluation.Domain.Enums;
 
 public enum RiskFactorType
 {
-    Gust,
-    Precipitation,
-    Pressure
+    TemperatureAnomaly,
+    HumidityAnomaly,
+    WindGust,
+    Rainfall,
+    PressureChange,
+    Wildfire,
+    Earthquake,
+    Flood,
+    Landslide,
+    Normal
 }

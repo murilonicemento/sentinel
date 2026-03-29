@@ -1,12 +1,11 @@
 using Microsoft.Extensions.Logging;
 using RiskEvaluation.Application.Interfaces;
-using RiskEvaluation.Application.IntegrationClients;
+using RiskEvaluation.Application.Interfaces.HttpClients;
 using RiskEvaluation.Domain.Enums;
 using RiskEvaluation.Domain.Events;
 using RiskEvaluation.Domain.Interfaces;
 using RiskEvaluation.Domain.Repositories;
 using RiskEvaluation.Domain.Services;
-using RiskEvaluation.Domain.ValueObjects;
 
 namespace RiskEvaluation.Application.Services;
 
@@ -54,12 +53,7 @@ public class RiskEvaluationService : IRiskEvaluationService
             return cachedEvaluation;
         }
 
-        // Fetch external weights from Risk Catalog
-        var riskWeights = await _riskCatalogClient.GetLatestRiskWeightsAsync();
-        var metricWeights = riskWeights?.MetricWeights;
-        var eventWeights = riskWeights?.EventWeights;
-
-        // Fetch geospatial context
+        var (metricWeights, eventWeights) = await _calculationService.LoadWeightsAsync();
         var geoContextDto = await _geospatialClient.GetSpatialContextAsync(latitude, longitude);
         GeospatialContext? geoContext = null;
         
@@ -78,7 +72,7 @@ public class RiskEvaluationService : IRiskEvaluationService
         }
 
         var score = _calculationService.CalculateRiskScore(metrics, events, metricWeights, eventWeights, geoContext);
-        var level = _calculationService.ClassifyRiskLevel(score);
+        var level = RiskCalculationService.ClassifyRiskLevel(score);
 
         await _cache.SetAsync(latitude, longitude, new RiskScoreCacheEntry
         {

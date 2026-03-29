@@ -1,6 +1,5 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
-using RiskEvaluation.Domain.Contracts;
 using RiskEvaluation.Domain.Entities;
 using RiskEvaluation.Domain.Repositories;
 
@@ -37,8 +36,8 @@ public class RiskCatalogPublishedEventHandler : INotificationHandler<RiskCatalog
         {
             var riskModel = new RiskModel(
                 notification.Version,
-                notification.Parameters ?? new Dictionary<string, double>(),
-                notification.Formula ?? string.Empty);
+                notification.Parameters,
+                notification.Formula);
 
             await _riskModelRepository.SaveAsync(riskModel, cancellationToken);
 
@@ -50,7 +49,8 @@ public class RiskCatalogPublishedEventHandler : INotificationHandler<RiskCatalog
         }
         catch (ArgumentException ex)
         {
-            _logger.LogError(ex, "Failed to create RiskModel from catalog event. Version: {Version}", notification.Version);
+            _logger.LogError(ex, "Failed to create RiskModel from catalog event. Version: {Version}",
+                notification.Version);
         }
     }
 }

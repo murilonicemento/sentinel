@@ -6,11 +6,11 @@ using Microsoft.Extensions.DependencyInjection;
 using RiskCatalog.Application.Interfaces;
 using RiskCatalog.Domain.IRepositories;
 using RiskCatalog.Infrastructure.Cache;
-using RiskCatalog.Infrastructure.DatabaseContext;
 using RiskCatalog.Infrastructure.Messaging;
-using RiskCatalog.Infrastructure.Repositories;
 using Polly;
 using Polly.Extensions.Http;
+using RiskCatalog.Infrastructure.Persistence.DatabaseContext;
+using RiskCatalog.Infrastructure.Persistence.Repositories;
 using StackExchange.Redis;
 
 namespace RiskCatalog.Infrastructure;

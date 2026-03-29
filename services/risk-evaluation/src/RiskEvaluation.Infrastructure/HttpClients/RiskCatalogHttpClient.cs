@@ -1,8 +1,9 @@
 using System.Net.Http.Json;
 using Microsoft.Extensions.Logging;
-using RiskEvaluation.Application.IntegrationClients;
+using RiskEvaluation.Application.DTOs;
+using RiskEvaluation.Application.Interfaces.HttpClients;
 
-namespace RiskEvaluation.Infrastructure.IntegrationClients;
+namespace RiskEvaluation.Infrastructure.HttpClients;
 
 public class RiskCatalogHttpClient : IRiskCatalogClient
 {
@@ -15,7 +16,7 @@ public class RiskCatalogHttpClient : IRiskCatalogClient
         _logger = logger;
     }
 
-    public async Task<RiskMatrixDto?> GetRiskMatrixAsync(string eventTypeCode, string severityLevel, int? version = null, CancellationToken cancellationToken = default)
+    public async Task<RiskMatrixDTO?> GetRiskMatrixAsync(string eventTypeCode, string severityLevel, int? version = null, CancellationToken cancellationToken = default)
     {
         var url = $"/api/risk-model/risk-matrix?eventTypeCode={eventTypeCode}&severityLevel={severityLevel}";
         
@@ -28,21 +29,21 @@ public class RiskCatalogHttpClient : IRiskCatalogClient
             return null;
             
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<RiskMatrixDto>(cancellationToken);
+        return await response.Content.ReadFromJsonAsync<RiskMatrixDTO>(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<RiskParameterDto>> GetRegionalRiskParametersAsync(Guid regionId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<RiskParameterDTO>> GetRegionalRiskParametersAsync(Guid regionId, CancellationToken cancellationToken = default)
     {
         var response = await _httpClient.GetAsync($"/api/risk-model/regional-risk-parameters?regionId={regionId}", cancellationToken);
         
         if (!response.IsSuccessStatusCode)
-            return new List<RiskParameterDto>();
+            return new List<RiskParameterDTO>();
             
-        var data = await response.Content.ReadFromJsonAsync<List<RiskParameterDto>>(cancellationToken);
+        var data = await response.Content.ReadFromJsonAsync<List<RiskParameterDTO>>(cancellationToken);
         return data ?? [];
     }
 
-    public async Task<RiskWeightsDto?> GetLatestRiskWeightsAsync(CancellationToken cancellationToken = default)
+    public async Task<RiskWeightsDTO?> GetLatestRiskWeightsAsync(CancellationToken cancellationToken = default)
     {
         // Get the latest published catalog version
         var response = await _httpClient.GetAsync("/api/risk-model/catalog/latest", cancellationToken);
@@ -51,6 +52,6 @@ public class RiskCatalogHttpClient : IRiskCatalogClient
             return null;
             
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<RiskWeightsDto>(cancellationToken);
+        return await response.Content.ReadFromJsonAsync<RiskWeightsDTO>(cancellationToken);
     }
 }
