@@ -45,6 +45,7 @@ public class RiskEvaluationService : IRiskEvaluationService
         RiskEvents events)
     {
         var cached = await _cache.GetAsync(latitude, longitude);
+        
         if (cached != null && IsRecent(cached.CalculatedAt))
         {
             var cachedLevel = Enum.Parse<RiskLevel>(cached.Level);
@@ -61,6 +62,7 @@ public class RiskEvaluationService : IRiskEvaluationService
         // Fetch geospatial context
         var geoContextDto = await _geospatialClient.GetSpatialContextAsync(latitude, longitude);
         GeospatialContext? geoContext = null;
+        
         if (geoContextDto != null)
         {
             geoContext = new GeospatialContext

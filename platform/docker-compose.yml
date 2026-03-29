@@ -195,6 +195,36 @@ services:
     restart: unless-stopped
     networks:
       - sentinel-network
+  kafka-init:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - kafka
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "
+      echo 'Esperando Kafka subir...'
+      sleep 10
+
+      echo 'Criando tópicos...'
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-catalog-published --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic disaster-event-detected --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic climatic-event-detected --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic geospatial-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic geospatial-dead-letter --partitions 1 --replication-factor 1
+
+      echo 'Tópicos criados:'
+      kafka-topics --bootstrap-server kafka:9092 --list
+      "
+    restart: no
+    networks:
+      - sentinel-network
   kafkaui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -273,4 +303,3 @@ volumes:
   grafana-data:
 networks:
   sentinel-network:
-  

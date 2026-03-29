@@ -7,6 +7,7 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using RiskEvaluation.Api.Filters;
 using RiskEvaluation.Api.Middlewares;
+using RiskEvaluation.Infrastructure.HostedServices;
 using Scalar.AspNetCore;
 using Serilog;
 
@@ -41,7 +42,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
     };
 });
 // Logging
-// builder.Host.UseSerilog((context, config) => { config.ReadFrom.Configuration(context.Configuration); });
+builder.Host.UseSerilog((context, config) => { config.ReadFrom.Configuration(context.Configuration); });
 
 // MongoDB Serialization
 BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
@@ -52,7 +53,7 @@ builder.Services
     .AddInfrastructureServiceCollection(builder.Configuration);
 
 // Hosted Service for Consumer
-// builder.Services.AddHostedService<MessageConsumerHostedService>();
+builder.Services.AddHostedService<MessageConsumerHostedService>();
 
 var app = builder.Build();
 
