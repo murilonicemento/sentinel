@@ -45,16 +45,14 @@ public class RegisterDataSourceHandler : IRequestHandler<RegisterDataSourceComma
             CollectionFrequencyType.From(request.CollectionFrequency).Value,
             request.TenantId
         );
-        var eventPermissions = request.Domains
-            .SelectMany(domain => request.EventsType
-                .Select(eventType => new EventTypePermission
-                {
-                    Id = Guid.NewGuid(),
-                    DataSourceId = dataSourceId,
-                    EventDomain = domain,
-                    EventType = eventType
-                }))
-            .ToList();
+        var eventPermissions = request.EventPermissions
+            .Select(eventTypePermission => new EventTypePermission
+            {
+                Id = Guid.NewGuid(),
+                DataSourceId = dataSourceId,
+                EventDomain = eventTypePermission.EventDomain,
+                EventType = eventTypePermission.EventType
+            }).ToList();
 
         var (_, tenantId) = await _dataSourceRepository.RegisterAsync(dataSource);
 

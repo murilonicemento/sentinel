@@ -5,9 +5,9 @@ using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using RiskCatalog.Application.DTO;
-using RiskCatalog.Infrastructure.DatabaseContext;
 using Xunit;
 using System.IdentityModel.Tokens.Jwt;
+using RiskCatalog.Infrastructure.Persistence.DatabaseContext;
 
 namespace RiskCatalog.IntegrationTests;
 

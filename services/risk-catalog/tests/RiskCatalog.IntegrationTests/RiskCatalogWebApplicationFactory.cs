@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
-using RiskCatalog.Infrastructure.DatabaseContext;
+using RiskCatalog.Infrastructure.Persistence.DatabaseContext;
 using StackExchange.Redis;
 using Testcontainers.Kafka;
 using Testcontainers.PostgreSql;

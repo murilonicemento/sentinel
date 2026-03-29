@@ -26,4 +26,8 @@
     <EditorConfigFiles Remove=".editorconfig" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Persistence\" />
+  </ItemGroup>
+
 </Project>

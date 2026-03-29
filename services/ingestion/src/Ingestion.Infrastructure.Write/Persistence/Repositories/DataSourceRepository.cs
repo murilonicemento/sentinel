@@ -35,8 +35,10 @@ public class DataSourceRepository : IDataSourceRepository
         var dataSource =
             _writeDbContext.Connection.QueryFirstOrDefault<DataSource>(query, new { Id = id, TenantId = tenantId });
 
-        if (dataSource is not null)
-            dataSource.DataCollections = GetDataCollectionByDataSourceId(id);
+        if (dataSource is null) return dataSource;
+
+        dataSource.DataCollections = GetDataCollectionByDataSourceId(id);
+        dataSource.EventPermissions = GetEventTypePermissionsByDataSourceId(id);
 
         return dataSource;
     }
@@ -85,5 +87,13 @@ public class DataSourceRepository : IDataSourceRepository
             @"SELECT id, data_source_id, collected_at, payload, tenant_id, created_at FROM data_collection WHERE data_source_id = @DataSourceId";
 
         return _writeDbContext.Connection.Query<DataCollection>(query, new { DataSourceId = dataSourceId });
+    }
+
+    private IEnumerable<EventTypePermission> GetEventTypePermissionsByDataSourceId(Guid dataSourceId)
+    {
+        var query =
+            @"SELECT id, data_source_id, event_domain, event_type FROM event_type_permission WHERE data_source_id = @DataSourceId";
+
+        return _writeDbContext.Connection.Query<EventTypePermission>(query, new { DataSourceId = dataSourceId });
     }
 }

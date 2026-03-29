@@ -88,6 +88,29 @@ services:
     restart: unless-stopped
     networks:
       - sentinel-network
+  risk-evaluation:
+    image: risk-evaluation
+    build:
+      context: ../services/risk-evaluation
+      dockerfile: Dockerfile
+    container_name: risk-evaluation
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__MongoDb=mongodb://mongodb:27017
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__Topic=risk-events
+      - Kafka__GroupId=risk-evaluation-group
+      - Loki__Url=http://loki:3100
+      - LOKI_URL=http://loki:3100
+    ports:
+      - "7004:8080"
+    depends_on:
+      - mongodb
+      - kafka
+      - loki
+    restart: unless-stopped
+    networks:
+      - sentinel-network
   postgres:
     image: postgres:15.5
     container_name: postgres
@@ -172,6 +195,36 @@ services:
     restart: unless-stopped
     networks:
       - sentinel-network
+  kafka-init:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - kafka
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "
+      echo 'Esperando Kafka subir...'
+      sleep 10
+
+      echo 'Criando tópicos...'
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-catalog-published --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic disaster-event-detected --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic climatic-event-detected --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic geospatial-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic geospatial-dead-letter --partitions 1 --replication-factor 1
+
+      echo 'Tópicos criados:'
+      kafka-topics --bootstrap-server kafka:9092 --list
+      "
+    restart: no
+    networks:
+      - sentinel-network
   kafkaui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -223,6 +276,23 @@ services:
     networks:
       - sentinel-network
     restart: unless-stopped
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:10.2.3
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - loki
+    networks:
+      - sentinel-network
+    restart: unless-stopped
 volumes:
   postgres-data:
   mongo-data:
@@ -230,6 +300,6 @@ volumes:
   minio-data:
   elasticsearch-data:
   loki-data:
+  grafana-data:
 networks:
   sentinel-network:
-  

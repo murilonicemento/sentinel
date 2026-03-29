@@ -304,6 +304,66 @@
           "Port": 8080
         }
       ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-evaluation/evaluate",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-evaluation/evaluate",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-evaluation",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-evaluation/history",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-evaluation/history",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-evaluation",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-evaluation/{id}",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-evaluation/{id}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-evaluation",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-evaluation/model",
+      "UpstreamHttpMethod": [
+        "Put",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-evaluation/model",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-evaluation",
+          "Port": 8080
+        }
+      ]
     }
   ]
 }
