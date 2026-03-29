@@ -18,6 +18,7 @@ public class RiskCatalogHttpClient : IRiskCatalogClient
     public async Task<RiskMatrixDto?> GetRiskMatrixAsync(string eventTypeCode, string severityLevel, int? version = null, CancellationToken cancellationToken = default)
     {
         var url = $"/api/risk-model/risk-matrix?eventTypeCode={eventTypeCode}&severityLevel={severityLevel}";
+        
         if (version.HasValue)
             url += $"&version={version.Value}";
             
@@ -38,7 +39,7 @@ public class RiskCatalogHttpClient : IRiskCatalogClient
             return new List<RiskParameterDto>();
             
         var data = await response.Content.ReadFromJsonAsync<List<RiskParameterDto>>(cancellationToken);
-        return data ?? new List<RiskParameterDto>();
+        return data ?? [];
     }
 
     public async Task<RiskWeightsDto?> GetLatestRiskWeightsAsync(CancellationToken cancellationToken = default)

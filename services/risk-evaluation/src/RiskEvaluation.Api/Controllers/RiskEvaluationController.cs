@@ -7,7 +7,7 @@ using RiskEvaluation.Application.Queries;
 namespace RiskEvaluation.Api.Controllers;
 
 [ApiController]
-[Route("risk-evaluation")]
+[Route("api/risk-evaluation")]
 public class RiskEvaluationController : ControllerBase
 {
     private readonly IMediator _mediator;

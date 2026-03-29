@@ -40,13 +40,6 @@ public static class ServiceCollectionExtension
             return ConnectionMultiplexer.Connect(connectionString);
         });
 
-        // HTTP Clients for external services
-        services.AddHttpClient<IIngestionClient, IngestionHttpClient>(client =>
-        {
-            client.BaseAddress = new Uri(configuration["Services:Ingestion:BaseUrl"] ?? "http://localhost:5001/");
-            client.DefaultRequestHeaders.Add("Accept", "application/json");
-        });
-
         services.AddHttpClient<IRiskCatalogClient, RiskCatalogHttpClient>(client =>
         {
             client.BaseAddress = new Uri(configuration["Services:RiskCatalog:BaseUrl"] ?? "http://localhost:5002/");
@@ -57,10 +50,12 @@ public static class ServiceCollectionExtension
         {
             client.BaseAddress = new Uri(configuration["Services:Geospatial:BaseUrl"] ?? "http://localhost:5003/");
             client.DefaultRequestHeaders.Add("Accept", "application/json");
+            client.DefaultRequestHeaders.Add("X-Api-Key", configuration["Services:Geospatial:ApiKey"] ?? string.Empty);
         });
 
         // Repositories
         services.AddScoped<IRiskEvaluationRepository, RiskEvaluationRepository>();
+        services.AddScoped<IRiskModelRepository, RiskModelRepository>();
 
         // Cache
         services.AddScoped<IRecentScoresCache, RedisRecentScoresCache>();
