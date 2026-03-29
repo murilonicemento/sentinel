@@ -111,6 +111,32 @@ services:
     restart: unless-stopped
     networks:
       - sentinel-network
+  alert-orchestrator:
+    image: alert-orchestrator
+    build:
+      context: ../services/alert-orchestrator
+      dockerfile: Dockerfile
+    container_name: alert-orchestrator
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__PostgreSql=Host=postgres;Port=5432;Database=alert_orchestrator;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - ConnectionStrings__Redis=redis:6379
+      - ConnectionStrings__Kafka=kafka:9092
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__ConsumerGroupId=alert-orchestrator-group
+      - Kafka__RiskUpdatedTopic=risk-updated
+      - Kafka__RegionIntersectedTopic=region-intersected
+      - Kafka__EventTopic=alert-orchestrator-events
+      - Kafka__CommandTopic=alert-commands
+    ports:
+      - "7005:8080"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    restart: unless-stopped
+    networks:
+      - sentinel-network
   postgres:
     image: postgres:15.5
     container_name: postgres
@@ -218,6 +244,14 @@ services:
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic geospatial-events --partitions 1 --replication-factor 1
 
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic geospatial-dead-letter --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-updated --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic region-intersected --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic alert-orchestrator-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic alert-commands --partitions 1 --replication-factor 1
 
       echo 'Tópicos criados:'
       kafka-topics --bootstrap-server kafka:9092 --list
