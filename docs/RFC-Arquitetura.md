@@ -1,4 +1,4 @@
-# RFC - Arquitetura do Projeto **Sentinel**
+# RFC - Arquitetura do Projeto **Sentinel** (Atualizado)
 
 ## 1. Contexto
 
@@ -15,12 +15,13 @@ O projeto **Sentinel** fornece uma solução distribuída e escalável para **an
 3. Permitir análises agregadas e preditivas em tempo real.
 4. Garantir resiliência via mensageria e processamento assíncrono.
 5. Suportar evolução contínua com arquitetura modular.
+6. Suportar envio de alertas multi-canal e registro detalhado para dashboards.
 
 ## 3. Visão Geral da Arquitetura
 
 A arquitetura é baseada em **microsserviços**, cada um responsável por um **bounded context**.
 
-- Comunicação: **eventos via RabbitMQ** e **APIs síncronas** quando necessário.
+- Comunicação: **eventos via RabbitMQ/Kafka** e **APIs síncronas** quando necessário.
 - Cache: **Redis** para consultas frequentes.
 - Indexação e busca: **Elasticsearch**.
 - Persistência: **MongoDB** para dados semi-estruturados e **PostgreSQL** para dados relacionais.
@@ -34,42 +35,36 @@ A arquitetura é baseada em **microsserviços**, cada um responsável por um **b
 **Subdomínios e Bounded Contexts**:
 
 1. **Detecção e Ingestão**
-
    - Ingestão de fontes externas
    - Normalização e validação de dados
 
 2. **Catálogo de Riscos**
-
    - Tipos de Evento e Severidade
    - Matrizes de Risco e Curvas IDF
 
 3. **Geoespacial e Infraestrutura Local**
-
    - Zonas de Risco e Rotas de Evacuação
    - Dispositivos de Alerta
 
 4. **Avaliação e Score de Risco**
-
    - Cálculo de Risco
    - Modelos de Predição
 
 5. **Orquestração de Alertas**
-
    - Regras de Disparo
    - Escalonamento e Quorum
+   - Integração com **Channels Service** para envio multi-canal
+   - Integração com **Reporting Service** para dashboards e KPIs
 
 6. **Tenancy e Governança**
-
    - Gestão de Tenants e Planos
    - Limites e Billing
 
 7. **Auditoria e Conformidade**
-
    - Trilha de Auditoria
    - Retenção e Conformidade
 
 8. **Observabilidade Operacional**
-
    - Telemetria e SLIs/SLOs
    - Saúde das Integrações
 
@@ -77,16 +72,26 @@ A arquitetura é baseada em **microsserviços**, cada um responsável por um **b
 
 ## 5. Comunicação
 
-- **Event-driven (RabbitMQ)** – entre ingestão, processamento, indexação e orquestração de alertas.
-- **HTTP/gRPC** – entre Query/Analytics Services e clientes externos.
+- **Event-driven (RabbitMQ/Kafka)** – entre ingestão, processamento, indexação e orquestração de alertas.
+- **HTTP/gRPC** – entre Query/Analytics Services, Channels Service, Reporting Service e clientes externos.
 - **Cache (Redis)** – otimização de consultas repetidas.
 
-> Observação: definir claramente tópicos/exchanges e estratégias de retry/DLQ.
+**Fluxo de Alertas**:
+
+1. Ingestion Service envia evento normalizado (`EventoClimaticoDetectado`).
+2. Geospatial Service calcula regiões afetadas (`RegiaoIntersectada`).
+3. Risk Scoring Service calcula score e envia `RiscoAtualizado`.
+4. Alert Orchestrator avalia regras, quorum e escalonamento.
+5. **Channels Service** envia alertas multi-canal (SMS, Push, WhatsApp, Sirenes IoT).
+6. **Reporting Service** consolida alertas, métricas e confirmações para dashboards e KPIs.
+7. Compliance/Audit registra eventos críticos.
+
+> Observação: Channels e Reporting Services são essenciais para garantir entrega confiável e rastreabilidade de alertas.
 
 ## 6. Tecnologias
 
 - **Backend**: ASP.NET Core (C#/.NET)
-- **Mensageria**: Kafka
+- **Mensageria**: Kafka / RabbitMQ
 - **Cache**: Redis
 - **Indexação & Busca**: Elasticsearch (NEST client)
 - **Banco Relacional**: PostgreSQL
@@ -106,11 +111,11 @@ A arquitetura é baseada em **microsserviços**, cada um responsável por um **b
 
 1. Fonte externa envia log/evento → **Detecção e Ingestão**.
 2. Dados normalizados → **Catálogo de Riscos** e **Avaliação e Score de Risco**.
-3. Eventos processados → **Orquestração de Alertas** e envio para **Dispositivos de Alerta**.
-4. **Observabilidade e Auditoria** coletam métricas, logs e trilhas de auditoria em paralelo.
-5. Dados agregados → **Query/Analytics Services** para dashboards e relatórios.
-
-> Observação: considerar event sourcing para auditoria e replay de eventos críticos.
+3. Eventos processados → **Orquestração de Alertas**.
+4. **Channels Service** envia notificações multi-canal.
+5. **Reporting Service** consolida alertas e métricas para dashboards.
+6. **Observabilidade e Auditoria** coletam métricas, logs e trilhas de auditoria em paralelo.
+7. Dados agregados → **Query/Analytics Services** para dashboards e relatórios.
 
 ## 9. Observabilidade
 
@@ -121,10 +126,10 @@ A arquitetura é baseada em **microsserviços**, cada um responsável por um **b
 
 ## 10. Próximos Passos
 
-1. Definir **contracts de eventos** para cada bounded context.
+1. Definir **contracts de eventos** para cada bounded context, incluindo Channels e Reporting.
 2. Configurar pipelines de CI/CD para microsserviços.
-3. Implementar **strategies de retry e DLQ** para RabbitMQ.
-4. Criar monitoramento e alertas proativos.
+3. Implementar **strategies de retry e DLQ** para RabbitMQ/Kafka.
+4. Criar monitoramento e alertas proativos para Channels e Reporting Service.
 
 ---
 
