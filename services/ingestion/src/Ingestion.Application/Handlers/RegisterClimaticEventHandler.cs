@@ -1,4 +1,4 @@
-﻿using Ingestion.Application.Commands;
+using Ingestion.Application.Commands;
 using Ingestion.Application.Events;
 using Ingestion.Application.Interfaces.Services;
 using MediatR;

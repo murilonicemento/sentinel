@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Ingestion.Application.DTO;
 using Ingestion.Application.Interfaces.HttpClients;

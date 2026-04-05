@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Ingestion.Application.DTO;
 using Ingestion.Application.Interfaces.Providers;
 using Microsoft.Extensions.Logging;

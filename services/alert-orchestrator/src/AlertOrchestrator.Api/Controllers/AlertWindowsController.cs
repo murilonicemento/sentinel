@@ -9,28 +9,25 @@ namespace AlertOrchestrator.Api.Controllers;
 public class AlertWindowsController : ControllerBase
 {
     private readonly IAlertWindowQueryService _queryService;
-    private readonly ILogger<AlertWindowsController> _logger;
 
-    public AlertWindowsController(IAlertWindowQueryService queryService, ILogger<AlertWindowsController> logger)
+    public AlertWindowsController(IAlertWindowQueryService queryService)
     {
         _queryService = queryService;
-        _logger = logger;
     }
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<AlertWindowDTO>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var window = await _queryService.GetByIdAsync(id, cancellationToken);
-        if (window is null)
-        {
-            return NotFound();
-        }
+
+        if (window is null) return NoContent();
 
         return Ok(window);
     }
 
     [HttpGet("by-region/{region}")]
-    public async Task<ActionResult<IReadOnlyList<AlertWindowDTO>>> GetByRegion(string region,
+    public async Task<ActionResult<IReadOnlyList<AlertWindowDTO>>> GetByRegion(
+        string region,
         CancellationToken cancellationToken)
     {
         var windows = await _queryService.GetByRegionAsync(region, cancellationToken);
@@ -38,7 +35,8 @@ public class AlertWindowsController : ControllerBase
     }
 
     [HttpGet("by-status/{status}")]
-    public async Task<ActionResult<IReadOnlyList<AlertWindowDTO>>> GetByStatus(string status,
+    public async Task<ActionResult<IReadOnlyList<AlertWindowDTO>>> GetByStatus(
+        string status,
         CancellationToken cancellationToken)
     {
         var windows = await _queryService.GetByStatusAsync(status, cancellationToken);

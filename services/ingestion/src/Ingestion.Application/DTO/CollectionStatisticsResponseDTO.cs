@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using Ingestion.Domain.Enums;
 using MongoDB.Bson.Serialization.Attributes;
 

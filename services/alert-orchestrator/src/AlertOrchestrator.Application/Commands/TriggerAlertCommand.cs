@@ -1,3 +1,6 @@
+using AlertOrchestrator.Application.DTOs;
+using AlertOrchestrator.Domain.Enums;
+
 namespace AlertOrchestrator.Application.Commands;
 
 public sealed record TriggerAlertCommand(
@@ -8,6 +11,7 @@ public sealed record TriggerAlertCommand(
     int SignalCount,
     List<string> SignalSources,
     DateTime TriggeredAt,
+    AlertEscalationLevel EscalationLevel,
     // Tenant context for multi-tenancy
     string? TenantId = null,
     // Severity/Priority for Channels Service routing
@@ -21,14 +25,7 @@ public sealed record TriggerAlertCommand(
     string? Message = null,
     string? RecommendedAction = null,
     // Geospatial data
-    GeoLocation? Location = null,
+    GeoLocationDTO? Location = null,
     // Affected population estimate
     int? EstimatedAffectedPopulation = null
-);
-
-public sealed record GeoLocation(
-    double Latitude,
-    double Longitude,
-    double? RadiusKm = null,
-    string? PolygonWkt = null
 );

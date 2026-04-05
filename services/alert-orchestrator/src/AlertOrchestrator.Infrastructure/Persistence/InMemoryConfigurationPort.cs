@@ -8,17 +8,18 @@ namespace AlertOrchestrator.Infrastructure.Persistence;
 public sealed class InMemoryConfigurationPort : IAlertConfigurationPort
 {
     private readonly IMemoryCache _cache;
-    private readonly ILogger<InMemoryConfigurationPort> _logger;
 
     private readonly Dictionary<string, TriggerRuleConfiguration> _defaultConfigurations = new()
     {
-        ["flood"] = new(0.7, TimeSpan.FromMinutes(30), 2, 1, false, false),
-        ["wildfire"] = new(0.8, TimeSpan.FromMinutes(15), 3, 2, true, true),
-        ["earthquake"] = new(0.6, TimeSpan.FromMinutes(10), 2, 1, true, false),
-        ["landslide"] = new(0.75, TimeSpan.FromMinutes(20), 2, 1, true, true),
-        ["storm"] = new(0.65, TimeSpan.FromMinutes(25), 2, 1, false, true),
-        ["heatwave"] = new(0.7, TimeSpan.FromMinutes(60), 2, 1, false, false),
+        ["flood"] = new TriggerRuleConfiguration(0.7, TimeSpan.FromMinutes(30), 2, 1, false, false),
+        ["wildfire"] = new TriggerRuleConfiguration(0.8, TimeSpan.FromMinutes(15), 3, 2, true, true),
+        ["earthquake"] = new TriggerRuleConfiguration(0.6, TimeSpan.FromMinutes(10), 2, 1, true, false),
+        ["landslide"] = new TriggerRuleConfiguration(0.75, TimeSpan.FromMinutes(20), 2, 1, true, true),
+        ["storm"] = new TriggerRuleConfiguration(0.65, TimeSpan.FromMinutes(25), 2, 1, false, true),
+        ["heatwave"] = new TriggerRuleConfiguration(0.7, TimeSpan.FromMinutes(60), 2, 1, false, false)
     };
+
+    private readonly ILogger<InMemoryConfigurationPort> _logger;
 
     public InMemoryConfigurationPort(IMemoryCache cache, ILogger<InMemoryConfigurationPort> logger)
     {
@@ -39,7 +40,14 @@ public sealed class InMemoryConfigurationPort : IAlertConfigurationPort
 
         var config = _defaultConfigurations.GetValueOrDefault(
             riskType.ToLowerInvariant(),
-            new TriggerRuleConfiguration(0.75, TimeSpan.FromMinutes(30), 2, 1, false, false));
+            new TriggerRuleConfiguration(
+                0.75,
+                TimeSpan.FromMinutes(30),
+                2,
+                1,
+                false,
+                false,
+                EscalationIntervals: new List<TimeSpan> { TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(15) }));
 
         _cache.Set(cacheKey, config, TimeSpan.FromMinutes(5));
 

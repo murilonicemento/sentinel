@@ -239,9 +239,9 @@ services:
 
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic climatic-event-detected --partitions 1 --replication-factor 1
 
-      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-events --partitions 1 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-evaluated --partitions 1 --replication-factor 1
 
-      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic geospatial-events --partitions 1 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic sensor-event-detected --partitions 1 --replication-factor 1
 
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic geospatial-dead-letter --partitions 1 --replication-factor 1
 

@@ -2,12 +2,12 @@ namespace AlertOrchestrator.Domain.ValueObjects;
 
 public sealed record RiskType
 {
-    public string Value { get; }
-
     private RiskType(string value)
     {
         Value = value;
     }
+
+    public string Value { get; }
 
     public static RiskType Flood => new("flood");
     public static RiskType Wildfire => new("wildfire");
@@ -29,5 +29,8 @@ public sealed record RiskType
         return new RiskType(normalized);
     }
 
-    public override string ToString() => Value;
+    public override string ToString()
+    {
+        return Value;
+    }
 }

@@ -1,6 +1,11 @@
+using System.Net;
+using System.Text.Json.Serialization;
+using AlertOrchestrator.Api.Middlewares;
 using AlertOrchestrator.Application.Events;
 using AlertOrchestrator.Infrastructure;
-using System.Text.Json.Serialization;
+using AlertOrchestrator.Infrastructure.Options;
+using Microsoft.AspNetCore.Mvc;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,13 +16,33 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
 
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-builder.Services.AddMediatR(cfg =>
+builder.Services.AddOpenApi();
+builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
-    cfg.RegisterServicesFromAssembly(typeof(RiskUpdatedEvent).Assembly);
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var errors = context.ModelState
+            .Values
+            .SelectMany(v => v.Errors)
+            .Select(e => e.ErrorMessage)
+            .ToList();
+
+        var responseObj = new
+        {
+            title = "One or more validation errors occurred.",
+            type = "RequestFormat",
+            statusCode = HttpStatusCode.BadRequest,
+            success = false,
+            errors = new
+            {
+                messages = errors
+            }
+        };
+
+        return new BadRequestObjectResult(responseObj);
+    };
 });
+builder.Services.AddMediatR(cfg => { cfg.RegisterServicesFromAssembly(typeof(RiskUpdatedEvent).Assembly); });
 
 var alertOrchestratorConfig = builder.Configuration.GetSection("AlertOrchestrator");
 var infrastructureOptions = new AlertOrchestratorInfrastructureOptions
@@ -32,8 +57,14 @@ var infrastructureOptions = new AlertOrchestratorInfrastructureOptions
     PostgreSqlConnectionString = alertOrchestratorConfig["PostgreSqlConnectionString"] ?? string.Empty,
     UseRedis = bool.TryParse(alertOrchestratorConfig["UseRedis"], out var useRedis) && useRedis,
     RedisConnectionString = alertOrchestratorConfig["RedisConnectionString"] ?? string.Empty,
-    IdempotencyExpiration = TimeSpan.FromHours(int.TryParse(alertOrchestratorConfig["IdempotencyExpirationHours"], out var hours) ? hours : 24),
-    ExpirationCheckInterval = TimeSpan.FromMinutes(int.TryParse(alertOrchestratorConfig["ExpirationCheckIntervalMinutes"], out var mins) ? mins : 1)
+    IdempotencyExpiration =
+        TimeSpan.FromHours(int.TryParse(alertOrchestratorConfig["IdempotencyExpirationHours"], out var hours)
+            ? hours
+            : 24),
+    ExpirationCheckInterval =
+        TimeSpan.FromMinutes(int.TryParse(alertOrchestratorConfig["ExpirationCheckIntervalMinutes"], out var mins)
+            ? mins
+            : 1)
 };
 
 builder.Services.AddAlertOrchestratorInfrastructure(infrastructureOptions);
@@ -41,20 +72,24 @@ builder.Services.AddAlertOrchestratorInfrastructure(infrastructureOptions);
 builder.Services.AddHealthChecks();
 
 builder.Services.AddOpenTelemetry()
-    .WithTracing(tracing =>
-    {
-        tracing.AddSource("AlertOrchestrator");
-    });
+    .WithTracing(tracing => { tracing.AddSource("AlertOrchestrator"); });
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options
+            .WithTitle("Sentinel - Alert Orchestrator API")
+            .WithTheme(ScalarTheme.DeepSpace)
+            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 }
 
 app.UseHttpsRedirection();
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");

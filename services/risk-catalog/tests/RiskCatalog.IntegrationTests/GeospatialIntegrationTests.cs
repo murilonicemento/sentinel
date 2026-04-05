@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using RiskCatalog.Application.DTO;
 using System.Net.Http.Json;
+using RiskCatalog.Api;
 
 namespace RiskCatalog.IntegrationTests;
 

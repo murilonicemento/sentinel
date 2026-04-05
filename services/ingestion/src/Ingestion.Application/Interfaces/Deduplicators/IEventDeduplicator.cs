@@ -1,4 +1,4 @@
-﻿namespace Ingestion.Application.Interfaces.Deduplicators;
+namespace Ingestion.Application.Interfaces.Deduplicators;
 
 public interface IEventDeduplicator
 {

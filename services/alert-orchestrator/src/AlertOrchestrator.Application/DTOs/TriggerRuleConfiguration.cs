@@ -19,5 +19,7 @@ public sealed record TriggerRuleConfiguration(
     // Channels Service integration
     List<string>? TargetChannels = null,
     string? Priority = null,
-    Dictionary<string, string>? ChannelSpecificSettings = null
+    Dictionary<string, string>? ChannelSpecificSettings = null,
+    // Escalation configuration
+    List<TimeSpan>? EscalationIntervals = null
 );

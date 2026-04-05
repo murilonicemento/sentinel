@@ -1,7 +1,6 @@
 using AlertOrchestrator.Application.Interfaces.Messaging;
 using AlertOrchestrator.Application.Interfaces.Observability;
 using AlertOrchestrator.Domain.Interfaces.Repositories;
-using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,9 +9,9 @@ namespace AlertOrchestrator.Infrastructure.HostedServices;
 
 public sealed class AlertWindowExpirationWorker : BackgroundService
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<AlertWindowExpirationWorker> _logger;
     private readonly TimeSpan _checkInterval;
+    private readonly ILogger<AlertWindowExpirationWorker> _logger;
+    private readonly IServiceProvider _serviceProvider;
 
     public AlertWindowExpirationWorker(
         IServiceProvider serviceProvider,
@@ -55,7 +54,6 @@ public sealed class AlertWindowExpirationWorker : BackgroundService
         var expiredWindows = await repository.GetExpiredOpenWindowsAsync(cancellationToken);
 
         foreach (var window in expiredWindows)
-        {
             try
             {
                 window.MarkExpired();
@@ -64,9 +62,7 @@ public sealed class AlertWindowExpirationWorker : BackgroundService
                 metrics.AlertExpired(window.Region, window.RiskType.ToString());
 
                 foreach (var domainEvent in window.DomainEvents)
-                {
                     await eventPublisher.PublishAsync(domainEvent, cancellationToken);
-                }
                 window.ClearDomainEvents();
 
                 _logger.LogInformation(
@@ -79,6 +75,5 @@ public sealed class AlertWindowExpirationWorker : BackgroundService
                     "Error processing expired window {WindowId} for Region: {Region}, RiskType: {RiskType}",
                     window.Id, window.Region, window.RiskType);
             }
-        }
     }
 }

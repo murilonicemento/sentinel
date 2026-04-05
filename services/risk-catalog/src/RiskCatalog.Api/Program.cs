@@ -155,6 +155,9 @@ app.MapControllers();
 
 app.Run();
 
-public partial class Program
+namespace RiskCatalog.Api
 {
+    public partial class Program
+    {
+    }
 }

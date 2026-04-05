@@ -1,4 +1,4 @@
-﻿using Ingestion.Application.Interfaces.HttpClients;
+using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Application.Interfaces.Services;
 using Ingestion.Application.Services;
 using Ingestion.Infrastructure.Write.HttpClients;

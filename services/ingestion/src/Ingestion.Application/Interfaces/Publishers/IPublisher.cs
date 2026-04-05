@@ -1,4 +1,4 @@
-﻿namespace Ingestion.Application.Interfaces.Publishers;
+namespace Ingestion.Application.Interfaces.Publishers;
 
 public interface IPublisher : IAsyncDisposable
 {

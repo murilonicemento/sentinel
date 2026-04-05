@@ -1,4 +1,4 @@
-﻿using Ingestion.Application.Interfaces.Publishers;
+using Ingestion.Application.Interfaces.Publishers;
 using Ingestion.Domain.Interfaces.Repositories;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

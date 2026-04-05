@@ -1,6 +1,4 @@
-using Ingestion.Application.Interfaces.HttpClients;
-
-namespace Ingestion.Infrastructure.Write.HttpClients;
+namespace Ingestion.Application.Interfaces.HttpClients;
 
 public interface ISensorPollingClientFactory
 {

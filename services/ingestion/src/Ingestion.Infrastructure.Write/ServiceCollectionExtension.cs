@@ -1,11 +1,10 @@
-﻿using System.Net.Http.Headers;
+using System.Net.Http.Headers;
 using Confluent.Kafka;
 using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Application.Interfaces.Providers;
 using Ingestion.Application.Interfaces.Publishers;
 using Ingestion.Domain.Interfaces.Repositories;
-using Ingestion.Domain.Repositories;
 using Ingestion.Infrastructure.Write.Cache.Deduplicators;
 using Ingestion.Infrastructure.Write.HostedServices;
 using Ingestion.Infrastructure.Write.HttpClients;

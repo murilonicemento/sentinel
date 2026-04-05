@@ -11,6 +11,7 @@ using RiskEvaluation.Infrastructure.Messaging;
 using RiskEvaluation.Infrastructure.Persistence;
 using MediatR;
 using RiskEvaluation.Application.Interfaces.HttpClients;
+using RiskEvaluation.Application.Interfaces.Messaging;
 using RiskEvaluation.Infrastructure.HttpClients;
 using StackExchange.Redis;
 

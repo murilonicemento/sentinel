@@ -1,8 +1,10 @@
+using AlertOrchestrator.Application.Commands;
 using AlertOrchestrator.Application.Events;
 using AlertOrchestrator.Application.Interfaces.Messaging;
 using AlertOrchestrator.Application.Interfaces.Observability;
 using AlertOrchestrator.Application.Ports;
 using AlertOrchestrator.Domain.Aggregates;
+using AlertOrchestrator.Domain.Configuration;
 using AlertOrchestrator.Domain.Enums;
 using AlertOrchestrator.Domain.Interfaces.Repositories;
 using AlertOrchestrator.Domain.ValueObjects;
@@ -13,13 +15,13 @@ namespace AlertOrchestrator.Application.Handlers;
 
 public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionIntersectedEvent>
 {
-    private readonly IAlertWindowRepository _windowRepository;
-    private readonly IEventPublisher _eventPublisher;
     private readonly ICommandPublisher _commandPublisher;
-    private readonly IIdempotencyService _idempotencyService;
     private readonly IAlertConfigurationPort _configurationPort;
-    private readonly IAlertMetrics _metrics;
+    private readonly IEventPublisher _eventPublisher;
+    private readonly IIdempotencyService _idempotencyService;
     private readonly ILogger<RegionIntersectedEventHandler> _logger;
+    private readonly IAlertMetrics _metrics;
+    private readonly IAlertWindowRepository _windowRepository;
 
     public RegionIntersectedEventHandler(
         IAlertWindowRepository windowRepository,
@@ -50,7 +52,7 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
         try
         {
             var config = await _configurationPort.GetConfigurationAsync(notification.RiskType, null, cancellationToken);
-            
+
             var window = await _windowRepository.GetOpenWindowAsync(
                 notification.Region,
                 RiskType.FromString(notification.RiskType),
@@ -67,7 +69,7 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
                     config.WindowDuration);
 
                 await _windowRepository.AddAsync(window, cancellationToken);
-                
+
                 _logger.LogInformation(
                     "AlertWindowOpened: {WindowId} for region intersection {Region}/{IntersectingRegion}",
                     window.Id, notification.Region, notification.IntersectingRegion);
@@ -75,9 +77,7 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
                 _metrics.AlertWindowOpened(notification.Region, notification.RiskType);
 
                 foreach (var domainEvent in window.DomainEvents)
-                {
                     await _eventPublisher.PublishAsync(domainEvent, cancellationToken);
-                }
                 window.ClearDomainEvents();
             }
 
@@ -113,38 +113,36 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
                 _metrics.AlertTriggered(notification.Region, notification.RiskType, window.Signals.Count);
                 _logger.LogInformation(
                     "AlertTriggered: Region intersection window {WindowId} triggered. Severity: {Severity}, Signals: {SignalCount}, Region: {Region}, IntersectingRegion: {IntersectingRegion}",
-                    window.Id, notification.Severity, window.Signals.Count, notification.Region, notification.IntersectingRegion);
+                    window.Id, notification.Severity, window.Signals.Count, notification.Region,
+                    notification.IntersectingRegion);
 
                 foreach (var domainEvent in window.DomainEvents)
-                {
                     await _eventPublisher.PublishAsync(domainEvent, cancellationToken);
-                }
                 window.ClearDomainEvents();
 
-                var command = new Commands.TriggerAlertCommand(
+                var command = new TriggerAlertCommand(
                     window.Id,
                     window.Region,
                     window.RiskType.ToString(),
                     notification.Severity,
                     window.Signals.Count,
                     window.Signals.Select(s => s.Source.ToString()).ToList(),
-                    DateTime.UtcNow);
+                    DateTime.UtcNow,
+                    window.CurrentEscalationLevel);
 
                 await _commandPublisher.PublishAsync(command, cancellationToken);
             }
             else
             {
                 await _windowRepository.UpdateAsync(window, cancellationToken);
-                
+
                 var quorumMet = window.MeetsQuorum(quorumConfig);
                 if (!quorumMet)
-                {
                     _metrics.QuorumFailed(
                         notification.Region,
                         notification.RiskType,
                         window.Signals.Count,
                         quorumConfig.MinimumSignals);
-                }
 
                 _logger.LogDebug(
                     "WindowUpdated: {WindowId} region intersection signal added. Signals: {SignalCount}, QuorumMet: {QuorumMet}",

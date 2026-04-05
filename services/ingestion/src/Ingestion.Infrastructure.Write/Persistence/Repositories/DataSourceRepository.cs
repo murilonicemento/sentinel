@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using Ingestion.Domain.AggregateRoots;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Interfaces.Repositories;

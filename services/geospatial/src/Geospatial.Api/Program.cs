@@ -45,7 +45,8 @@ builder.Services
 
 builder.Services
     .Configure<ElasticsearchOptions>(builder.Configuration.GetSection("Elasticsearch"))
-    .Configure<KafkaConsumerOptions>(builder.Configuration.GetSection("KafkaConsumerOptions"));
+    .Configure<KafkaConsumerOptions>(builder.Configuration.GetSection("KafkaConsumerOptions"))
+    .Configure<Geospatial.Infrastructure.Options.KafkaProducerOptions>(builder.Configuration.GetSection("KafkaProducerOptions"));
 
 builder.Services
     .AddScoped<IBatchEvaluateUseCase, BatchEvaluateUseCase>()

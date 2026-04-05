@@ -1,9 +1,11 @@
+using AlertOrchestrator.Application.Commands;
 using AlertOrchestrator.Application.DTOs;
 using AlertOrchestrator.Application.Events;
 using AlertOrchestrator.Application.Interfaces.Messaging;
 using AlertOrchestrator.Application.Interfaces.Observability;
 using AlertOrchestrator.Application.Ports;
 using AlertOrchestrator.Domain.Aggregates;
+using AlertOrchestrator.Domain.Configuration;
 using AlertOrchestrator.Domain.Enums;
 using AlertOrchestrator.Domain.Interfaces.Repositories;
 using AlertOrchestrator.Domain.ValueObjects;
@@ -14,13 +16,13 @@ namespace AlertOrchestrator.Application.Handlers;
 
 public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEvent>
 {
-    private readonly IAlertWindowRepository _windowRepository;
-    private readonly IEventPublisher _eventPublisher;
     private readonly ICommandPublisher _commandPublisher;
-    private readonly IIdempotencyService _idempotencyService;
     private readonly IAlertConfigurationPort _configurationPort;
-    private readonly IAlertMetrics _metrics;
+    private readonly IEventPublisher _eventPublisher;
+    private readonly IIdempotencyService _idempotencyService;
     private readonly ILogger<RiskUpdatedEventHandler> _logger;
+    private readonly IAlertMetrics _metrics;
+    private readonly IAlertWindowRepository _windowRepository;
 
     public RiskUpdatedEventHandler(
         IAlertWindowRepository windowRepository,
@@ -50,8 +52,10 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
 
         try
         {
-            var config = await _configurationPort.GetConfigurationAsync(notification.RiskType, notification.TenantId, cancellationToken);
-            
+            var config =
+                await _configurationPort.GetConfigurationAsync(notification.RiskType, notification.TenantId,
+                    cancellationToken);
+
             if (!ShouldEvaluate(config, notification.RiskScore))
             {
                 _logger.LogDebug("Risk score {Score} below threshold {Threshold} for {RiskType}",
@@ -76,7 +80,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
                     config.WindowDuration);
 
                 await _windowRepository.AddAsync(window, cancellationToken);
-                
+
                 _logger.LogInformation(
                     "AlertWindowOpened: {WindowId} for {Region}/{RiskType} with threshold {Threshold}",
                     window.Id, notification.Region, notification.RiskType, config.Threshold);
@@ -84,9 +88,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
                 _metrics.AlertWindowOpened(notification.Region, notification.RiskType);
 
                 foreach (var domainEvent in window.DomainEvents)
-                {
                     await _eventPublisher.PublishAsync(domainEvent, cancellationToken);
-                }
                 window.ClearDomainEvents();
             }
 
@@ -118,38 +120,36 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
                 _metrics.AlertTriggered(notification.Region, notification.RiskType, window.Signals.Count);
                 _logger.LogInformation(
                     "AlertTriggered: Window {WindowId} triggered with {SignalCount} signals. Score: {Score}, Region: {Region}, RiskType: {RiskType}",
-                    window.Id, window.Signals.Count, notification.RiskScore, notification.Region, notification.RiskType);
+                    window.Id, window.Signals.Count, notification.RiskScore, notification.Region,
+                    notification.RiskType);
 
                 foreach (var domainEvent in window.DomainEvents)
-                {
                     await _eventPublisher.PublishAsync(domainEvent, cancellationToken);
-                }
                 window.ClearDomainEvents();
 
-                var command = new Commands.TriggerAlertCommand(
+                var command = new TriggerAlertCommand(
                     window.Id,
                     window.Region,
                     window.RiskType.ToString(),
                     notification.RiskScore,
                     window.Signals.Count,
                     window.Signals.Select(s => s.Source.ToString()).ToList(),
-                    DateTime.UtcNow);
+                    DateTime.UtcNow,
+                    window.CurrentEscalationLevel);
 
                 await _commandPublisher.PublishAsync(command, cancellationToken);
             }
             else
             {
                 await _windowRepository.UpdateAsync(window, cancellationToken);
-                
+
                 var quorumMet = window.MeetsQuorum(quorumConfig);
                 if (!quorumMet)
-                {
                     _metrics.QuorumFailed(
-                        notification.Region, 
-                        notification.RiskType, 
-                        window.Signals.Count, 
+                        notification.Region,
+                        notification.RiskType,
+                        window.Signals.Count,
                         quorumConfig.MinimumSignals);
-                }
 
                 _logger.LogDebug(
                     "WindowUpdated: {WindowId} signals: {SignalCount}, QuorumMet: {QuorumMet}, ShouldTrigger: {ShouldTrigger}",
@@ -160,8 +160,8 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, 
-                "Error processing RiskUpdatedEvent {EventId} for Region: {Region}, RiskType: {RiskType}", 
+            _logger.LogError(ex,
+                "Error processing RiskUpdatedEvent {EventId} for Region: {Region}, RiskType: {RiskType}",
                 notification.EventId, notification.Region, notification.RiskType);
             throw;
         }

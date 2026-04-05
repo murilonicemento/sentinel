@@ -1,4 +1,4 @@
-﻿namespace Ingestion.Domain.Aggregates;
+namespace Ingestion.Domain.Aggregates;
 
 public class SampleSensor
 {

@@ -1,4 +1,4 @@
-﻿using Ingestion.Domain.Aggregates;
+using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Enums;
 
 namespace Ingestion.Domain.AggregateRoots;

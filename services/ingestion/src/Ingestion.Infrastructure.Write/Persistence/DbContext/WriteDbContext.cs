@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace Ingestion.Infrastructure.Write.Persistence.DbContext;

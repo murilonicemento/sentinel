@@ -129,16 +129,21 @@ CREATE TABLE risk_matrix
 
 CREATE TABLE alert_windows
 (
-    id               uuid PRIMARY KEY,
-    region           varchar(100)     NOT NULL,
-    risk_type        varchar(50)      NOT NULL,
-    tenant_id        varchar(50)      NULL,
-    opened_at        timestamptz      NOT NULL,
-    expires_at       timestamptz      NOT NULL,
-    status           varchar(20)      NOT NULL,
-    threshold        double precision NOT NULL,
-    triggered_at     timestamptz      NULL,
-    final_risk_score double precision NULL
+    id                        uuid PRIMARY KEY,
+    region                    varchar(100)     NOT NULL,
+    risk_type                 varchar(50)      NOT NULL,
+    tenant_id                 varchar(50)      NULL,
+    opened_at                 timestamptz      NOT NULL,
+    expires_at                timestamptz      NOT NULL,
+    status                    varchar(20)      NOT NULL,
+    threshold                 double precision NOT NULL,
+    triggered_at              timestamptz      NULL,
+    final_risk_score          double precision NULL,
+    current_escalation_level  varchar(20)      NOT NULL DEFAULT 'Level1',
+    confirmed_at              timestamptz      NULL,
+    closed_at                 timestamptz      NULL,
+    closed_by                 varchar(100)     NULL,
+    close_reason              varchar(500)     NULL
 );
 
 CREATE TABLE alert_signals
@@ -159,3 +164,4 @@ CREATE INDEX idx_alert_windows_status ON alert_windows (status);
 CREATE INDEX idx_alert_windows_expires_at ON alert_windows (expires_at);
 CREATE INDEX idx_alert_windows_tenant_id ON alert_windows (tenant_id);
 CREATE INDEX idx_alert_signals_event_id ON alert_signals (event_id);
+CREATE INDEX idx_alert_windows_confirmed_at ON alert_windows (confirmed_at) WHERE confirmed_at IS NULL;

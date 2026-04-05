@@ -7,8 +7,8 @@ namespace AlertOrchestrator.Infrastructure.Persistence.Repositories;
 
 public sealed class InMemoryAlertWindowRepository : IAlertWindowRepository
 {
-    private readonly Dictionary<Guid, AlertWindow> _windows = new();
     private readonly Lock _lock = new();
+    private readonly Dictionary<Guid, AlertWindow> _windows = new();
 
     public Task<AlertWindow?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -19,7 +19,8 @@ public sealed class InMemoryAlertWindowRepository : IAlertWindowRepository
         }
     }
 
-    public Task<AlertWindow?> GetOpenWindowAsync(string region, RiskType riskType, string? tenantId, CancellationToken cancellationToken = default)
+    public Task<AlertWindow?> GetOpenWindowAsync(string region, RiskType riskType, string? tenantId,
+        CancellationToken cancellationToken = default)
     {
         lock (_lock)
         {
@@ -34,7 +35,8 @@ public sealed class InMemoryAlertWindowRepository : IAlertWindowRepository
         }
     }
 
-    public Task<IReadOnlyList<AlertWindow>> GetByRegionAsync(string region, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<AlertWindow>> GetByRegionAsync(string region,
+        CancellationToken cancellationToken = default)
     {
         lock (_lock)
         {
@@ -43,7 +45,8 @@ public sealed class InMemoryAlertWindowRepository : IAlertWindowRepository
         }
     }
 
-    public Task<IReadOnlyList<AlertWindow>> GetByStatusAsync(AlertStatus status, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<AlertWindow>> GetByStatusAsync(AlertStatus status,
+        CancellationToken cancellationToken = default)
     {
         lock (_lock)
         {
@@ -63,12 +66,25 @@ public sealed class InMemoryAlertWindowRepository : IAlertWindowRepository
         }
     }
 
+    public Task<IReadOnlyList<AlertWindow>> GetTriggeredUnconfirmedWindowsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            var windows = _windows.Values
+                .Where(w => w.Status == AlertStatus.Triggered && w.ConfirmedAt == null)
+                .ToList();
+            return Task.FromResult<IReadOnlyList<AlertWindow>>(windows);
+        }
+    }
+
     public Task AddAsync(AlertWindow window, CancellationToken cancellationToken = default)
     {
         lock (_lock)
         {
             _windows[window.Id] = window;
         }
+
         return Task.CompletedTask;
     }
 
@@ -78,6 +94,7 @@ public sealed class InMemoryAlertWindowRepository : IAlertWindowRepository
         {
             _windows[window.Id] = window;
         }
+
         return Task.CompletedTask;
     }
 }

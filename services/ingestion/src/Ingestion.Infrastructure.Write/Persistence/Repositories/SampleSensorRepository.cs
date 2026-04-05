@@ -1,6 +1,6 @@
-﻿using Dapper;
+using Dapper;
 using Ingestion.Domain.Aggregates;
-using Ingestion.Domain.Repositories;
+using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Infrastructure.Write.Persistence.DbContext;
 
 namespace Ingestion.Infrastructure.Write.Persistence.Repositories;

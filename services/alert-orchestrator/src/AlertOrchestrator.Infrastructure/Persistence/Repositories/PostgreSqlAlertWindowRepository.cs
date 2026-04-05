@@ -12,7 +12,8 @@ public sealed class PostgreSqlAlertWindowRepository : IAlertWindowRepository
     private readonly AlertOrchestratorDbContext _context;
     private readonly ILogger<PostgreSqlAlertWindowRepository> _logger;
 
-    public PostgreSqlAlertWindowRepository(AlertOrchestratorDbContext context, ILogger<PostgreSqlAlertWindowRepository> logger)
+    public PostgreSqlAlertWindowRepository(AlertOrchestratorDbContext context,
+        ILogger<PostgreSqlAlertWindowRepository> logger)
     {
         _context = context;
         _logger = logger;
@@ -26,29 +27,27 @@ public sealed class PostgreSqlAlertWindowRepository : IAlertWindowRepository
             .FirstOrDefaultAsync(w => w.Id == id, cancellationToken);
     }
 
-    public async Task<AlertWindow?> GetOpenWindowAsync(string region, RiskType riskType, string? tenantId, CancellationToken cancellationToken = default)
+    public async Task<AlertWindow?> GetOpenWindowAsync(string region, RiskType riskType, string? tenantId,
+        CancellationToken cancellationToken = default)
     {
         var query = _context.AlertWindows
             .AsNoTracking()
             .Include(w => w.Signals)
             .Where(w => w.Region == region
-                && w.RiskType == riskType
-                && w.Status == AlertStatus.Open
-                && w.ExpiresAt > DateTime.UtcNow);
+                        && w.RiskType == riskType
+                        && w.Status == AlertStatus.Open
+                        && w.ExpiresAt > DateTime.UtcNow);
 
         if (!string.IsNullOrEmpty(tenantId))
-        {
             query = query.Where(w => w.TenantId == tenantId);
-        }
         else
-        {
             query = query.Where(w => w.TenantId == null);
-        }
 
         return await query.FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<AlertWindow>> GetByRegionAsync(string region, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<AlertWindow>> GetByRegionAsync(string region,
+        CancellationToken cancellationToken = default)
     {
         return await _context.AlertWindows
             .AsNoTracking()
@@ -57,7 +56,8 @@ public sealed class PostgreSqlAlertWindowRepository : IAlertWindowRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<AlertWindow>> GetByStatusAsync(AlertStatus status, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<AlertWindow>> GetByStatusAsync(AlertStatus status,
+        CancellationToken cancellationToken = default)
     {
         return await _context.AlertWindows
             .AsNoTracking()
@@ -66,12 +66,23 @@ public sealed class PostgreSqlAlertWindowRepository : IAlertWindowRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<AlertWindow>> GetExpiredOpenWindowsAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<AlertWindow>> GetExpiredOpenWindowsAsync(
+        CancellationToken cancellationToken = default)
     {
         return await _context.AlertWindows
             .AsNoTracking()
             .Include(w => w.Signals)
             .Where(w => w.Status == AlertStatus.Open && w.ExpiresAt <= DateTime.UtcNow)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<AlertWindow>> GetTriggeredUnconfirmedWindowsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.AlertWindows
+            .AsNoTracking()
+            .Include(w => w.Signals)
+            .Where(w => w.Status == AlertStatus.Triggered && w.ConfirmedAt == null)
             .ToListAsync(cancellationToken);
     }
 

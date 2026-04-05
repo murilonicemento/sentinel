@@ -1,5 +1,6 @@
 using AlertOrchestrator.Application.DTOs;
 using AlertOrchestrator.Application.Interfaces.Services;
+using AlertOrchestrator.Domain.Aggregates;
 using AlertOrchestrator.Domain.Enums;
 using AlertOrchestrator.Domain.Interfaces.Repositories;
 
@@ -20,24 +21,23 @@ public sealed class AlertWindowQueryService : IAlertWindowQueryService
         return window is null ? null : MapToDto(window);
     }
 
-    public async Task<IReadOnlyList<AlertWindowDTO>> GetByRegionAsync(string region, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<AlertWindowDTO>> GetByRegionAsync(string region,
+        CancellationToken cancellationToken = default)
     {
         var windows = await _repository.GetByRegionAsync(region, cancellationToken);
         return windows.Select(MapToDto).ToList();
     }
 
-    public async Task<IReadOnlyList<AlertWindowDTO>> GetByStatusAsync(string status, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<AlertWindowDTO>> GetByStatusAsync(string status,
+        CancellationToken cancellationToken = default)
     {
-        if (!Enum.TryParse<AlertStatus>(status, true, out var alertStatus))
-        {
-            return Array.Empty<AlertWindowDTO>();
-        }
+        if (!Enum.TryParse<AlertStatus>(status, true, out var alertStatus)) return Array.Empty<AlertWindowDTO>();
 
         var windows = await _repository.GetByStatusAsync(alertStatus, cancellationToken);
         return windows.Select(MapToDto).ToList();
     }
 
-    private static AlertWindowDTO MapToDto(Domain.Aggregates.AlertWindow window)
+    private static AlertWindowDTO MapToDto(AlertWindow window)
     {
         return new AlertWindowDTO(
             window.Id,

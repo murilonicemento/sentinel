@@ -6,11 +6,11 @@ namespace AlertOrchestrator.Infrastructure.Persistence;
 
 public sealed class AlertOrchestratorDbContext : DbContext
 {
-    public DbSet<AlertWindow> AlertWindows => Set<AlertWindow>();
-
     public AlertOrchestratorDbContext(DbContextOptions<AlertOrchestratorDbContext> options) : base(options)
     {
     }
+
+    public DbSet<AlertWindow> AlertWindows => Set<AlertWindow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

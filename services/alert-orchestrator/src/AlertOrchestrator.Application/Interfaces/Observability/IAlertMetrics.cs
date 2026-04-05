@@ -1,3 +1,5 @@
+using AlertOrchestrator.Domain.Enums;
+
 namespace AlertOrchestrator.Application.Interfaces.Observability;
 
 public interface IAlertMetrics
@@ -8,4 +10,6 @@ public interface IAlertMetrics
     void AlertExpired(string region, string riskType);
     void QuorumFailed(string region, string riskType, int currentSignals, int requiredSignals);
     void SignalAdded(string region, string riskType, string source);
+    void AlertConfirmed(string region, string riskType);
+    void AlertEscalated(string region, string riskType, AlertEscalationLevel level);
 }

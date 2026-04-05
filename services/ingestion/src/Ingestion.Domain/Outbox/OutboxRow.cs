@@ -1,4 +1,4 @@
-﻿namespace Ingestion.Domain.Outbox;
+namespace Ingestion.Domain.Outbox;
 
 public class OutboxRow
 {

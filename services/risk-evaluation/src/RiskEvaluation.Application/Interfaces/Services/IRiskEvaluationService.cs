@@ -1,7 +1,4 @@
-using RiskEvaluation.Domain.Entities;
-using RiskEvaluation.Domain.ValueObjects;
-
-namespace RiskEvaluation.Application.Interfaces;
+namespace RiskEvaluation.Application.Interfaces.Services;
 
 public interface IRiskEvaluationService
 {

@@ -1,6 +1,6 @@
+using System.Text.Json;
 using AlertOrchestrator.Application.Interfaces.Cooldown;
 using Microsoft.Extensions.Caching.Distributed;
-using System.Text.Json;
 
 namespace AlertOrchestrator.Infrastructure.Cooldown;
 
@@ -13,14 +13,16 @@ public sealed class DistributedAlertCooldownService : IAlertCooldownService
         _cache = cache;
     }
 
-    public async Task<bool> IsInCooldownAsync(string region, string riskType, string? tenantId, CancellationToken cancellationToken = default)
+    public async Task<bool> IsInCooldownAsync(string region, string riskType, string? tenantId,
+        CancellationToken cancellationToken = default)
     {
         var key = BuildCacheKey(region, riskType, tenantId);
         var value = await _cache.GetStringAsync(key, cancellationToken);
         return !string.IsNullOrEmpty(value);
     }
 
-    public async Task RecordAlertAsync(string region, string riskType, string? tenantId, CancellationToken cancellationToken = default)
+    public async Task RecordAlertAsync(string region, string riskType, string? tenantId,
+        CancellationToken cancellationToken = default)
     {
         var key = BuildCacheKey(region, riskType, tenantId);
         var cooldownData = new CooldownData
@@ -44,11 +46,12 @@ public sealed class DistributedAlertCooldownService : IAlertCooldownService
             cancellationToken);
     }
 
-    public async Task<TimeSpan?> GetRemainingCooldownAsync(string region, string riskType, string? tenantId, CancellationToken cancellationToken = default)
+    public async Task<TimeSpan?> GetRemainingCooldownAsync(string region, string riskType, string? tenantId,
+        CancellationToken cancellationToken = default)
     {
         var key = BuildCacheKey(region, riskType, tenantId);
         var value = await _cache.GetStringAsync(key, cancellationToken);
-        
+
         if (string.IsNullOrEmpty(value))
             return null;
 
@@ -59,7 +62,7 @@ public sealed class DistributedAlertCooldownService : IAlertCooldownService
         // Calculate remaining cooldown (assuming 15 min default)
         var elapsed = DateTime.UtcNow - data.TriggeredAt;
         var remaining = TimeSpan.FromMinutes(15) - elapsed;
-        
+
         return remaining > TimeSpan.Zero ? remaining : null;
     }
 
