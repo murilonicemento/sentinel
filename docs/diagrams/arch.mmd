@@ -8,7 +8,6 @@ subgraph External
     Satellite[Satélites]
     WhatsApp[WhatsApp Business API]
     Sirene[Sirenes IoT]
-    Dashboards[Defesas Civis / Dashboards]
 end
 
 %% =====================
@@ -44,12 +43,11 @@ subgraph RiskCatalogService
 end
 
 %% =====================
-%% Risk Scoring Service
+%% Risk Evaluation Service
 %% =====================
-subgraph RiskScoringService
-    RS_Server[Risk Scoring Server]
-    RS_DB[TimescaleDB / PostgreSQL]
-    RS_ML[Optional ML Model ONNX]
+subgraph RiskEvaluationService
+    RE_Server[Risk Evaluation Server]
+    RE_DB[MongoDB]
 end
 
 %% =====================
@@ -58,29 +56,6 @@ end
 subgraph AlertOrchestrator
     AO_Server[Alert Orchestrator Server]
     AO_DB[PostgreSQL / MongoDB Sagas]
-end
-
-%% =====================
-%% Tenants & Billing
-%% =====================
-subgraph TenantsBilling
-    TB_DB[PostgreSQL]
-end
-
-%% =====================
-%% Compliance / Audit
-%% =====================
-subgraph ComplianceService
-    Compliance_DB[PostgreSQL / EventStoreDB]
-    WORM[WORM Bucket MinIO]
-end
-
-%% =====================
-%% Reporting / Read Models
-%% =====================
-subgraph ReportingService
-    Reporting_ES[Elasticsearch]
-    Reporting_Cache[Redis]
 end
 
 %% =====================
@@ -97,40 +72,26 @@ end
 
 %% =====================
 %% Event Flow
-%% =====================
-WeatherAPI -->|Evento Climático| IS_Server
-IoT -->|Sensores| IS_Server
-Satellite -->|Dados| IS_Server
+WeatherAPI -->|Dados Meteorológicos| IS_Server
+IoT -->|Dados de Sensores| IS_Server
+Satellite -->|Imagens / Dados| IS_Server
 
-IS_Server -->|EventoClimaticoDetectado| Geo_Server
-Geo_Server -->|RegiaoIntersectada| RS_Server
-RS_Server -->|RiscoAtualizado| AO_Server
-AO_Server -->|DispararAlerta| Channels_Server
-Channels_Server --> WhatsApp
-Channels_Server --> Sirene
-AO_Server -->|Auditoria| Compliance_DB
-Channels_Server --> Reporting_ES
-
-RiskCatalog_DB --> RS_Server
-TB_DB --> AO_Server
+IS_Server -->|SensorEventDetected| Geo_Server
+IS_Server -->|SensorEventDetected| RE_Server
+RiskCatalog_DB -->|RiskCatalogPublished| RE_Server
+Geo_Server -->|RegionIntersected| AO_Server
+RE_Server -->|RiskUpdated / RiskEvaluated / HighRiskDetected| AO_Server
 
 APIGateway --> IS_Server
 APIGateway --> Geo_Server
 APIGateway --> RiskCatalog_DB
-APIGateway --> RS_Server
+APIGateway --> RE_Server
 APIGateway --> AO_Server
-APIGateway --> Channels_Server
-APIGateway --> Reporting_ES
-APIGateway --> TB_DB
 
-%% Observability Connections
 IS_Server --> OTEL
 Geo_Server --> OTEL
-RS_Server --> OTEL
+RE_Server --> OTEL
 AO_Server --> OTEL
-Channels_Server --> OTEL
-Compliance_DB --> OTEL
-Reporting_ES --> OTEL
 
 OTEL --> Prometheus
 OTEL --> Grafana
