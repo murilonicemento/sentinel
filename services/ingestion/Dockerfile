@@ -6,13 +6,13 @@ EXPOSE 8081
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
-WORKDIR /src
-COPY ["src/Ingestion.Api/Ingestion.Api.csproj", "Ingestion.Api/"]
-COPY ["src/Ingestion.Application/Ingestion.Application.csproj", "Ingestion.Application/"]
-COPY ["src/Ingestion.Domain/Ingestion.Domain.csproj", "Ingestion.Domain/"]
-COPY ["src/Ingestion.Infrastructure/Ingestion.Infrastructure.csproj", "Ingestion.Infrastructure/"]
-COPY ["tests/Ingestion.IntegrationTests/Ingestion.IntegrationTests.csproj", "Ingestion.IntegrationTests/"]
-COPY ["tests/Ingestion.UnitTests/Ingestion.UnitTests.csproj", "Ingestion.UnitTests/"]
+WORKDIR /
+COPY ["src/Ingestion.Api/Ingestion.Api.csproj", "src/Ingestion.Api/"]
+COPY ["src/Ingestion.Application/Ingestion.Application.csproj", "src/Ingestion.Application/"]
+COPY ["src/Ingestion.Domain/Ingestion.Domain.csproj", "src/Ingestion.Domain/"]
+COPY ["src/Ingestion.Infrastructure/Ingestion.Infrastructure.csproj", "src/Ingestion.Infrastructure/"]
+COPY ["tests/Ingestion.IntegrationTests/Ingestion.IntegrationTests.csproj", "tests/Ingestion.IntegrationTests/"]
+COPY ["tests/Ingestion.UnitTests/Ingestion.UnitTests.csproj", "tests/Ingestion.UnitTests/"]
 RUN dotnet restore "src/Ingestion.Api/Ingestion.Api.csproj"
 COPY . .
 WORKDIR "/src/Ingestion.Api"
