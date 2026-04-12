@@ -1,6 +1,0 @@
-@RiskCatalog.Api_HostAddress = http://localhost:5133
-
-GET {{RiskCatalog.Api_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

@@ -1,8 +1,0 @@
-namespace AlertOrchestrator.Application.DTOs;
-
-public record ResponseBaseDTO<T>
-{
-    public int StatusCode { get; set; }
-    public bool Success { get; set; }
-    public required T Data { get; set; }
-}

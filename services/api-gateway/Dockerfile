@@ -8,7 +8,7 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["ApiGateway.Api/ApiGateway.Api.csproj", "ApiGateway.Api/"]
-RUN dotnet restore "ApiGateway.Api/ApiGateway.Api.csproj"
+RUN dotnet restore "services/api-gateway/ApiGateway.Api/ApiGateway.Api.csproj"
 COPY . .
 WORKDIR "/src/ApiGateway.Api"
 RUN dotnet build "./ApiGateway.Api.csproj" -c $BUILD_CONFIGURATION -o /app/build

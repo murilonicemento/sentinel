@@ -1,105 +1,61 @@
-# RFC - Arquitetura do Projeto **Sentinel** (Atualizado)
+# RFC - Arquitetura do Projeto **Sentinel**
 
 ## 1. Contexto
 
-O projeto **Sentinel** fornece uma solução distribuída e escalável para **análise de logs em tempo real**, com foco em **resiliência, observabilidade e flexibilidade de consulta**. Inspirado em **DDD, CQRS, Clean Architecture e Microsserviços**, o sistema foi projetado para:
-
-- Suportar grandes volumes de dados.
-- Manter separação clara de responsabilidades.
-- Facilitar evolução contínua e manutenção modular.
+O projeto **Sentinel** tem como objetivo fornecer uma solução distribuída e escalável para **análise de logs em tempo real**, com foco em resiliência, observabilidade e flexibilidade de consulta. Inspirado em princípios de **DDD, CQRS, Clean Architecture e Microsserviços**, o sistema foi projetado para suportar grandes volumes de dados, manter separação clara de responsabilidades e facilitar evolução contínua.
 
 ## 2. Objetivos
 
-1. Capturar logs e eventos de diversas fontes de forma confiável e escalável.
-2. Oferecer busca rápida e eficiente sobre os dados coletados.
-3. Permitir análises agregadas e preditivas em tempo real.
-4. Garantir resiliência via mensageria e processamento assíncrono.
-5. Suportar evolução contínua com arquitetura modular.
-6. Suportar envio de alertas multi-canal e registro detalhado para dashboards.
+1. Capturar logs de diversas fontes de forma confiável e escalável.
+2. Oferecer busca rápida e eficiente sobre os logs.
+3. Permitir análises agregadas em tempo real.
+4. Garantir resiliência por meio de mensageria e processamento assíncrono.
+5. Suportar evolução contínua via arquitetura modular.
 
 ## 3. Visão Geral da Arquitetura
 
-A arquitetura é baseada em **microsserviços**, cada um responsável por um **bounded context**.
-
-- Comunicação: **eventos via RabbitMQ/Kafka** e **APIs síncronas** quando necessário.
-- Cache: **Redis** para consultas frequentes.
-- Indexação e busca: **Elasticsearch**.
-- Persistência: **MongoDB** para dados semi-estruturados e **PostgreSQL** para dados relacionais.
-
-> Observação: considerar Kubernetes futuramente para orquestração e escalabilidade automática.
+A arquitetura é baseada em microsserviços, cada um responsável por um **bounded context**. Comunicação é feita via **eventos em RabbitMQ** e APIs síncronas quando necessário. O sistema conta ainda com suporte de **Redis** para caching, **Elasticsearch** para indexação e busca, e **MongoDB/PostgreSQL** para persistência.
 
 ## 4. Domínios e Subdomínios
 
-- **Domínio Principal**: Monitoramento e Alertas de Eventos Naturais
+- **Core Domain**: Gestão e análise de logs.
+- **Supporting Domains**:
 
-**Subdomínios e Bounded Contexts**:
+  - Autenticação e Autorização (Identity)
+  - Indexação e Busca
+  - Processamento e Agregação
 
-1. **Detecção e Ingestão**
-   - Ingestão de fontes externas
-   - Normalização e validação de dados
+- **Generic Domains**:
 
-2. **Catálogo de Riscos**
-   - Tipos de Evento e Severidade
-   - Matrizes de Risco e Curvas IDF
+  - Observabilidade
+  - Monitoramento de Saúde
 
-3. **Geoespacial e Infraestrutura Local**
-   - Zonas de Risco e Rotas de Evacuação
-   - Dispositivos de Alerta
+## 5. Bounded Contexts
 
-4. **Avaliação e Score de Risco**
-   - Cálculo de Risco
-   - Modelos de Predição
+1. **Ingestion Service**: Captura e normaliza logs.
+2. **Processing Service**: Realiza transformações, enriquecimento e roteamento.
+3. **Indexing Service**: Indexa no Elasticsearch.
+4. **Query Service**: Expõe API para consultas rápidas.
+5. **Analytics Service**: Executa análises agregadas (dashboards/relatórios).
+6. **Identity Service**: Gerencia usuários, permissões e autenticação JWT.
 
-5. **Orquestração de Alertas**
-   - Regras de Disparo
-   - Escalonamento e Quorum
-   - Integração com **Channels Service** para envio multi-canal
-   - Integração com **Reporting Service** para dashboards e KPIs
+## 6. Comunicação
 
-6. **Tenancy e Governança**
-   - Gestão de Tenants e Planos
-   - Limites e Billing
+- **Event-driven** (RabbitMQ): entre ingestão, processamento e indexação.
+- **HTTP/gRPC**: entre Query Service, Analytics e clientes externos.
+- **Cache (Redis)**: otimização de consultas repetidas.
 
-7. **Auditoria e Conformidade**
-   - Trilha de Auditoria
-   - Retenção e Conformidade
-
-8. **Observabilidade Operacional**
-   - Telemetria e SLIs/SLOs
-   - Saúde das Integrações
-
-> Observação: cada bounded context é responsável por suas regras de negócio, armazenamento e eventos específicos, garantindo desacoplamento e escalabilidade.
-
-## 5. Comunicação
-
-- **Event-driven (RabbitMQ/Kafka)** – entre ingestão, processamento, indexação e orquestração de alertas.
-- **HTTP/gRPC** – entre Query/Analytics Services, Channels Service, Reporting Service e clientes externos.
-- **Cache (Redis)** – otimização de consultas repetidas.
-
-**Fluxo de Alertas**:
-
-1. Ingestion Service envia evento normalizado (`EventoClimaticoDetectado`).
-2. Geospatial Service calcula regiões afetadas (`RegiaoIntersectada`).
-3. Risk Scoring Service calcula score e envia `RiscoAtualizado`.
-4. Alert Orchestrator avalia regras, quorum e escalonamento.
-5. **Channels Service** envia alertas multi-canal (SMS, Push, WhatsApp, Sirenes IoT).
-6. **Reporting Service** consolida alertas, métricas e confirmações para dashboards e KPIs.
-7. Compliance/Audit registra eventos críticos.
-
-> Observação: Channels e Reporting Services são essenciais para garantir entrega confiável e rastreabilidade de alertas.
-
-## 6. Tecnologias
+## 7. Tecnologias
 
 - **Backend**: ASP.NET Core (C#/.NET)
-- **Mensageria**: Kafka / RabbitMQ
+- **Mensageria**: RabbitMQ
 - **Cache**: Redis
 - **Indexação & Busca**: Elasticsearch (NEST client)
 - **Banco Relacional**: PostgreSQL
 - **Banco NoSQL**: MongoDB
-- **Containerização**: Docker + Docker Compose
-- Futuro: Kubernetes para orquestração
+- **Containerização**: Docker + Docker Compose (futuro: Kubernetes)
 
-## 7. Padrões Arquiteturais
+## 8. Padrões Arquiteturais
 
 - **DDD (Domain-Driven Design)**
 - **CQRS (Command Query Responsibility Segregation)**
@@ -107,29 +63,20 @@ A arquitetura é baseada em **microsserviços**, cada um responsável por um **b
 - **Event-Driven Architecture**
 - **SOLID Principles**
 
-## 8. Fluxo de Alto Nível
+## 9. Fluxo de Alto Nível
 
-1. Fonte externa envia log/evento → **Detecção e Ingestão**.
-2. Dados normalizados → **Catálogo de Riscos** e **Avaliação e Score de Risco**.
-3. Eventos processados → **Orquestração de Alertas**.
-4. **Channels Service** envia notificações multi-canal.
-5. **Reporting Service** consolida alertas e métricas para dashboards.
-6. **Observabilidade e Auditoria** coletam métricas, logs e trilhas de auditoria em paralelo.
-7. Dados agregados → **Query/Analytics Services** para dashboards e relatórios.
+1. Fonte externa envia log → **Ingestion Service**
+2. Log validado/enriquecido → evento no **RabbitMQ**
+3. **Processing Service** aplica transformações e publica novos eventos
+4. **Indexing Service** consome e envia para Elasticsearch
+5. **Query Service** expõe APIs para consultas rápidas
+6. **Analytics Service** executa agregações e análises em tempo real
 
-## 9. Observabilidade
+## 10. Observabilidade
 
-- **Logging centralizado** – Sentinel + ELK Stack.
-- **Health Checks** – endpoints de saúde dos serviços.
-- **Tracing distribuído** – OpenTelemetry.
-- **Metrics & Dashboards** – Prometheus/Grafana.
-
-## 10. Próximos Passos
-
-1. Definir **contracts de eventos** para cada bounded context, incluindo Channels e Reporting.
-2. Configurar pipelines de CI/CD para microsserviços.
-3. Implementar **strategies de retry e DLQ** para RabbitMQ/Kafka.
-4. Criar monitoramento e alertas proativos para Channels e Reporting Service.
+- **Logging centralizado**: próprio Sentinel + ELK Stack
+- **Health Checks**: endpoints de saúde
+- **Tracing distribuído**: OpenTelemetry
 
 ---
 
