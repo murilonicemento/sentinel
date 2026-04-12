@@ -7,18 +7,18 @@ using Microsoft.Extensions.Logging;
 
 namespace AlertOrchestrator.Application.Handlers;
 
-public sealed class ConfirmAlertReceiptCommandHandler : IRequestHandler<ConfirmAlertReceiptCommand>
+public sealed class ConfirmAlertReceiptEventHandler : IRequestHandler<ConfirmAlertReceiptCommand>
 {
     private readonly IEventPublisher _eventPublisher;
-    private readonly ILogger<ConfirmAlertReceiptCommandHandler> _logger;
+    private readonly ILogger<ConfirmAlertReceiptEventHandler> _logger;
     private readonly IAlertMetrics _metrics;
     private readonly IAlertWindowRepository _windowRepository;
 
-    public ConfirmAlertReceiptCommandHandler(
+    public ConfirmAlertReceiptEventHandler(
         IAlertWindowRepository windowRepository,
         IEventPublisher eventPublisher,
         IAlertMetrics metrics,
-        ILogger<ConfirmAlertReceiptCommandHandler> logger)
+        ILogger<ConfirmAlertReceiptEventHandler> logger)
     {
         _windowRepository = windowRepository;
         _eventPublisher = eventPublisher;

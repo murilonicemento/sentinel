@@ -6,6 +6,7 @@ using AlertOrchestrator.Infrastructure;
 using AlertOrchestrator.Infrastructure.Options;
 using Microsoft.AspNetCore.Mvc;
 using Scalar.AspNetCore;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,27 +45,33 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 });
 builder.Services.AddMediatR(cfg => { cfg.RegisterServicesFromAssembly(typeof(RiskUpdatedEvent).Assembly); });
 
-var alertOrchestratorConfig = builder.Configuration.GetSection("AlertOrchestrator");
+builder.Host.UseSerilog((context, config) =>
+{
+    config.ReadFrom.Configuration(context.Configuration)
+          .Enrich.FromLogContext()
+          .Enrich.WithEnvironmentName();
+});
+
+var kafkaConfig = builder.Configuration.GetSection("Kafka");
+var kafkaTopicsConfig = kafkaConfig.GetSection("Topics");
+var databaseConfig = builder.Configuration.GetSection("Database");
+var cacheConfig = builder.Configuration.GetSection("Cache");
+var idempotencyConfig = builder.Configuration.GetSection("Idempotency");
+
 var infrastructureOptions = new AlertOrchestratorInfrastructureOptions
 {
-    KafkaBootstrapServers = alertOrchestratorConfig["KafkaBootstrapServers"] ?? "localhost:9092",
-    ConsumerGroupId = alertOrchestratorConfig["ConsumerGroupId"] ?? "alert-orchestrator-group",
-    RiskUpdatedTopic = alertOrchestratorConfig["RiskUpdatedTopic"] ?? "risk-updated",
-    RegionIntersectedTopic = alertOrchestratorConfig["RegionIntersectedTopic"] ?? "region-intersected",
-    EventTopic = alertOrchestratorConfig["EventTopic"] ?? "alert-orchestrator-events",
-    CommandTopic = alertOrchestratorConfig["CommandTopic"] ?? "alert-commands",
-    UsePostgreSql = bool.TryParse(alertOrchestratorConfig["UsePostgreSql"], out var usePostgreSql) && usePostgreSql,
-    PostgreSqlConnectionString = alertOrchestratorConfig["PostgreSqlConnectionString"] ?? string.Empty,
-    UseRedis = bool.TryParse(alertOrchestratorConfig["UseRedis"], out var useRedis) && useRedis,
-    RedisConnectionString = alertOrchestratorConfig["RedisConnectionString"] ?? string.Empty,
-    IdempotencyExpiration =
-        TimeSpan.FromHours(int.TryParse(alertOrchestratorConfig["IdempotencyExpirationHours"], out var hours)
-            ? hours
-            : 24),
-    ExpirationCheckInterval =
-        TimeSpan.FromMinutes(int.TryParse(alertOrchestratorConfig["ExpirationCheckIntervalMinutes"], out var mins)
-            ? mins
-            : 1)
+    KafkaBootstrapServers = kafkaConfig.GetValue("BootstrapServers", "localhost:9093"),
+    ConsumerGroupId = kafkaConfig.GetValue("ConsumerGroupId", "alert-orchestrator-group"),
+    RiskUpdatedTopic = kafkaTopicsConfig.GetValue("RiskUpdated", "risk-updated"),
+    RegionIntersectedTopic = kafkaTopicsConfig.GetValue("RegionIntersected", "region-intersected"),
+    EventTopic = kafkaTopicsConfig.GetValue("Event", "alert-orchestrator-events"),
+    CommandTopic = kafkaTopicsConfig.GetValue("Command", "alert-commands"),
+    UsePostgreSql = databaseConfig.GetValue("UsePostgreSql", false),
+    PostgreSqlConnectionString = databaseConfig.GetValue("PostgreSqlConnectionString", string.Empty),
+    UseRedis = cacheConfig.GetValue("UseRedis", false),
+    RedisConnectionString = cacheConfig.GetValue("RedisConnectionString", string.Empty),
+    IdempotencyExpiration = TimeSpan.FromHours(idempotencyConfig.GetValue("ExpirationHours", 24)),
+    ExpirationCheckInterval = TimeSpan.FromMinutes(idempotencyConfig.GetValue("CheckIntervalMinutes", 1))
 };
 
 builder.Services.AddAlertOrchestratorInfrastructure(infrastructureOptions);

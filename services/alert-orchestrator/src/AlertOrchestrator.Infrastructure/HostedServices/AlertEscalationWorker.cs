@@ -73,32 +73,31 @@ public sealed class AlertEscalationWorker : BackgroundService
                 var nextLevel =
                     GetNextEscalationLevel(window.CurrentEscalationLevel, config.EscalationIntervals, elapsed);
 
-                if (nextLevel.HasValue && window.Escalate(nextLevel.Value))
-                {
-                    await repository.UpdateAsync(window, cancellationToken);
+                if (!nextLevel.HasValue || !window.Escalate(nextLevel.Value)) continue;
+                
+                await repository.UpdateAsync(window, cancellationToken);
 
-                    metrics.AlertEscalated(window.Region, window.RiskType.ToString(), nextLevel.Value);
-                    _logger.LogInformation(
-                        "AlertEscalated: Window {WindowId} escalated to {Level}. Region: {Region}, RiskType: {RiskType}, Elapsed: {Elapsed}",
-                        window.Id, nextLevel.Value, window.Region, window.RiskType, elapsed);
+                metrics.AlertEscalated(window.Region, window.RiskType.ToString(), nextLevel.Value);
+                _logger.LogInformation(
+                    "AlertEscalated: Window {WindowId} escalated to {Level}. Region: {Region}, RiskType: {RiskType}, Elapsed: {Elapsed}",
+                    window.Id, nextLevel.Value, window.Region, window.RiskType, elapsed);
 
-                    foreach (var domainEvent in window.DomainEvents)
-                        await eventPublisher.PublishAsync(domainEvent, cancellationToken);
-                    window.ClearDomainEvents();
+                foreach (var domainEvent in window.DomainEvents)
+                    await eventPublisher.PublishAsync(domainEvent, cancellationToken);
+                window.ClearDomainEvents();
 
-                    // Send escalated alert command
-                    var command = new TriggerAlertCommand(
-                        window.Id,
-                        window.Region,
-                        window.RiskType.ToString(),
-                        window.FinalRiskScore!.Value,
-                        window.Signals.Count,
-                        window.Signals.Select(s => s.Source.ToString()).ToList(),
-                        DateTime.UtcNow,
-                        nextLevel.Value);
+                // Send escalated alert command
+                var command = new TriggerAlertCommand(
+                    window.Id,
+                    window.Region,
+                    window.RiskType.ToString(),
+                    window.FinalRiskScore!.Value,
+                    window.Signals.Count,
+                    window.Signals.Select(s => s.Source.ToString()).ToList(),
+                    DateTime.UtcNow,
+                    nextLevel.Value);
 
-                    await commandPublisher.PublishAsync(command, cancellationToken);
-                }
+                await commandPublisher.PublishAsync(command, cancellationToken);
             }
             catch (Exception ex)
             {

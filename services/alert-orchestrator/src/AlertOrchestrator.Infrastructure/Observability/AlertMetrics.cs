@@ -11,7 +11,6 @@ public sealed class AlertMetrics : IAlertMetrics
     private readonly Counter<long> _alertsEscalated;
     private readonly Counter<long> _alertsExpired;
     private readonly Counter<long> _alertsTriggered;
-    private readonly Meter _meter;
     private readonly Counter<long> _quorumFailures;
     private readonly Counter<long> _signalsAdded;
     private readonly Counter<long> _windowsClosed;
@@ -19,41 +18,41 @@ public sealed class AlertMetrics : IAlertMetrics
 
     public AlertMetrics()
     {
-        _meter = new Meter("AlertOrchestrator", "1.0.0");
+        var meter = new Meter("AlertOrchestrator", "1.0.0");
 
-        _windowsOpened = _meter.CreateCounter<long>(
+        _windowsOpened = meter.CreateCounter<long>(
             "alert_windows_opened",
             description: "Number of alert windows opened");
 
-        _windowsClosed = _meter.CreateCounter<long>(
+        _windowsClosed = meter.CreateCounter<long>(
             "alert_windows_closed",
             description: "Number of alert windows closed");
 
-        _alertsTriggered = _meter.CreateCounter<long>(
+        _alertsTriggered = meter.CreateCounter<long>(
             "alerts_triggered",
             description: "Number of alerts triggered");
 
-        _alertsExpired = _meter.CreateCounter<long>(
+        _alertsExpired = meter.CreateCounter<long>(
             "alerts_expired",
             description: "Number of alert windows expired");
 
-        _quorumFailures = _meter.CreateCounter<long>(
+        _quorumFailures = meter.CreateCounter<long>(
             "quorum_failures",
             description: "Number of quorum validation failures");
 
-        _alertsConfirmed = _meter.CreateCounter<long>(
+        _alertsConfirmed = meter.CreateCounter<long>(
             "alerts_confirmed",
             description: "Number of alerts confirmed");
 
-        _alertsEscalated = _meter.CreateCounter<long>(
+        _alertsEscalated = meter.CreateCounter<long>(
             "alerts_escalated",
             description: "Number of alerts escalated");
 
-        _signalsAdded = _meter.CreateCounter<long>(
+        _signalsAdded = meter.CreateCounter<long>(
             "signals_added",
             description: "Number of signals added to windows");
 
-        _alertLatency = _meter.CreateHistogram<double>(
+        _alertLatency = meter.CreateHistogram<double>(
             "alert_latency_seconds",
             "s",
             "Time from window open to alert trigger");
