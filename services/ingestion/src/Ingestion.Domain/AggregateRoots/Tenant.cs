@@ -1,4 +1,4 @@
-﻿namespace Ingestion.Domain.AggregateRoots;
+namespace Ingestion.Domain.AggregateRoots;
 
 public class Tenant
 {

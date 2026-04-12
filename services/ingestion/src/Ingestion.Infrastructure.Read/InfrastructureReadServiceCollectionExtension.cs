@@ -1,4 +1,4 @@
-﻿using Ingestion.Infrastructure.Read.Persistence.DbContext;
+using Ingestion.Infrastructure.Read.Persistence.DbContext;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Ingestion.Infrastructure.Read;

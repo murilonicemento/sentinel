@@ -1,5 +1,4 @@
 ﻿using Confluent.Kafka;
-using Ingestion.Infrastructure.Write.HttpClients;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +8,7 @@ using RiskCatalog.Infrastructure.Cache;
 using RiskCatalog.Infrastructure.Messaging;
 using Polly;
 using Polly.Extensions.Http;
+using RiskCatalog.Infrastructure.HttpClients;
 using RiskCatalog.Infrastructure.Persistence.DatabaseContext;
 using RiskCatalog.Infrastructure.Persistence.Repositories;
 using StackExchange.Redis;

@@ -1,4 +1,4 @@
-﻿using Ingestion.Domain.Outbox;
+using Ingestion.Domain.Outbox;
 
 namespace Ingestion.Domain.Interfaces.Repositories;
 

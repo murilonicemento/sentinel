@@ -1,4 +1,4 @@
-﻿using Ingestion.Application.Events;
+using Ingestion.Application.Events;
 using Ingestion.Application.Queries;
 using Ingestion.Infrastructure.Read.Persistence.DbContext;
 using MediatR;

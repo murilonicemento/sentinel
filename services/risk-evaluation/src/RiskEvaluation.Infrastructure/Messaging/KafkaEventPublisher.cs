@@ -2,6 +2,7 @@ using RiskEvaluation.Application.Interfaces;
 using Confluent.Kafka;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using RiskEvaluation.Application.Interfaces.Messaging;
 
 namespace RiskEvaluation.Infrastructure.Messaging;
 

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RiskEvaluation.Application.Interfaces;
+using RiskEvaluation.Application.Interfaces.Messaging;
 
 namespace RiskEvaluation.Infrastructure.HostedServices;
 

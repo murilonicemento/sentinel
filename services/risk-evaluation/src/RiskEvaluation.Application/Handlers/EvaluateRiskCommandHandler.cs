@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using RiskEvaluation.Application.Commands;
 using RiskEvaluation.Application.DTOs;
 using RiskEvaluation.Application.Interfaces;
+using RiskEvaluation.Application.Interfaces.Services;
 using RiskEvaluation.Domain.ValueObjects;
 
 namespace RiskEvaluation.Application.Handlers;

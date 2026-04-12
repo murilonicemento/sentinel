@@ -1,4 +1,4 @@
-﻿namespace Ingestion.Domain.Enums;
+namespace Ingestion.Domain.Enums;
 
 public enum DisasterEventEnum
 {

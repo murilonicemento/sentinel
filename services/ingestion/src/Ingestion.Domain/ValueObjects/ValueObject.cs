@@ -1,4 +1,4 @@
-﻿namespace Ingestion.Domain.ValueObjects;
+namespace Ingestion.Domain.ValueObjects;
 
 public abstract class ValueObject
 {

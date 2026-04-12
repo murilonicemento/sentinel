@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Outbox;
 using Ingestion.Infrastructure.Write.Persistence.DbContext;

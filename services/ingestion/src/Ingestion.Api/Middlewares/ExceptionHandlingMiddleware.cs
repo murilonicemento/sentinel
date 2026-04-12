@@ -1,4 +1,4 @@
-﻿namespace Ingestion.Api.Middlewares;
+namespace Ingestion.Api.Middlewares;
 
 public class ExceptionHandlingMiddleware
 {

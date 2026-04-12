@@ -1,4 +1,4 @@
-﻿using Ingestion.Application.Commands;
+using Ingestion.Application.Commands;
 using Ingestion.Domain.AggregateRoots;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Interfaces.Repositories;

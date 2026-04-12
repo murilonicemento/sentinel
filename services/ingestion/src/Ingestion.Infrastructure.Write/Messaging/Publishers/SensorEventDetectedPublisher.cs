@@ -1,4 +1,4 @@
-﻿using Confluent.Kafka;
+using Confluent.Kafka;
 using Ingestion.Application.Events;
 using Ingestion.Application.Interfaces.Publishers;
 using Microsoft.Extensions.Logging;

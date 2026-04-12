@@ -2,36 +2,34 @@ sequenceDiagram
     autonumber
     participant Sensor
     participant Ingestion as Ingestion Service
+    participant Kafka as Event Broker
     participant Geospatial as Geospatial Service
-    participant RiskScoring as Risk Scoring Service
+    participant RiskCatalog as Risk Catalog Service
+    participant RiskEvaluation as Risk Evaluation Service
     participant Orchestrator as Alert Orchestrator
-    participant Channels as Channels Service
-    participant Audit as Compliance Audit Service
-    participant Reporting as Reporting Readmodel Service
+    participant Channels as Alert Delivery
 
     %% 1. Sensor envia dados
     Sensor->>Ingestion: RegistrarColetaSensor / RegistrarEventoNatural
-    Note right of Ingestion: Normaliza, valida e deduplica dados
-    Ingestion->>Geospatial: EventoClimaticoDetectado
-    Ingestion->>Reporting: EventoClimaticoDetectado
-       
-    %% 2. Geospatial calcula zonas de risco
-    Geospatial->>RiskScoring: RegiaoIntersectada
-    Geospatial->>Reporting: RegiaoIntersectada
-    
-    %% 3. Risk Scoring calcula score
-    RiskScoring->>Orchestrator: RiscoAtualizado
-    RiskScoring->>Reporting: RiscoAtualizado
-    
-    %% 4. Orquestrador avalia políticas e dispara alertas
-    Orchestrator->>Channels: DispararAlerta
-    Orchestrator->>Audit: AlertaDisparado
-    Orchestrator->>Reporting: JanelaAlertaAberta / AlertaDisparado
-    
-    %% 5. Channels envia alertas
-    Channels->>Populacao: SMS / Push / WhatsApp / Sirenes
-    Channels->>Orchestrator: AlertaConfirmado
-    Channels->>Reporting: AlertaEntregue / AlertaConfirmado
-    
-    %% 6. Audit registra eventos críticos
-    Audit->>Reporting: Eventos armazenados para dashboards e KPIs
+    Note right of Ingestion: Normaliza, valida e publica evento
+    Ingestion->>Kafka: SensorEventDetected
+
+    %% 2. Eventos chegam ao processamento
+    Kafka->>Geospatial: SensorEventDetected
+    Kafka->>RiskEvaluation: SensorEventDetected
+    Kafka->>RiskCatalog: (opcional) atualização de catálogo
+
+    %% 3. Geospatial processa contexto espacial
+    Geospatial->>Kafka: RegionIntersected
+    Kafka->>Orchestrator: RegionIntersected
+
+    %% 4. Risk Evaluation calcula risco
+    RiskCatalog->>Kafka: RiskCatalogPublished
+    Kafka->>RiskEvaluation: RiskCatalogPublished
+    RiskEvaluation->>Geospatial: GetSpatialContext
+    RiskEvaluation->>Kafka: RiskUpdated / RiskEvaluated / HighRiskDetected
+    Kafka->>Orchestrator: RiskUpdated
+
+    %% 5. Orquestrador avalia e dispara alerta
+    Orchestrator->>Channels: TriggerAlert
+    Channels->>Orchestrator: AlertConfirmed

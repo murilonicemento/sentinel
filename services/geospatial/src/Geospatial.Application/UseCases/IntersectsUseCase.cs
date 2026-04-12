@@ -1,3 +1,4 @@
+using Geospatial.Application.Interfaces.Messaging;
 using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Domain.Events;
 using Geospatial.Domain.Geometry;
@@ -11,15 +12,18 @@ public class IntersectsUseCase : IIntersectsUseCase
 {
     private readonly IGeospatialCalculator _calculator;
     private readonly IGeospatialEventRepository _eventRepository;
+    private readonly IRegionIntersectedPublisher _regionIntersectedPublisher;
     private readonly ILogger<IntersectsUseCase> _logger;
 
     public IntersectsUseCase(
         IGeospatialCalculator calculator,
         IGeospatialEventRepository eventRepository,
+        IRegionIntersectedPublisher regionIntersectedPublisher,
         ILogger<IntersectsUseCase> logger)
     {
         _calculator = calculator;
         _eventRepository = eventRepository;
+        _regionIntersectedPublisher = regionIntersectedPublisher;
         _logger = logger;
     }
 
@@ -54,6 +58,11 @@ public class IntersectsUseCase : IIntersectsUseCase
         };
 
         await _eventRepository.IndexAsync(evt, cancellationToken);
+
+        if (result)
+        {
+            await _regionIntersectedPublisher.PublishAsync(evt, cancellationToken);
+        }
 
         return result;
     }

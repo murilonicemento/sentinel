@@ -1,3 +1,4 @@
+using Geospatial.Application.Interfaces.Messaging;
 using Geospatial.Application.UseCases;
 using Geospatial.Domain.Events;
 using Geospatial.Domain.Geometry;
@@ -13,6 +14,7 @@ public class IntersectsUseCaseTests
 {
     private readonly Mock<IGeospatialCalculator> _mockCalculator;
     private readonly Mock<IGeospatialEventRepository> _mockEventRepository;
+    private readonly Mock<IRegionIntersectedPublisher> _mockPublisher;
     private readonly Mock<ILogger<IntersectsUseCase>> _mockLogger;
     private readonly IntersectsUseCase _sut;
 
@@ -22,8 +24,15 @@ public class IntersectsUseCaseTests
         _mockEventRepository = new Mock<IGeospatialEventRepository>();
         _mockEventRepository.Setup(x => x.IndexAsync(It.IsAny<GeospatialOperationEvent>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+        _mockPublisher = new Mock<IRegionIntersectedPublisher>();
+        _mockPublisher.Setup(x => x.PublishAsync(It.IsAny<GeospatialOperationEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
         _mockLogger = new Mock<ILogger<IntersectsUseCase>>();
-        _sut = new IntersectsUseCase(_mockCalculator.Object, _mockEventRepository.Object, _mockLogger.Object);
+        _sut = new IntersectsUseCase(
+            _mockCalculator.Object,
+            _mockEventRepository.Object,
+            _mockPublisher.Object,
+            _mockLogger.Object);
     }
 
     [Fact]
@@ -38,6 +47,7 @@ public class IntersectsUseCaseTests
 
         Assert.True(result);
         _mockCalculator.Verify(x => x.Intersects(polyA, polyB), Times.Once);
+        _mockPublisher.Verify(x => x.PublishAsync(It.IsAny<GeospatialOperationEvent>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -51,6 +61,7 @@ public class IntersectsUseCaseTests
         var result = await _sut.ExecuteAsync(polyA, polyB);
 
         Assert.False(result);
+        _mockPublisher.Verify(x => x.PublishAsync(It.IsAny<GeospatialOperationEvent>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     private static GeoPolygon CreateTestPolygon()

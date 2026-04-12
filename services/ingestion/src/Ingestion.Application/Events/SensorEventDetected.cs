@@ -1,4 +1,4 @@
-﻿using Ingestion.Domain.Enums;
+using Ingestion.Domain.Enums;
 
 namespace Ingestion.Application.Events;
 

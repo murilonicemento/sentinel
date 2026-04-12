@@ -85,6 +85,8 @@ public static class ServiceCollectionExtension
             return new ConsumerBuilder<Null, string>(config).Build();
         });
 
+        services.AddSingleton<Geospatial.Application.Interfaces.Messaging.IRegionIntersectedPublisher, Messaging.Publishers.RegionIntersectedPublisher>();
+
         return services;
     }
 }

@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using RiskCatalog.Application.DTO;
 using RiskCatalog.Application.Interfaces;
 
-namespace Ingestion.Infrastructure.Write.HttpClients;
+namespace RiskCatalog.Infrastructure.HttpClients;
 
 public class GeospatialClient : IGeospatialClient
 {

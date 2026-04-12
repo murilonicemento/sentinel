@@ -1,4 +1,4 @@
-﻿using Ingestion.Application.DTO;
+using Ingestion.Application.DTO;
 
 namespace Ingestion.Application.Interfaces.Services;
 

@@ -1,4 +1,4 @@
-﻿using Ingestion.Domain.AggregateRoots;
+using Ingestion.Domain.AggregateRoots;
 
 namespace Ingestion.Domain.Interfaces.Repositories;
 

@@ -1,4 +1,4 @@
-﻿using Ingestion.Application.Interfaces.Deduplicators;
+using Ingestion.Application.Interfaces.Deduplicators;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 

@@ -1,4 +1,4 @@
-﻿namespace Ingestion.Application.DTO;
+﻿namespace RiskEvaluation.Application.DTOs;
 
 public record ResponseBaseDTO<T>
 {

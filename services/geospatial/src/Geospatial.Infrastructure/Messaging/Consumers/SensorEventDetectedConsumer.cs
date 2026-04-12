@@ -86,7 +86,6 @@ public sealed class SensorEventDetectedConsumer : BackgroundService
             var evt = JsonSerializer.Deserialize<SensorEventDetected>(messageValue, JsonOptions);
             if (evt == null) return false;
 
-            // exemplo de interface que TEvent deve ter
             if (!IsValidCoordinates(evt.Latitude, evt.Longitude)) return false;
 
             var geospatialEvent = new GeospatialOperationEvent

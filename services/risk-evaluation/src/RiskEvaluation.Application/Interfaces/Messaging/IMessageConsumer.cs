@@ -1,4 +1,4 @@
-namespace RiskEvaluation.Application.Interfaces;
+namespace RiskEvaluation.Application.Interfaces.Messaging;
 
 public interface IMessageConsumer : IAsyncDisposable
 {

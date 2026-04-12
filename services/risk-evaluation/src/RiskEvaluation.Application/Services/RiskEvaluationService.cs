@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using RiskEvaluation.Application.Interfaces;
 using RiskEvaluation.Application.Interfaces.HttpClients;
+using RiskEvaluation.Application.Interfaces.Messaging;
+using RiskEvaluation.Application.Interfaces.Services;
 using RiskEvaluation.Domain.Enums;
 using RiskEvaluation.Domain.Events;
 using RiskEvaluation.Domain.Interfaces;

@@ -10,6 +10,7 @@ using RiskEvaluation.Domain.Repositories;
 using RiskEvaluation.Domain.Services;
 using RiskEvaluation.Application.Interfaces;
 using RiskEvaluation.Application.Interfaces.HttpClients;
+using RiskEvaluation.Application.Interfaces.Messaging;
 using RiskEvaluation.Domain.ValueObjects;
 
 namespace RiskEvaluation.UnitTests.Services;

@@ -1,4 +1,4 @@
-﻿namespace Ingestion.Application.DTO;
+namespace Ingestion.Application.DTO;
 
 public record RadiusDTO
 {

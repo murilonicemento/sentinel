@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using RiskEvaluation.Domain.Contracts;
 using Microsoft.Extensions.Logging;
+using RiskEvaluation.Application.Interfaces.Messaging;
 
 namespace RiskEvaluation.Infrastructure.Messaging;
 
