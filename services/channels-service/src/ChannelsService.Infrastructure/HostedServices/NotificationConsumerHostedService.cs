@@ -14,15 +14,18 @@ public sealed class NotificationConsumerHostedService : BackgroundService
     private readonly IConfiguration _configuration;
     private readonly ILogger<NotificationConsumerHostedService> _logger;
     private readonly IChannelDeliveryService _deliveryService;
+    private readonly IDeadLetterPublisher _deadLetterPublisher;
 
     public NotificationConsumerHostedService(
         IConfiguration configuration,
         ILogger<NotificationConsumerHostedService> logger,
-        IChannelDeliveryService deliveryService)
+        IChannelDeliveryService deliveryService,
+        IDeadLetterPublisher deadLetterPublisher)
     {
         _configuration = configuration;
         _logger = logger;
         _deliveryService = deliveryService;
+        _deadLetterPublisher = deadLetterPublisher;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -77,8 +80,22 @@ public sealed class NotificationConsumerHostedService : BackgroundService
                         continue;
                     }
 
-                    _logger.LogInformation("Received notification event {EventId} from Kafka.", notification.EventId);
-                    await _deliveryService.DeliverAsync(notification, stoppingToken);
+                    _logger.LogInformation(
+                        "Received notification event {EventId} type {EventType} correlation {CorrelationId} from Kafka.",
+                        notification.EventId,
+                        notification.EventType,
+                        notification.CorrelationId);
+
+                    var deliveryResult = await _deliveryService.DeliverAsync(notification, stoppingToken);
+                    if (!deliveryResult.Success)
+                    {
+                        _logger.LogError(
+                            "Notification event {EventId} failed processing: {Error}",
+                            notification.EventId,
+                            deliveryResult.Error);
+
+                        await _deadLetterPublisher.PublishAsync(notification, deliveryResult, stoppingToken);
+                    }
                 }
                 catch (OperationCanceledException)
                 {

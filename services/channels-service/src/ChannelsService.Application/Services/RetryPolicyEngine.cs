@@ -1,6 +1,8 @@
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Models;
 using Microsoft.Extensions.Logging;
+using Polly;
+using Polly.Timeout;
 
 namespace ChannelsService.Application.Services;
 
@@ -13,38 +15,55 @@ public sealed class RetryPolicyEngine : IRetryPolicyEngine
         _logger = logger;
     }
 
-    public async Task<DeliveryResult> ExecuteAsync(Func<Task<DeliveryResult>> sendFunc, int maxAttempts, CancellationToken cancellationToken)
+    public async Task<DeliveryResult> ExecuteAsync(Func<CancellationToken, Task<DeliveryResult>> sendFunc, int maxAttempts, ProviderResilienceOptions resilienceOptions, CancellationToken cancellationToken)
     {
-        DeliveryResult lastResult = new() { Success = false, Error = "No send attempt executed." };
+        var jitter = new Random();
 
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                return new DeliveryResult { Success = false, Error = "Retry cancelled." };
-            }
-
-            try
-            {
-                lastResult = await sendFunc();
-                if (lastResult.Success)
+        var retryPolicy = Policy<DeliveryResult>
+            .Handle<Exception>()
+            .OrResult(result => !result.Success)
+            .WaitAndRetryAsync(
+                maxAttempts,
+                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)) + TimeSpan.FromMilliseconds(jitter.Next(0, 250)),
+                onRetry: (outcome, timeSpan, retryCount, context) =>
                 {
-                    return lastResult;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error executing retry policy on attempt {Attempt}.", attempt);
-                lastResult = new DeliveryResult { Success = false, Error = ex.Message };
-            }
+                    if (outcome.Exception != null)
+                    {
+                        _logger.LogWarning(outcome.Exception, "Retry {RetryCount} failed with exception.", retryCount);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Retry {RetryCount} received unsuccessful result: {Error}", retryCount, outcome.Result?.Error);
+                    }
+                });
 
-            if (attempt < maxAttempts)
-            {
-                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)) + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 250));
-                await Task.Delay(delay, cancellationToken);
-            }
+        AsyncPolicy<DeliveryResult> policy = retryPolicy;
+
+        if (resilienceOptions.CircuitBreakerFailureThreshold > 0)
+        {
+            var circuitBreakerPolicy = Policy<DeliveryResult>
+                .Handle<Exception>()
+                .OrResult(result => !result.Success)
+                .CircuitBreakerAsync(
+                    resilienceOptions.CircuitBreakerFailureThreshold,
+                    TimeSpan.FromSeconds(resilienceOptions.CircuitBreakerDurationSeconds),
+                    onBreak: (outcome, breakDelay, context) =>
+                    {
+                        _logger.LogWarning(outcome.Exception, "Circuit breaker opened for {BreakDelay} after failure.", breakDelay);
+                    },
+                    onReset: context => _logger.LogInformation("Circuit breaker reset."),
+                    onHalfOpen: () => _logger.LogInformation("Circuit breaker is half-open."));
+
+            policy = circuitBreakerPolicy.WrapAsync(policy);
         }
 
-        return lastResult;
+        if (resilienceOptions.TimeoutSeconds > 0)
+        {
+            var timeoutPolicy = Policy.TimeoutAsync<DeliveryResult>(TimeSpan.FromSeconds(resilienceOptions.TimeoutSeconds), TimeoutStrategy.Optimistic);
+            policy = timeoutPolicy.WrapAsync(policy);
+        }
+
+        var executionResult = await policy.ExecuteAsync(async ct => await sendFunc(ct), cancellationToken);
+        return executionResult;
     }
 }

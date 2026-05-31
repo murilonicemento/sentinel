@@ -36,8 +36,11 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
         var settings = _settingsProvider.GetSettings(notification.TenantId);
         var orderedChannels = _fallbackExecutor.GetFallbackOrder(notification, settings);
 
-        _logger.LogInformation("Starting delivery for event {EventId} on tenant {TenantId}. Channels: {Channels}",
+        _logger.LogInformation(
+            "Starting delivery for event {EventId} type {EventType} correlation {CorrelationId} on tenant {TenantId}. Channels: {Channels}",
             notification.EventId,
+            notification.EventType,
+            notification.CorrelationId,
             notification.TenantId,
             string.Join(',', orderedChannels));
 
@@ -55,20 +58,27 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                 continue;
             }
 
-            var maxRetries = settings.MaxRetries.TryGetValue(channel, out var retries) ? retries : 3;
+            var maxRetries = settings.MaxRetries.GetValueOrDefault(channel, 3);
             var attemptNumber = 0;
+            var resilienceOptions = (provider as IResilientChannelProvider)?.ResilienceOptions ?? new ProviderResilienceOptions();
 
-            var attemptResult = await _retryPolicyEngine.ExecuteAsync(async () =>
+            var attemptResult = await _retryPolicyEngine.ExecuteAsync(async ct =>
             {
                 attemptNumber++;
-                var deliveryResult = await provider.SendAsync(notification, cancellationToken);
-                var status = deliveryResult.Success ? DeliveryStatus.Sent : DeliveryStatus.Failed;
+                var deliveryResult = await provider.SendAsync(notification, ct);
+                deliveryResult.ProviderName = provider.ProviderName;
+
+                var status = deliveryResult.Success
+                    ? attemptNumber > 1 ? DeliveryStatus.Retried : DeliveryStatus.Sent
+                    : DeliveryStatus.Failed;
 
                 await _deliveryRepository.AddAsync(new DeliveryAttempt
                 {
+                    AttemptId = Guid.NewGuid().ToString("N"),
                     EventId = notification.EventId,
                     TenantId = notification.TenantId,
                     Channel = channel,
+                    Provider = provider.ProviderName,
                     Status = status,
                     AttemptCount = attemptNumber,
                     ErrorMessage = deliveryResult.Error,
@@ -76,15 +86,24 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                 });
 
                 return deliveryResult;
-            }, maxRetries, cancellationToken);
+            }, maxRetries, resilienceOptions, cancellationToken);
 
             if (attemptResult.Success)
             {
-                _logger.LogInformation("Delivery succeeded for event {EventId} on channel {Channel}.", notification.EventId, channel);
+                _logger.LogInformation(
+                    "Delivery succeeded for event {EventId} on channel {Channel} using provider {Provider}.",
+                    notification.EventId,
+                    channel,
+                    attemptResult.ProviderName);
                 return attemptResult;
             }
 
-            _logger.LogWarning("Channel {Channel} failed for event {EventId}: {Error}", channel, notification.EventId, attemptResult.Error);
+            _logger.LogWarning(
+                "Channel {Channel} failed for event {EventId} after {Attempts} attempts: {Error}",
+                channel,
+                notification.EventId,
+                maxRetries,
+                attemptResult.Error);
         }
 
         return new DeliveryResult { Success = false, Error = "All configured channels failed." };

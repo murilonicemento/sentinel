@@ -5,6 +5,7 @@ public enum ChannelType
     Sms,
     Email,
     Push,
+    Mqtt,
     WhatsApp,
     Siren
 }

@@ -8,5 +8,6 @@ namespace ChannelsService.Domain.Interfaces;
 public interface IChannelProvider
 {
     ChannelType ChannelType { get; }
+    string ProviderName { get; }
     Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken);
 }

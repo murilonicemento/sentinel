@@ -15,7 +15,7 @@ public sealed class FallbackExecutor : IFallbackExecutor
             ? requestedChannels.Where(settings.EnabledChannels.Contains).ToList()
             : enabledChannels;
 
-        if (settings.FallbackOrder.Any())
+        if (settings.FallbackOrder.Any() && notification.FallbackEnabled)
         {
             return settings.FallbackOrder
                 .Where(candidateChannels.Contains)
@@ -23,6 +23,9 @@ public sealed class FallbackExecutor : IFallbackExecutor
                 .ToList();
         }
 
-        return candidateChannels.Distinct().ToList();
+        return candidateChannels
+            .Distinct()
+            .OrderBy(channel => settings.PriorityOrder.GetValueOrDefault(channel, int.MaxValue))
+            .ToList();
     }
 }

@@ -34,20 +34,22 @@ public sealed class ConfigurationTenantChannelSettingsProvider : ITenantChannelS
     private static TenantChannelSettings GetFallbackDefault() => new()
     {
         TenantId = "default",
-        EnabledChannels = new List<ChannelType> { ChannelType.Sms, ChannelType.Email, ChannelType.Push },
+        EnabledChannels = new List<ChannelType> { ChannelType.Sms, ChannelType.Email, ChannelType.Push, ChannelType.Mqtt },
         PriorityOrder = new Dictionary<ChannelType, int>
         {
             [ChannelType.Sms] = 1,
             [ChannelType.Email] = 2,
             [ChannelType.Push] = 3,
-            [ChannelType.WhatsApp] = 4,
-            [ChannelType.Siren] = 5
+            [ChannelType.Mqtt] = 4,
+            [ChannelType.WhatsApp] = 5,
+            [ChannelType.Siren] = 6
         },
         MaxRetries = new Dictionary<ChannelType, int>
         {
             [ChannelType.Sms] = 3,
             [ChannelType.Email] = 2,
             [ChannelType.Push] = 2,
+            [ChannelType.Mqtt] = 2,
             [ChannelType.WhatsApp] = 2,
             [ChannelType.Siren] = 3
         },

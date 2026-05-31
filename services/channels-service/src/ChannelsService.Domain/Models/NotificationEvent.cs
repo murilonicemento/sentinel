@@ -8,6 +8,9 @@ public sealed class NotificationEvent
     public string EventId { get; set; } = string.Empty;
     public string TenantId { get; set; } = string.Empty;
     public string UserId { get; set; } = string.Empty;
+    public string EventType { get; set; } = string.Empty;
+    public string CorrelationId { get; set; } = string.Empty;
+    public bool FallbackEnabled { get; set; } = true;
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public NotificationPriority Priority { get; set; } = NotificationPriority.Medium;
