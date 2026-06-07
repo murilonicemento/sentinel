@@ -5,12 +5,12 @@ namespace ChannelsService.Infrastructure.Persistence;
 
 public sealed class ChannelsServiceDbContext : DbContext
 {
+    public DbSet<DeliveryAttempt> DeliveryAttempts { get; set; }
+
     public ChannelsServiceDbContext(DbContextOptions<ChannelsServiceDbContext> options)
         : base(options)
     {
     }
-
-    public DbSet<DeliveryAttempt> DeliveryAttempts { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

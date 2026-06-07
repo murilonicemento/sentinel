@@ -4,6 +4,7 @@ using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Models;
 using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -12,20 +13,18 @@ namespace ChannelsService.Infrastructure.HostedServices;
 public sealed class NotificationConsumerHostedService : BackgroundService
 {
     private readonly IConfiguration _configuration;
+
     private readonly ILogger<NotificationConsumerHostedService> _logger;
-    private readonly IChannelDeliveryService _deliveryService;
-    private readonly IDeadLetterPublisher _deadLetterPublisher;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
 
     public NotificationConsumerHostedService(
         IConfiguration configuration,
         ILogger<NotificationConsumerHostedService> logger,
-        IChannelDeliveryService deliveryService,
-        IDeadLetterPublisher deadLetterPublisher)
+        IServiceScopeFactory scopeFactory)
     {
         _configuration = configuration;
         _logger = logger;
-        _deliveryService = deliveryService;
-        _deadLetterPublisher = deadLetterPublisher;
+        _serviceScopeFactory = scopeFactory;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -33,7 +32,8 @@ public sealed class NotificationConsumerHostedService : BackgroundService
         var bootstrapServers = _configuration["Kafka:BootstrapServers"];
         if (string.IsNullOrWhiteSpace(bootstrapServers))
         {
-            _logger.LogWarning("Kafka bootstrap servers are not configured. NotificationConsumerHostedService will not start.");
+            _logger.LogWarning(
+                "Kafka bootstrap servers are not configured. NotificationConsumerHostedService will not start.");
             return;
         }
 
@@ -68,11 +68,12 @@ public sealed class NotificationConsumerHostedService : BackgroundService
                         continue;
                     }
 
-                    var notification = JsonSerializer.Deserialize<NotificationEvent>(consumeResult.Message.Value, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true,
-                        Converters = { new JsonStringEnumConverter() }
-                    });
+                    var notification = JsonSerializer.Deserialize<NotificationEvent>(consumeResult.Message.Value,
+                        new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true,
+                            Converters = { new JsonStringEnumConverter() }
+                        });
 
                     if (notification == null)
                     {
@@ -86,16 +87,21 @@ public sealed class NotificationConsumerHostedService : BackgroundService
                         notification.EventType,
                         notification.CorrelationId);
 
-                    var deliveryResult = await _deliveryService.DeliverAsync(notification, stoppingToken);
-                    if (!deliveryResult.Success)
-                    {
-                        _logger.LogError(
-                            "Notification event {EventId} failed processing: {Error}",
-                            notification.EventId,
-                            deliveryResult.Error);
+                    using var scope = _serviceScopeFactory.CreateScope();
+                    var deliveryService =
+                        scope.ServiceProvider.GetRequiredService<IChannelDeliveryService>();
+                    var deadLetterPublisher =
+                        scope.ServiceProvider.GetRequiredService<IDeadLetterPublisher>();
+                    var deliveryResult = await deliveryService.DeliverAsync(notification, stoppingToken);
 
-                        await _deadLetterPublisher.PublishAsync(notification, deliveryResult, stoppingToken);
-                    }
+                    if (deliveryResult.Success) continue;
+
+                    _logger.LogError(
+                        "Notification event {EventId} failed processing: {Error}",
+                        notification.EventId,
+                        deliveryResult.Error);
+
+                    await deadLetterPublisher.PublishAsync(notification, deliveryResult, stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {

@@ -4,6 +4,7 @@ using ChannelsService.Domain.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
+using MQTTnet.Protocol;
 
 namespace ChannelsService.Infrastructure.Providers;
 
@@ -52,20 +53,20 @@ public sealed class MqttChannelProvider : ChannelProviderBase
                 .WithTcpServer(_options.Broker, _options.Port)
                 .Build();
 
-            var mqttFactory = new MqttFactory();
+            var mqttFactory = new MqttClientFactory();
             using var mqttClient = mqttFactory.CreateMqttClient();
             await mqttClient.ConnectAsync(clientOptions, cancellationToken);
 
             var message = new MqttApplicationMessageBuilder()
                 .WithTopic(topic)
                 .WithPayload(payload)
-                .WithAtLeastOnceQoS()
+                .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
                 .Build();
 
             var result = await mqttClient.PublishAsync(message, cancellationToken);
-            await mqttClient.DisconnectAsync(cancellationToken);
+            await mqttClient.DisconnectAsync(new MqttClientDisconnectOptionsBuilder().Build(), cancellationToken);
 
-            if (result.ReasonCode == MQTTnet.Client.Publishing.MqttClientPublishReasonCode.Success)
+            if (result.ReasonCode == MqttClientPublishReasonCode.Success)
             {
                 _logger.LogInformation("MQTT published notification {EventId} to topic {Topic}.", notification.EventId, topic);
                 return new DeliveryResult { Success = true, ProviderName = ProviderName };

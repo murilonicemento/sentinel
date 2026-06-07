@@ -16,7 +16,8 @@ namespace ChannelsService.Infrastructure;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddChannelsServiceInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddChannelsServiceInfrastructure(this IServiceCollection services,
+        IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("ChannelsServiceDatabase");
         if (!string.IsNullOrWhiteSpace(connectionString))
@@ -44,7 +45,8 @@ public static class ServiceCollectionExtensions
         var emailProviderType = configuration["ChannelsService:Providers:Email:Type"];
         if (string.Equals(emailProviderType, "SendGrid", StringComparison.OrdinalIgnoreCase))
         {
-            services.Configure<ChannelProviderSettings<SendGridProviderOptions>>(configuration.GetSection("ChannelsService:Providers:Email"));
+            services.Configure<ChannelProviderSettings<SendGridProviderOptions>>(
+                configuration.GetSection("ChannelsService:Providers:Email"));
             services.AddSingleton<IChannelProvider, SendGridEmailChannelProvider>();
         }
         else
@@ -55,7 +57,8 @@ public static class ServiceCollectionExtensions
         var smsProviderType = configuration["ChannelsService:Providers:Sms:Type"];
         if (string.Equals(smsProviderType, "Twilio", StringComparison.OrdinalIgnoreCase))
         {
-            services.Configure<ChannelProviderSettings<TwilioProviderOptions>>(configuration.GetSection("ChannelsService:Providers:Sms"));
+            services.Configure<ChannelProviderSettings<TwilioProviderOptions>>(
+                configuration.GetSection("ChannelsService:Providers:Sms"));
             services.AddSingleton<IChannelProvider, TwilioSmsChannelProvider>();
         }
         else
@@ -66,7 +69,8 @@ public static class ServiceCollectionExtensions
         var whatsappProviderType = configuration["ChannelsService:Providers:WhatsApp:Type"];
         if (string.Equals(whatsappProviderType, "TwilioWhatsApp", StringComparison.OrdinalIgnoreCase))
         {
-            services.Configure<ChannelProviderSettings<TwilioProviderOptions>>(configuration.GetSection("ChannelsService:Providers:WhatsApp"));
+            services.Configure<ChannelProviderSettings<TwilioProviderOptions>>(
+                configuration.GetSection("ChannelsService:Providers:WhatsApp"));
             services.AddSingleton<IChannelProvider, TwilioWhatsAppChannelProvider>();
         }
         else
@@ -75,11 +79,20 @@ public static class ServiceCollectionExtensions
         }
 
         var mqttProviderType = configuration["ChannelsService:Providers:MQTT:Type"];
-        if (string.Equals(mqttProviderType, "Mqtt", StringComparison.OrdinalIgnoreCase) || string.Equals(mqttProviderType, "MQTT", StringComparison.OrdinalIgnoreCase))
-        {
-            services.Configure<ChannelProviderSettings<MqttProviderOptions>>(configuration.GetSection("ChannelsService:Providers:MQTT"));
-            services.AddSingleton<IChannelProvider, MqttChannelProvider>();
-        }
+        if (!string.Equals(mqttProviderType, "Mqtt", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(mqttProviderType, "MQTT", StringComparison.OrdinalIgnoreCase))
+            return services
+                .AddSingleton<IDeadLetterPublisher, KafkaDeadLetterPublisher>()
+                .AddSingleton<INotificationPublisher, KafkaNotificationPublisher>()
+                .AddScoped<IChannelDeliveryService, ChannelDeliveryService>()
+                .AddScoped<IRetryPolicyEngine, RetryPolicyEngine>()
+                .AddScoped<IFallbackExecutor, FallbackExecutor>()
+                .AddScoped<IChannelProvider, PushChannelProvider>()
+                .AddScoped<IChannelProvider, SirenChannelProvider>()
+                .AddHostedService<NotificationConsumerHostedService>();
+        services.Configure<ChannelProviderSettings<MqttProviderOptions>>(
+            configuration.GetSection("ChannelsService:Providers:MQTT"));
+        services.AddSingleton<IChannelProvider, MqttChannelProvider>();
 
         return services
             .AddSingleton<IDeadLetterPublisher, KafkaDeadLetterPublisher>()
