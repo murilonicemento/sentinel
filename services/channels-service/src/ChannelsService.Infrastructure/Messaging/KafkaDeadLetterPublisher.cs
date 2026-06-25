@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ChannelsService.Application.Interfaces;
-using ChannelsService.Domain.Models;
+using ChannelsService.Domain.Entities;
 using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -12,10 +12,12 @@ public sealed class KafkaDeadLetterPublisher : IDeadLetterPublisher, IAsyncDispo
 {
     private readonly IProducer<Null, string> _producer;
     private readonly string _topic;
+    private readonly IChannelMetrics _metrics;
     private readonly ILogger<KafkaDeadLetterPublisher> _logger;
 
-    public KafkaDeadLetterPublisher(IConfiguration configuration, ILogger<KafkaDeadLetterPublisher> logger)
+    public KafkaDeadLetterPublisher(IConfiguration configuration, IChannelMetrics metrics, ILogger<KafkaDeadLetterPublisher> logger)
     {
+        _metrics = metrics;
         _logger = logger;
         _topic = configuration["Kafka:DeadLetterTopic"] ?? "notification-events-dlq";
 
@@ -59,13 +61,16 @@ public sealed class KafkaDeadLetterPublisher : IDeadLetterPublisher, IAsyncDispo
             var message = new Message<Null, string> { Value = payload };
             var delivery = await _producer.ProduceAsync(_topic, message, cancellationToken);
             _logger.LogInformation("Published notification {EventId} to DLQ topic {Topic} at offset {Offset}.", notification.EventId, _topic, delivery.Offset.Value);
+            _metrics.RecordDeadLetterPublished(true);
         }
         catch (ProduceException<Null, string> exception)
         {
+            _metrics.RecordDeadLetterPublished(false);
             _logger.LogError(exception, "Failed to publish notification {EventId} to DLQ topic {Topic}.", notification.EventId, _topic);
         }
         catch (Exception exception)
         {
+            _metrics.RecordDeadLetterPublished(false);
             _logger.LogError(exception, "Unexpected error publishing notification {EventId} to DLQ.", notification.EventId);
         }
     }

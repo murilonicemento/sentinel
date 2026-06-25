@@ -1,5 +1,5 @@
+using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
-using ChannelsService.Domain.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Twilio;
@@ -21,7 +21,7 @@ public sealed class TwilioSmsChannelProvider : ChannelProviderBase
         TwilioClient.Init(_options.AccountSid, _options.AuthToken);
     }
 
-    public override ChannelType ChannelType => ChannelType.Sms;
+    public override ChannelTypeEnum ChannelTypeEnum => ChannelTypeEnum.Sms;
     public override string ProviderName => "Twilio";
 
     public override async Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)

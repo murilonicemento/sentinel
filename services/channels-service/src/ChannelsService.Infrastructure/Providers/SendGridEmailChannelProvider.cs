@@ -1,5 +1,5 @@
+using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
-using ChannelsService.Domain.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SendGrid;
@@ -21,7 +21,7 @@ public sealed class SendGridEmailChannelProvider : ChannelProviderBase
         _client = new SendGridClient(_options.ApiKey);
     }
 
-    public override ChannelType ChannelType => ChannelType.Email;
+    public override ChannelTypeEnum ChannelTypeEnum => ChannelTypeEnum.Email;
     public override string ProviderName => "SendGrid";
 
     public override async Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)

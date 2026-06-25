@@ -1,4 +1,4 @@
-using ChannelsService.Domain.Models;
+using ChannelsService.Domain.Entities;
 
 namespace ChannelsService.Application.Interfaces;
 

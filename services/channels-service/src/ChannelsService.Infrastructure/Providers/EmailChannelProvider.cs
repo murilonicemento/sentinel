@@ -1,5 +1,5 @@
+using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
-using ChannelsService.Domain.Models;
 using Microsoft.Extensions.Logging;
 
 namespace ChannelsService.Infrastructure.Providers;
@@ -7,7 +7,7 @@ namespace ChannelsService.Infrastructure.Providers;
 public sealed class EmailChannelProvider : ChannelProviderBase
 {
     public EmailChannelProvider(ILogger<EmailChannelProvider> logger) : base(logger) { }
-    public override ChannelType ChannelType => ChannelType.Email;
+    public override ChannelTypeEnum ChannelTypeEnum => ChannelTypeEnum.Email;
     public override async Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Sending Email for event {EventId} to tenant {TenantId}.", notification.EventId, notification.TenantId);

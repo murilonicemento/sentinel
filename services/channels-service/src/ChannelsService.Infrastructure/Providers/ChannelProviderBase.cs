@@ -1,6 +1,6 @@
+using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
 using ChannelsService.Domain.Interfaces;
-using ChannelsService.Domain.Models;
 using Microsoft.Extensions.Logging;
 
 namespace ChannelsService.Infrastructure.Providers;
@@ -17,7 +17,7 @@ public abstract class ChannelProviderBase : IChannelProvider, IResilientChannelP
 
     public ProviderResilienceOptions ResilienceOptions { get; }
 
-    public abstract ChannelType ChannelType { get; }
-    public virtual string ProviderName => ChannelType.ToString();
+    public abstract ChannelTypeEnum ChannelTypeEnum { get; }
+    public virtual string ProviderName => ChannelTypeEnum.ToString();
     public abstract Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken);
 }

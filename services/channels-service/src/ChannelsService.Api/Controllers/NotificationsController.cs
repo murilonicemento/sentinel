@@ -1,29 +1,25 @@
 using ChannelsService.Application.Interfaces;
-using ChannelsService.Domain.Models;
+using ChannelsService.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ChannelsService.Api.Controllers;
 
 [ApiController]
-[Route("api/v1/notifications")]
+[Route("api/notifications")]
 public class NotificationsController : ControllerBase
 {
     private readonly IChannelDeliveryService _deliveryService;
+    private readonly IDeadLetterPublisher _deadLetterPublisher;
     private readonly IDeliveryRepository _deliveryRepository;
 
     public NotificationsController(
         IChannelDeliveryService deliveryService,
+        IDeadLetterPublisher deadLetterPublisher,
         IDeliveryRepository deliveryRepository)
     {
         _deliveryService = deliveryService;
+        _deadLetterPublisher = deadLetterPublisher;
         _deliveryRepository = deliveryRepository;
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> Post(NotificationEvent notification, CancellationToken cancellationToken)
-    {
-        var result = await _deliveryService.DeliverAsync(notification, cancellationToken);
-        return result.Success ? Ok(result) : StatusCode(500, result);
     }
 
     [HttpGet("{eventId}/attempts")]
@@ -31,5 +27,17 @@ public class NotificationsController : ControllerBase
     {
         var attempts = await _deliveryRepository.GetByEventAsync(eventId);
         return Ok(attempts);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Post(NotificationEvent notification, CancellationToken cancellationToken)
+    {
+        var result = await _deliveryService.DeliverAsync(notification, cancellationToken);
+
+        if (result.Success)
+            return Ok(result);
+
+        await _deadLetterPublisher.PublishAsync(notification, result, cancellationToken);
+        return StatusCode(500, result);
     }
 }

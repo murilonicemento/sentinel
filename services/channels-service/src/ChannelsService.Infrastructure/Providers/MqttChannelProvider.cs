@@ -1,6 +1,6 @@
 using System.Text.Json;
+using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
-using ChannelsService.Domain.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
@@ -20,7 +20,7 @@ public sealed class MqttChannelProvider : ChannelProviderBase
         _options = options.Value.Options;
     }
 
-    public override ChannelType ChannelType => ChannelType.Mqtt;
+    public override ChannelTypeEnum ChannelTypeEnum => ChannelTypeEnum.Mqtt;
     public override string ProviderName => "MQTT";
 
     public override async Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)

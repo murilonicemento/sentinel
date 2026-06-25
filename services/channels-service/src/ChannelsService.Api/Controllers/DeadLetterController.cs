@@ -1,11 +1,11 @@
 using ChannelsService.Application.Interfaces;
-using ChannelsService.Domain.Models;
+using ChannelsService.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ChannelsService.Api.Controllers;
 
 [ApiController]
-[Route("api/v1/dlq")]
+[Route("api/dlq")]
 public class DeadLetterController : ControllerBase
 {
     private readonly INotificationPublisher _notificationPublisher;

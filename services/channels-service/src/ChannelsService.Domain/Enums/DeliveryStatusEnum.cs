@@ -1,6 +1,6 @@
 namespace ChannelsService.Domain.Enums;
 
-public enum DeliveryStatus
+public enum DeliveryStatusEnum
 {
     Pending,
     Sent,

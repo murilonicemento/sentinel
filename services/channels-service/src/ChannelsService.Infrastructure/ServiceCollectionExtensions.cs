@@ -3,10 +3,12 @@ using ChannelsService.Application.Services;
 using ChannelsService.Domain.Interfaces;
 using ChannelsService.Infrastructure.HostedServices;
 using ChannelsService.Infrastructure.Messaging;
+using ChannelsService.Infrastructure.Observability;
 using ChannelsService.Infrastructure.Persistence;
+using ChannelsService.Infrastructure.Persistence.Repositories;
 using ChannelsService.Infrastructure.Providers;
-using ChannelsService.Infrastructure.Repositories;
 using ChannelsService.Infrastructure.Settings;
+using Confluent.Kafka;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Configuration;
@@ -16,7 +18,8 @@ namespace ChannelsService.Infrastructure;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddChannelsServiceInfrastructure(this IServiceCollection services,
+    public static IServiceCollection AddChannelsServiceInfrastructure(
+        this IServiceCollection services,
         IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("ChannelsServiceDatabase");
@@ -78,6 +81,15 @@ public static class ServiceCollectionExtensions
             services.AddScoped<IChannelProvider, WhatsAppChannelProvider>();
         }
 
+        services.AddHttpClient();
+        services.Configure<ChannelProviderSettings<PushProviderOptions>>(
+            configuration.GetSection("ChannelsService:Providers:Push"));
+        services.AddScoped<IChannelProvider, PushChannelProvider>();
+
+        services.Configure<ChannelProviderSettings<SirenProviderOptions>>(
+            configuration.GetSection("ChannelsService:Providers:Siren"));
+        services.AddScoped<IChannelProvider, SirenChannelProvider>();
+
         var mqttProviderType = configuration["ChannelsService:Providers:MQTT:Type"];
         if (!string.Equals(mqttProviderType, "Mqtt", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(mqttProviderType, "MQTT", StringComparison.OrdinalIgnoreCase))
@@ -87,8 +99,7 @@ public static class ServiceCollectionExtensions
                 .AddScoped<IChannelDeliveryService, ChannelDeliveryService>()
                 .AddScoped<IRetryPolicyEngine, RetryPolicyEngine>()
                 .AddScoped<IFallbackExecutor, FallbackExecutor>()
-                .AddScoped<IChannelProvider, PushChannelProvider>()
-                .AddScoped<IChannelProvider, SirenChannelProvider>()
+                .AddSingleton<IChannelMetrics, ChannelMetrics>()
                 .AddHostedService<NotificationConsumerHostedService>();
         services.Configure<ChannelProviderSettings<MqttProviderOptions>>(
             configuration.GetSection("ChannelsService:Providers:MQTT"));
@@ -100,8 +111,23 @@ public static class ServiceCollectionExtensions
             .AddScoped<IChannelDeliveryService, ChannelDeliveryService>()
             .AddScoped<IRetryPolicyEngine, RetryPolicyEngine>()
             .AddScoped<IFallbackExecutor, FallbackExecutor>()
-            .AddScoped<IChannelProvider, PushChannelProvider>()
-            .AddScoped<IChannelProvider, SirenChannelProvider>()
+            .AddSingleton<IChannelMetrics, ChannelMetrics>()
             .AddHostedService<NotificationConsumerHostedService>();
     }
+
+    private static IServiceCollection AddPublishers(this IServiceCollection services, IConfiguration configuration) =>
+        services.AddSingleton<IProducer<Null, string>>(sp =>
+            {
+                var config = new ProducerConfig
+                {
+                    BootstrapServers = configuration["ConnectionStrings:Kafka"]!,
+                    Acks = Acks.All,
+                    EnableIdempotence = true,
+                    MessageTimeoutMs = 5000
+                };
+
+                return new ProducerBuilder<Null, string>(config).Build();
+            })
+            .AddSingleton<INotificationPublisher, KafkaNotificationPublisher>()
+            .AddSingleton<IDeadLetterPublisher, KafkaDeadLetterPublisher>();
 }

@@ -1,6 +1,6 @@
 using System.Text.Json;
+using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
-using ChannelsService.Domain.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Twilio;
@@ -22,7 +22,7 @@ public sealed class TwilioWhatsAppChannelProvider : ChannelProviderBase
         TwilioClient.Init(_options.AccountSid, _options.AuthToken);
     }
 
-    public override ChannelType ChannelType => ChannelType.WhatsApp;
+    public override ChannelTypeEnum ChannelTypeEnum => ChannelTypeEnum.WhatsApp;
     public override string ProviderName => "TwilioWhatsApp";
 
     public override async Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)

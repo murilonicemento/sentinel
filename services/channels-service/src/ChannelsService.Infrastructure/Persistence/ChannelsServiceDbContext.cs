@@ -1,4 +1,4 @@
-using ChannelsService.Domain.Models;
+using ChannelsService.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace ChannelsService.Infrastructure.Persistence;
@@ -23,7 +23,7 @@ public sealed class ChannelsServiceDbContext : DbContext
             entity.Property(e => e.TenantId).IsRequired().HasMaxLength(64);
             entity.Property(e => e.Channel).IsRequired();
             entity.Property(e => e.Provider).IsRequired().HasMaxLength(128);
-            entity.Property(e => e.Status).IsRequired();
+            entity.Property(e => e.StatusEnum).IsRequired();
             entity.Property(e => e.AttemptCount).IsRequired();
             entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
             entity.Property(e => e.Timestamp).IsRequired();

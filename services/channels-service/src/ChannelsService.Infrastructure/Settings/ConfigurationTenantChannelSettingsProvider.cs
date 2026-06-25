@@ -1,6 +1,6 @@
 using ChannelsService.Application.Interfaces;
+using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
-using ChannelsService.Domain.Models;
 using Microsoft.Extensions.Configuration;
 
 namespace ChannelsService.Infrastructure.Settings;
@@ -34,25 +34,25 @@ public sealed class ConfigurationTenantChannelSettingsProvider : ITenantChannelS
     private static TenantChannelSettings GetFallbackDefault() => new()
     {
         TenantId = "default",
-        EnabledChannels = new List<ChannelType> { ChannelType.Sms, ChannelType.Email, ChannelType.Push, ChannelType.Mqtt },
-        PriorityOrder = new Dictionary<ChannelType, int>
+        EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email, ChannelTypeEnum.Push, ChannelTypeEnum.Mqtt },
+        PriorityOrder = new Dictionary<ChannelTypeEnum, int>
         {
-            [ChannelType.Sms] = 1,
-            [ChannelType.Email] = 2,
-            [ChannelType.Push] = 3,
-            [ChannelType.Mqtt] = 4,
-            [ChannelType.WhatsApp] = 5,
-            [ChannelType.Siren] = 6
+            [ChannelTypeEnum.Sms] = 1,
+            [ChannelTypeEnum.Email] = 2,
+            [ChannelTypeEnum.Push] = 3,
+            [ChannelTypeEnum.Mqtt] = 4,
+            [ChannelTypeEnum.WhatsApp] = 5,
+            [ChannelTypeEnum.Siren] = 6
         },
-        MaxRetries = new Dictionary<ChannelType, int>
+        MaxRetries = new Dictionary<ChannelTypeEnum, int>
         {
-            [ChannelType.Sms] = 3,
-            [ChannelType.Email] = 2,
-            [ChannelType.Push] = 2,
-            [ChannelType.Mqtt] = 2,
-            [ChannelType.WhatsApp] = 2,
-            [ChannelType.Siren] = 3
+            [ChannelTypeEnum.Sms] = 3,
+            [ChannelTypeEnum.Email] = 2,
+            [ChannelTypeEnum.Push] = 2,
+            [ChannelTypeEnum.Mqtt] = 2,
+            [ChannelTypeEnum.WhatsApp] = 2,
+            [ChannelTypeEnum.Siren] = 3
         },
-        FallbackOrder = new List<ChannelType> { ChannelType.Sms, ChannelType.Push, ChannelType.Email }
+        FallbackOrder = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Push, ChannelTypeEnum.Email }
     };
 }

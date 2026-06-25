@@ -1,6 +1,6 @@
 namespace ChannelsService.Domain.Enums;
 
-public enum ChannelType
+public enum ChannelTypeEnum
 {
     Sms,
     Email,

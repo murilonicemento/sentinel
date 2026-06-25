@@ -1,9 +1,8 @@
 using ChannelsService.Application.Interfaces;
-using ChannelsService.Domain.Models;
-using ChannelsService.Infrastructure.Persistence;
+using ChannelsService.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace ChannelsService.Infrastructure.Repositories;
+namespace ChannelsService.Infrastructure.Persistence.Repositories;
 
 public sealed class PostgresDeliveryRepository : IDeliveryRepository
 {

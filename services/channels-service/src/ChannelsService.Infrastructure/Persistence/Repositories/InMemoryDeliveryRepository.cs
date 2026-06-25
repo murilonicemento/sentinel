@@ -1,7 +1,7 @@
 using ChannelsService.Application.Interfaces;
-using ChannelsService.Domain.Models;
+using ChannelsService.Domain.Entities;
 
-namespace ChannelsService.Infrastructure.Repositories;
+namespace ChannelsService.Infrastructure.Persistence.Repositories;
 
 public sealed class InMemoryDeliveryRepository : IDeliveryRepository
 {

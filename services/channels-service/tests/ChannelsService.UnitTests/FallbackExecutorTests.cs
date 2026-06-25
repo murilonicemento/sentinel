@@ -1,6 +1,6 @@
 using ChannelsService.Application.Services;
+using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
-using ChannelsService.Domain.Models;
 using Xunit;
 
 namespace ChannelsService.UnitTests;
@@ -15,26 +15,26 @@ public sealed class FallbackExecutorTests
         var notification = new NotificationEvent
         {
             TenantId = "tenant-1",
-            Channels = new List<ChannelType> { ChannelType.Email, ChannelType.Sms },
+            Channels = new List<ChannelTypeEnum> { ChannelTypeEnum.Email, ChannelTypeEnum.Sms },
             FallbackEnabled = false
         };
 
         var settings = new TenantChannelSettings
         {
             TenantId = "tenant-1",
-            EnabledChannels = new List<ChannelType> { ChannelType.Sms, ChannelType.Email, ChannelType.Push },
-            PriorityOrder = new Dictionary<ChannelType, int>
+            EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email, ChannelTypeEnum.Push },
+            PriorityOrder = new Dictionary<ChannelTypeEnum, int>
             {
-                [ChannelType.Sms] = 1,
-                [ChannelType.Email] = 2,
-                [ChannelType.Push] = 3
+                [ChannelTypeEnum.Sms] = 1,
+                [ChannelTypeEnum.Email] = 2,
+                [ChannelTypeEnum.Push] = 3
             },
-            FallbackOrder = new List<ChannelType> { ChannelType.Sms, ChannelType.Push }
+            FallbackOrder = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Push }
         };
 
         var result = executor.GetFallbackOrder(notification, settings);
 
-        Assert.Equal(new[] { ChannelType.Sms, ChannelType.Email }, result);
+        Assert.Equal(new[] { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }, result);
     }
 
     [Fact]
@@ -51,18 +51,18 @@ public sealed class FallbackExecutorTests
         var settings = new TenantChannelSettings
         {
             TenantId = "tenant-2",
-            EnabledChannels = new List<ChannelType> { ChannelType.Sms, ChannelType.Email, ChannelType.Push },
-            PriorityOrder = new Dictionary<ChannelType, int>
+            EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email, ChannelTypeEnum.Push },
+            PriorityOrder = new Dictionary<ChannelTypeEnum, int>
             {
-                [ChannelType.Sms] = 1,
-                [ChannelType.Email] = 2,
-                [ChannelType.Push] = 3
+                [ChannelTypeEnum.Sms] = 1,
+                [ChannelTypeEnum.Email] = 2,
+                [ChannelTypeEnum.Push] = 3
             },
-            FallbackOrder = new List<ChannelType> { ChannelType.Push, ChannelType.Sms }
+            FallbackOrder = new List<ChannelTypeEnum> { ChannelTypeEnum.Push, ChannelTypeEnum.Sms }
         };
 
         var result = executor.GetFallbackOrder(notification, settings);
 
-        Assert.Equal(new[] { ChannelType.Push, ChannelType.Sms }, result);
+        Assert.Equal(new[] { ChannelTypeEnum.Push, ChannelTypeEnum.Sms }, result);
     }
 }

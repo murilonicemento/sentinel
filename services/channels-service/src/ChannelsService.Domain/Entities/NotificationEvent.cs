@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using ChannelsService.Domain.Enums;
 
-namespace ChannelsService.Domain.Models;
+namespace ChannelsService.Domain.Entities;
 
 public sealed class NotificationEvent
 {
@@ -16,6 +16,6 @@ public sealed class NotificationEvent
     public NotificationPriority Priority { get; set; } = NotificationPriority.Medium;
 
     public NotificationMessage Message { get; set; } = new();
-    public List<ChannelType> Channels { get; set; } = new();
+    public List<ChannelTypeEnum> Channels { get; set; } = new();
     public Dictionary<string, string>? Metadata { get; set; }
 }

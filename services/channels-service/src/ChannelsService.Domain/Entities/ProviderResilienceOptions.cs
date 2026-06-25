@@ -1,4 +1,4 @@
-namespace ChannelsService.Domain.Models;
+namespace ChannelsService.Domain.Entities;
 
 public sealed record ProviderResilienceOptions
 {

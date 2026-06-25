@@ -310,6 +310,19 @@ services:
     networks:
       - sentinel-network
     restart: unless-stopped
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    networks:
+      - sentinel-network
+    restart: unless-stopped
   grafana:
     container_name: grafana
     image: grafana/grafana:10.2.3
@@ -321,13 +334,15 @@ services:
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - loki
+      - prometheus
     networks:
       - sentinel-network
     restart: unless-stopped
 volumes:
+  prometheus-data:
   postgres-data:
   mongo-data:
   redis-data:

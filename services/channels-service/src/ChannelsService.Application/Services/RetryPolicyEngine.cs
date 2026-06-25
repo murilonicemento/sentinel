@@ -1,5 +1,5 @@
 using ChannelsService.Application.Interfaces;
-using ChannelsService.Domain.Models;
+using ChannelsService.Domain.Entities;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Timeout;
