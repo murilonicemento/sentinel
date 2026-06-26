@@ -1,5 +1,8 @@
+using ChannelsService.Application.DTOs;
 using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
+using ChannelsService.Domain.Events;
+using ChannelsService.Infrastructure.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SendGrid;
@@ -24,12 +27,12 @@ public sealed class SendGridEmailChannelProvider : ChannelProviderBase
     public override ChannelTypeEnum ChannelTypeEnum => ChannelTypeEnum.Email;
     public override string ProviderName => "SendGrid";
 
-    public override async Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
+    public override async Task<DeliveryResultDTO> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
     {
         var recipientEmail = notification.Metadata?.GetValueOrDefault("recipientEmail") ?? string.Empty;
         if (string.IsNullOrWhiteSpace(recipientEmail))
         {
-            return new DeliveryResult { Success = false, Error = "Recipient email is missing." };
+            return new DeliveryResultDTO { Success = false, Error = "Recipient email is missing." };
         }
 
         var from = new EmailAddress(_options.FromEmail, _options.FromName);
@@ -40,12 +43,12 @@ public sealed class SendGridEmailChannelProvider : ChannelProviderBase
         if (response.IsSuccessStatusCode)
         {
             _logger.LogInformation("SendGrid sent email for event {EventId} to {Recipient}.", notification.EventId, recipientEmail);
-            return new DeliveryResult { Success = true, ProviderName = ProviderName };
+            return new DeliveryResultDTO { Success = true, ProviderName = ProviderName };
         }
 
         var responseBody = await response.Body.ReadAsStringAsync(cancellationToken);
         _logger.LogWarning("SendGrid failed for event {EventId} with status {StatusCode}: {Body}.", notification.EventId, response.StatusCode, responseBody);
-        return new DeliveryResult
+        return new DeliveryResultDTO
         {
             Success = false,
             Error = $"SendGrid returned {(int)response.StatusCode}: {responseBody}",

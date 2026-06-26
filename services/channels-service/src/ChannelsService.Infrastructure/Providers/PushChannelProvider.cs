@@ -1,8 +1,11 @@
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using ChannelsService.Application.DTOs;
 using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
+using ChannelsService.Domain.Events;
+using ChannelsService.Infrastructure.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -26,11 +29,11 @@ public sealed class PushChannelProvider : ChannelProviderBase
     public override ChannelTypeEnum ChannelTypeEnum => ChannelTypeEnum.Push;
     public override string ProviderName => "PushService";
 
-    public override async Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
+    public override async Task<DeliveryResultDTO> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_options.Endpoint))
         {
-            return new DeliveryResult
+            return new DeliveryResultDTO
             {
                 Success = false,
                 ProviderName = ProviderName,
@@ -41,7 +44,7 @@ public sealed class PushChannelProvider : ChannelProviderBase
         var target = notification.Metadata?.GetValueOrDefault("pushTarget") ?? _options.DefaultTarget;
         if (string.IsNullOrWhiteSpace(target))
         {
-            return new DeliveryResult
+            return new DeliveryResultDTO
             {
                 Success = false,
                 ProviderName = ProviderName,
@@ -73,12 +76,12 @@ public sealed class PushChannelProvider : ChannelProviderBase
             if (response.IsSuccessStatusCode)
             {
                 _logger.LogInformation("Push sent for event {EventId} to target {Target}.", notification.EventId, target);
-                return new DeliveryResult { Success = true, ProviderName = ProviderName };
+                return new DeliveryResultDTO { Success = true, ProviderName = ProviderName };
             }
 
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogWarning("Push provider returned {StatusCode} for event {EventId}: {Body}.", response.StatusCode, notification.EventId, responseBody);
-            return new DeliveryResult
+            return new DeliveryResultDTO
             {
                 Success = false,
                 ProviderName = ProviderName,
@@ -88,7 +91,7 @@ public sealed class PushChannelProvider : ChannelProviderBase
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Push send failed for event {EventId}.", notification.EventId);
-            return new DeliveryResult
+            return new DeliveryResultDTO
             {
                 Success = false,
                 ProviderName = ProviderName,

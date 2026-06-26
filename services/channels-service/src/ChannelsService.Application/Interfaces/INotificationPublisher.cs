@@ -1,4 +1,5 @@
 using ChannelsService.Domain.Entities;
+using ChannelsService.Domain.Events;
 
 namespace ChannelsService.Application.Interfaces;
 

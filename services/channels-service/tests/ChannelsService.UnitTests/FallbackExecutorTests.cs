@@ -1,6 +1,8 @@
+using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Services;
 using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
+using ChannelsService.Domain.Events;
 using Xunit;
 
 namespace ChannelsService.UnitTests;
@@ -19,7 +21,7 @@ public sealed class FallbackExecutorTests
             FallbackEnabled = false
         };
 
-        var settings = new TenantChannelSettings
+        var settings = new TenantChannelDTO
         {
             TenantId = "tenant-1",
             EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email, ChannelTypeEnum.Push },
@@ -48,7 +50,7 @@ public sealed class FallbackExecutorTests
             FallbackEnabled = true
         };
 
-        var settings = new TenantChannelSettings
+        var settings = new TenantChannelDTO
         {
             TenantId = "tenant-2",
             EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email, ChannelTypeEnum.Push },

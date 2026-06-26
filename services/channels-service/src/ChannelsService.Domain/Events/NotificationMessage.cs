@@ -1,4 +1,4 @@
-namespace ChannelsService.Domain.Entities;
+namespace ChannelsService.Domain.Events;
 
 public sealed class NotificationMessage
 {

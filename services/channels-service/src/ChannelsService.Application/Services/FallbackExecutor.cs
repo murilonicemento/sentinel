@@ -1,23 +1,25 @@
+using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
+using ChannelsService.Domain.Events;
 
 namespace ChannelsService.Application.Services;
 
 public sealed class FallbackExecutor : IFallbackExecutor
 {
-    public IReadOnlyList<ChannelTypeEnum> GetFallbackOrder(NotificationEvent notification, TenantChannelSettings settings)
+    public IReadOnlyList<ChannelTypeEnum> GetFallbackOrder(NotificationEvent notification, TenantChannelDTO dto)
     {
         var requestedChannels = notification.Channels?.Distinct().ToList() ?? new List<ChannelTypeEnum>();
-        var enabledChannels = settings.EnabledChannels.Any() ? settings.EnabledChannels : Enum.GetValues<ChannelTypeEnum>().Cast<ChannelTypeEnum>().ToList();
+        var enabledChannels = dto.EnabledChannels.Any() ? dto.EnabledChannels : Enum.GetValues<ChannelTypeEnum>().Cast<ChannelTypeEnum>().ToList();
 
         var candidateChannels = requestedChannels.Any()
-            ? requestedChannels.Where(settings.EnabledChannels.Contains).ToList()
+            ? requestedChannels.Where(dto.EnabledChannels.Contains).ToList()
             : enabledChannels;
 
-        if (settings.FallbackOrder.Any() && notification.FallbackEnabled)
+        if (dto.FallbackOrder.Any() && notification.FallbackEnabled)
         {
-            return settings.FallbackOrder
+            return dto.FallbackOrder
                 .Where(candidateChannels.Contains)
                 .Distinct()
                 .ToList();
@@ -25,7 +27,7 @@ public sealed class FallbackExecutor : IFallbackExecutor
 
         return candidateChannels
             .Distinct()
-            .OrderBy(channel => settings.PriorityOrder.GetValueOrDefault(channel, int.MaxValue))
+            .OrderBy(channel => dto.PriorityOrder.GetValueOrDefault(channel, int.MaxValue))
             .ToList();
     }
 }

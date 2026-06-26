@@ -1,4 +1,4 @@
-namespace ChannelsService.Infrastructure.Providers;
+namespace ChannelsService.Infrastructure.Options;
 
 public sealed record TwilioProviderOptions
 {

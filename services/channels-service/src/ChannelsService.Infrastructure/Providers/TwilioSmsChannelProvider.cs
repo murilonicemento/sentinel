@@ -1,5 +1,8 @@
+using ChannelsService.Application.DTOs;
 using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
+using ChannelsService.Domain.Events;
+using ChannelsService.Infrastructure.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Twilio;
@@ -24,12 +27,12 @@ public sealed class TwilioSmsChannelProvider : ChannelProviderBase
     public override ChannelTypeEnum ChannelTypeEnum => ChannelTypeEnum.Sms;
     public override string ProviderName => "Twilio";
 
-    public override async Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
+    public override async Task<DeliveryResultDTO> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
     {
         var recipientNumber = notification.Metadata?.GetValueOrDefault("recipientPhone") ?? notification.UserId;
         if (string.IsNullOrWhiteSpace(recipientNumber))
         {
-            return new DeliveryResult { Success = false, Error = "Recipient phone number is missing." };
+            return new DeliveryResultDTO { Success = false, Error = "Recipient phone number is missing." };
         }
 
         try
@@ -40,12 +43,12 @@ public sealed class TwilioSmsChannelProvider : ChannelProviderBase
                 body: notification.Message.Body);
 
             _logger.LogInformation("Twilio sent SMS for event {EventId} to {Recipient}.", notification.EventId, recipientNumber);
-            return new DeliveryResult { Success = true, ProviderName = ProviderName };
+            return new DeliveryResultDTO { Success = true, ProviderName = ProviderName };
         }
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Twilio send failed for event {EventId}.", notification.EventId);
-            return new DeliveryResult
+            return new DeliveryResultDTO
             {
                 Success = false,
                 Error = exception.Message,

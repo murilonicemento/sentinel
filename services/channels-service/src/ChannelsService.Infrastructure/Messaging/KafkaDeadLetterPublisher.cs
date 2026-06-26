@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Entities;
+using ChannelsService.Domain.Events;
 using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -37,7 +39,7 @@ public sealed class KafkaDeadLetterPublisher : IDeadLetterPublisher, IAsyncDispo
         _producer = new ProducerBuilder<Null, string>(kafkaConfig).Build();
     }
 
-    public async Task PublishAsync(NotificationEvent notification, DeliveryResult result, CancellationToken cancellationToken)
+    public async Task PublishAsync(NotificationEvent notification, DeliveryResultDTO resultDto, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_topic))
         {
@@ -50,7 +52,7 @@ public sealed class KafkaDeadLetterPublisher : IDeadLetterPublisher, IAsyncDispo
             var payload = JsonSerializer.Serialize(new
             {
                 notification,
-                result,
+                result = resultDto,
                 publishedAt = DateTime.UtcNow
             }, new JsonSerializerOptions
             {

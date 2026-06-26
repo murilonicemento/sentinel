@@ -1,8 +1,8 @@
 using ChannelsService.Domain.Enums;
 
-namespace ChannelsService.Domain.Entities;
+namespace ChannelsService.Application.DTOs;
 
-public sealed class TenantChannelSettings
+public sealed class TenantChannelDTO
 {
     public string TenantId { get; set; } = string.Empty;
     public List<ChannelTypeEnum> EnabledChannels { get; set; } = new();

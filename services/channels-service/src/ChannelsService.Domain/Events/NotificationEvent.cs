@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using ChannelsService.Domain.Enums;
 
-namespace ChannelsService.Domain.Entities;
+namespace ChannelsService.Domain.Events;
 
 public sealed class NotificationEvent
 {
@@ -13,7 +13,7 @@ public sealed class NotificationEvent
     public bool FallbackEnabled { get; set; } = true;
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public NotificationPriority Priority { get; set; } = NotificationPriority.Medium;
+    public NotificationPriorityEnum PriorityEnum { get; set; } = NotificationPriorityEnum.Medium;
 
     public NotificationMessage Message { get; set; } = new();
     public List<ChannelTypeEnum> Channels { get; set; } = new();

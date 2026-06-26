@@ -1,6 +1,6 @@
-namespace ChannelsService.Domain.Entities;
+namespace ChannelsService.Application.DTOs;
 
-public sealed class DeliveryResult
+public sealed class DeliveryResultDTO
 {
     public bool Success { get; set; }
     public string? Error { get; set; }

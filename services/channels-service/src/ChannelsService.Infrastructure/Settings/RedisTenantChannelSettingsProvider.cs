@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Entities;
 using Microsoft.Extensions.Caching.Distributed;
@@ -38,7 +39,7 @@ public sealed class RedisTenantChannelSettingsProvider : ITenantChannelSettingsP
         _cacheTtl = TimeSpan.FromSeconds(ttlSeconds);
     }
 
-    public TenantChannelSettings GetSettings(string tenantId)
+    public TenantChannelDTO GetSettings(string tenantId)
     {
         var cacheKey = GetCacheKey(tenantId);
         try
@@ -46,7 +47,7 @@ public sealed class RedisTenantChannelSettingsProvider : ITenantChannelSettingsP
             var cachedValue = _cache.GetString(cacheKey);
             if (!string.IsNullOrWhiteSpace(cachedValue))
             {
-                var settings = JsonSerializer.Deserialize<TenantChannelSettings>(cachedValue, _serializerOptions);
+                var settings = JsonSerializer.Deserialize<TenantChannelDTO>(cachedValue, _serializerOptions);
                 if (settings != null)
                 {
                     _logger.LogDebug("Loaded tenant settings for {TenantId} from Redis cache.", tenantId);

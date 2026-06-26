@@ -1,3 +1,4 @@
+using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Entities;
 using Microsoft.Extensions.Logging;
@@ -15,11 +16,11 @@ public sealed class RetryPolicyEngine : IRetryPolicyEngine
         _logger = logger;
     }
 
-    public async Task<DeliveryResult> ExecuteAsync(Func<CancellationToken, Task<DeliveryResult>> sendFunc, int maxAttempts, ProviderResilienceOptions resilienceOptions, CancellationToken cancellationToken)
+    public async Task<DeliveryResultDTO> ExecuteAsync(Func<CancellationToken, Task<DeliveryResultDTO>> sendFunc, int maxAttempts, ProviderResilienceDTO resilienceDto, CancellationToken cancellationToken)
     {
         var jitter = new Random();
 
-        var retryPolicy = Policy<DeliveryResult>
+        var retryPolicy = Policy<DeliveryResultDTO>
             .Handle<Exception>()
             .OrResult(result => !result.Success)
             .WaitAndRetryAsync(
@@ -37,16 +38,16 @@ public sealed class RetryPolicyEngine : IRetryPolicyEngine
                     }
                 });
 
-        AsyncPolicy<DeliveryResult> policy = retryPolicy;
+        AsyncPolicy<DeliveryResultDTO> policy = retryPolicy;
 
-        if (resilienceOptions.CircuitBreakerFailureThreshold > 0)
+        if (resilienceDto.CircuitBreakerFailureThreshold > 0)
         {
-            var circuitBreakerPolicy = Policy<DeliveryResult>
+            var circuitBreakerPolicy = Policy<DeliveryResultDTO>
                 .Handle<Exception>()
                 .OrResult(result => !result.Success)
                 .CircuitBreakerAsync(
-                    resilienceOptions.CircuitBreakerFailureThreshold,
-                    TimeSpan.FromSeconds(resilienceOptions.CircuitBreakerDurationSeconds),
+                    resilienceDto.CircuitBreakerFailureThreshold,
+                    TimeSpan.FromSeconds(resilienceDto.CircuitBreakerDurationSeconds),
                     onBreak: (outcome, breakDelay, context) =>
                     {
                         _logger.LogWarning(outcome.Exception, "Circuit breaker opened for {BreakDelay} after failure.", breakDelay);
@@ -57,9 +58,9 @@ public sealed class RetryPolicyEngine : IRetryPolicyEngine
             policy = circuitBreakerPolicy.WrapAsync(policy);
         }
 
-        if (resilienceOptions.TimeoutSeconds > 0)
+        if (resilienceDto.TimeoutSeconds > 0)
         {
-            var timeoutPolicy = Policy.TimeoutAsync<DeliveryResult>(TimeSpan.FromSeconds(resilienceOptions.TimeoutSeconds), TimeoutStrategy.Optimistic);
+            var timeoutPolicy = Policy.TimeoutAsync<DeliveryResultDTO>(TimeSpan.FromSeconds(resilienceDto.TimeoutSeconds), TimeoutStrategy.Optimistic);
             policy = timeoutPolicy.WrapAsync(policy);
         }
 

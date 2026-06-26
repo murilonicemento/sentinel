@@ -1,6 +1,9 @@
 using System.Text.Json;
+using ChannelsService.Application.DTOs;
 using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
+using ChannelsService.Domain.Events;
+using ChannelsService.Infrastructure.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
@@ -23,17 +26,17 @@ public sealed class MqttChannelProvider : ChannelProviderBase
     public override ChannelTypeEnum ChannelTypeEnum => ChannelTypeEnum.Mqtt;
     public override string ProviderName => "MQTT";
 
-    public override async Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
+    public override async Task<DeliveryResultDTO> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_options.Broker))
         {
-            return new DeliveryResult { Success = false, Error = "MQTT broker is not configured." };
+            return new DeliveryResultDTO { Success = false, Error = "MQTT broker is not configured." };
         }
 
         var topic = notification.Metadata?.GetValueOrDefault("mqttTopic") ?? _options.Topic;
         if (string.IsNullOrWhiteSpace(topic))
         {
-            return new DeliveryResult { Success = false, Error = "MQTT topic is not configured." };
+            return new DeliveryResultDTO { Success = false, Error = "MQTT topic is not configured." };
         }
 
         var payload = JsonSerializer.Serialize(new
@@ -69,15 +72,15 @@ public sealed class MqttChannelProvider : ChannelProviderBase
             if (result.ReasonCode == MqttClientPublishReasonCode.Success)
             {
                 _logger.LogInformation("MQTT published notification {EventId} to topic {Topic}.", notification.EventId, topic);
-                return new DeliveryResult { Success = true, ProviderName = ProviderName };
+                return new DeliveryResultDTO { Success = true, ProviderName = ProviderName };
             }
 
-            return new DeliveryResult { Success = false, Error = $"MQTT publish failed with reason {result.ReasonCode}.", ProviderName = ProviderName };
+            return new DeliveryResultDTO { Success = false, Error = $"MQTT publish failed with reason {result.ReasonCode}.", ProviderName = ProviderName };
         }
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "MQTT send failed for event {EventId}.", notification.EventId);
-            return new DeliveryResult { Success = false, Error = exception.Message, ProviderName = ProviderName };
+            return new DeliveryResultDTO { Success = false, Error = exception.Message, ProviderName = ProviderName };
         }
     }
 }

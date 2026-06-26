@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Entities;
+using ChannelsService.Domain.Events;
 using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

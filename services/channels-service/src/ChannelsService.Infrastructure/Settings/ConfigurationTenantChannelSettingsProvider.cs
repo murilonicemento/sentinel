@@ -1,3 +1,4 @@
+using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
@@ -14,12 +15,12 @@ public sealed class ConfigurationTenantChannelSettingsProvider : ITenantChannelS
         _configuration = configuration;
     }
 
-    public TenantChannelSettings GetSettings(string tenantId)
+    public TenantChannelDTO GetSettings(string tenantId)
     {
         var tenantSection = _configuration.GetSection($"ChannelsService:Tenants:{tenantId}");
         if (tenantSection.Exists())
         {
-            var settings = tenantSection.Get<TenantChannelSettings>();
+            var settings = tenantSection.Get<TenantChannelDTO>();
             if (settings != null)
             {
                 return settings;
@@ -27,11 +28,11 @@ public sealed class ConfigurationTenantChannelSettingsProvider : ITenantChannelS
         }
 
         var defaultSection = _configuration.GetSection("ChannelsService:DefaultTenantSettings");
-        var defaultSettings = defaultSection.Get<TenantChannelSettings>() ?? GetFallbackDefault();
+        var defaultSettings = defaultSection.Get<TenantChannelDTO>() ?? GetFallbackDefault();
         return defaultSettings;
     }
 
-    private static TenantChannelSettings GetFallbackDefault() => new()
+    private static TenantChannelDTO GetFallbackDefault() => new()
     {
         TenantId = "default",
         EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email, ChannelTypeEnum.Push, ChannelTypeEnum.Mqtt },

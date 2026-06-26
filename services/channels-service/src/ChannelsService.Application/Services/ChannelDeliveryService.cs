@@ -1,8 +1,9 @@
 using System.Diagnostics;
+using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
-using ChannelsService.Domain.Interfaces;
+using ChannelsService.Domain.Events;
 using Microsoft.Extensions.Logging;
 
 namespace ChannelsService.Application.Services;
@@ -35,7 +36,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
         _logger = logger;
     }
 
-    public async Task<DeliveryResult> DeliverAsync(NotificationEvent notification, CancellationToken cancellationToken)
+    public async Task<DeliveryResultDTO> DeliverAsync(NotificationEvent notification, CancellationToken cancellationToken)
     {
         var attemptedChannels = 0;
         var settings = _settingsProvider.GetSettings(notification.TenantId);
@@ -51,7 +52,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
 
         if (!orderedChannels.Any())
         {
-            return new DeliveryResult
+            return new DeliveryResultDTO
             {
                 Success = false,
                 Error = "No channels are configured for delivery."
@@ -65,7 +66,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                return new DeliveryResult { Success = false, Error = "Delivery cancelled." };
+                return new DeliveryResultDTO { Success = false, Error = "Delivery cancelled." };
             }
 
             var provider = _providers.FirstOrDefault(p => p.ChannelTypeEnum == channel);
@@ -78,7 +79,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
 
             var maxRetries = settings.MaxRetries.GetValueOrDefault(channel, 3);
             var attemptNumber = 0;
-            var resilienceOptions = (provider as IResilientChannelProvider)?.ResilienceOptions ?? new ProviderResilienceOptions();
+            var resilienceOptions = (provider as IResilientChannelProvider)?.ResilienceOptions ?? new ProviderResilienceDTO();
             attemptedChannels++;
             var attemptStopwatch = Stopwatch.StartNew();
 
@@ -135,7 +136,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
 
         if (successfulProviders.Any())
         {
-            return new DeliveryResult
+            return new DeliveryResultDTO
             {
                 Success = true,
                 ProviderName = string.Join(",", successfulProviders),
@@ -143,7 +144,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
             };
         }
 
-        return new DeliveryResult
+        return new DeliveryResultDTO
         {
             Success = false,
             Error = failedChannels.Any()

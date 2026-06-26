@@ -1,8 +1,9 @@
+using ChannelsService.Application.DTOs;
 using ChannelsService.Domain.Entities;
 
 namespace ChannelsService.Application.Interfaces;
 
 public interface ITenantChannelSettingsProvider
 {
-    TenantChannelSettings GetSettings(string tenantId);
+    TenantChannelDTO GetSettings(string tenantId);
 }

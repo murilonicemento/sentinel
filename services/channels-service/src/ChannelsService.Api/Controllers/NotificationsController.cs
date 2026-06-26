@@ -1,5 +1,6 @@
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Entities;
+using ChannelsService.Domain.Events;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ChannelsService.Api.Controllers;

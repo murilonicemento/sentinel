@@ -1,6 +1,6 @@
-namespace ChannelsService.Domain.Entities;
+namespace ChannelsService.Application.DTOs;
 
-public sealed record ProviderResilienceOptions
+public sealed record ProviderResilienceDTO
 {
     public int TimeoutSeconds { get; init; }
     public int CircuitBreakerFailureThreshold { get; init; } = 3;

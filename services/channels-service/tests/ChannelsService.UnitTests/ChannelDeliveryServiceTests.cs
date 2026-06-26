@@ -1,8 +1,9 @@
+using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Application.Services;
 using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
-using ChannelsService.Domain.Interfaces;
+using ChannelsService.Domain.Events;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -20,7 +21,7 @@ public sealed class ChannelDeliveryServiceTests
             Channels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms }
         };
 
-        var settings = new TenantChannelSettings
+        var settings = new TenantChannelDTO
         {
             TenantId = "tenant-1",
             EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms },
@@ -58,7 +59,7 @@ public sealed class ChannelDeliveryServiceTests
             Channels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }
         };
 
-        var settings = new TenantChannelSettings
+        var settings = new TenantChannelDTO
         {
             TenantId = "tenant-2",
             EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email },
@@ -104,7 +105,7 @@ public sealed class ChannelDeliveryServiceTests
             Channels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }
         };
 
-        var settings = new TenantChannelSettings
+        var settings = new TenantChannelDTO
         {
             TenantId = "tenant-3",
             EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email },
@@ -153,7 +154,7 @@ public sealed class ChannelDeliveryServiceTests
             Channels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }
         };
 
-        var settings = new TenantChannelSettings
+        var settings = new TenantChannelDTO
         {
             TenantId = "tenant-4",
             EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email },
@@ -205,9 +206,9 @@ public sealed class ChannelDeliveryServiceTests
         public ChannelTypeEnum ChannelTypeEnum => _channelTypeEnum;
         public string ProviderName => _providerName;
 
-        public Task<DeliveryResult> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
+        public Task<DeliveryResultDTO> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new DeliveryResult
+            return Task.FromResult(new DeliveryResultDTO
             {
                 Success = _shouldSucceed,
                 ProviderName = _providerName,
@@ -236,16 +237,16 @@ public sealed class ChannelDeliveryServiceTests
 
     private sealed class StubTenantChannelSettingsProvider : ITenantChannelSettingsProvider
     {
-        private readonly TenantChannelSettings _settings;
+        private readonly TenantChannelDTO _dto;
 
-        public StubTenantChannelSettingsProvider(TenantChannelSettings settings)
+        public StubTenantChannelSettingsProvider(TenantChannelDTO dto)
         {
-            _settings = settings;
+            _dto = dto;
         }
 
-        public TenantChannelSettings GetSettings(string tenantId)
+        public TenantChannelDTO GetSettings(string tenantId)
         {
-            return _settings;
+            return _dto;
         }
     }
 
@@ -259,7 +260,7 @@ public sealed class ChannelDeliveryServiceTests
         }
 
         public IReadOnlyList<ChannelTypeEnum> GetFallbackOrder(NotificationEvent notification,
-            TenantChannelSettings settings)
+            TenantChannelDTO dto)
         {
             return _channelOrder;
         }
@@ -267,8 +268,8 @@ public sealed class ChannelDeliveryServiceTests
 
     private sealed class NoOpRetryPolicyEngine : IRetryPolicyEngine
     {
-        public Task<DeliveryResult> ExecuteAsync(Func<CancellationToken, Task<DeliveryResult>> sendFunc,
-            int maxAttempts, ProviderResilienceOptions resilienceOptions, CancellationToken cancellationToken)
+        public Task<DeliveryResultDTO> ExecuteAsync(Func<CancellationToken, Task<DeliveryResultDTO>> sendFunc,
+            int maxAttempts, ProviderResilienceDTO resilienceDto, CancellationToken cancellationToken)
         {
             return sendFunc(cancellationToken);
         }
