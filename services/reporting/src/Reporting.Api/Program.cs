@@ -20,7 +20,9 @@ builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices();
 
 builder.Services.AddOpenTelemetry()
-    .WithMetrics(metrics => metrics.AddMeter("ReportingService"))
+    .WithMetrics(metrics => metrics
+        .AddMeter("ReportingService")
+        .AddPrometheusExporter())
     .WithTracing(tracing => tracing.AddSource("ReportingService"));
 
 var app = builder.Build();

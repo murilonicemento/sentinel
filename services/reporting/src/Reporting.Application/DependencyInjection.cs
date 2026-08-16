@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Reporting.Application.Interfaces;
-using Reporting.Application.Interfaces;
 using Reporting.Application.Services;
 
 namespace Reporting.Application;

@@ -42,6 +42,103 @@ public class ReportingKafkaConsumerTests
     }
 
     [Fact]
+    public void BuildDeadLetterMessage_IncludesSourceMetadataAndOriginalPayload()
+    {
+        var payload = """
+            {"eventId":"evt-99","eventType":"AlertTriggered","tenantId":"tenant-a"}
+            """;
+
+        var deadLetter = ReportingKafkaConsumerHostedService.BuildDeadLetterMessage(
+            payload,
+            "reporting-events",
+            "Processing failed after retries",
+            3,
+            42,
+            99);
+
+        using var document = System.Text.Json.JsonDocument.Parse(deadLetter);
+        var root = document.RootElement;
+
+        Assert.Equal("reporting-events", root.GetProperty("sourceTopic").GetString());
+        Assert.Equal("Processing failed after retries", root.GetProperty("reason").GetString());
+        Assert.Equal(3, root.GetProperty("attempts").GetInt32());
+        Assert.Equal(42, root.GetProperty("partition").GetInt32());
+        Assert.Equal(99, root.GetProperty("offset").GetInt64());
+        Assert.Equal(payload.Trim(), root.GetProperty("originalPayload").GetString());
+    }
+
+    [Fact]
+    public void BuildReprocessingMessage_IncludesReplayMetadata()
+    {
+        var payload = """
+            {"eventId":"evt-100","eventType":"NotificationSent"}
+            """;
+
+        var replay = ReportingKafkaConsumerHostedService.BuildReprocessingMessage(
+            payload,
+            "reporting-events",
+            "manual-replay");
+
+        using var document = System.Text.Json.JsonDocument.Parse(replay);
+        var root = document.RootElement;
+
+        Assert.Equal("reporting-events", root.GetProperty("sourceTopic").GetString());
+        Assert.Equal("manual-replay", root.GetProperty("reprocessedBy").GetString());
+        Assert.True(root.GetProperty("replayRequested").GetBoolean());
+        Assert.Equal(payload.Trim(), root.GetProperty("originalPayload").GetString());
+    }
+
+    [Fact]
+    public void ParseDeadLetterEnvelope_WhenPayloadIsStructured_ReturnsEnvelope()
+    {
+        var payload = """
+            {
+              "sourceTopic":"reporting-events",
+              "reason":"Processing failed after retries",
+              "attempts":3,
+              "partition":1,
+              "offset":42,
+              "deadLetteredAtUtc":"2026-07-10T12:00:00Z",
+              "originalPayload":"{\"eventId\":\"evt-99\"}",
+              "replayRequested":false,
+              "replayRequestedBy":null
+            }
+            """;
+
+        var deadLetter = ReportingDeadLetterConsumerHostedService.ParseDeadLetterEnvelope(payload);
+
+        Assert.NotNull(deadLetter);
+        Assert.Equal("reporting-events", deadLetter!.SourceTopic);
+        Assert.Equal("Processing failed after retries", deadLetter.Reason);
+        Assert.Equal(3, deadLetter.Attempts);
+        Assert.Equal(42, deadLetter.Offset);
+        Assert.False(deadLetter.ReplayRequested);
+    }
+
+    [Fact]
+    public void ShouldReplay_WhenReasonIsRetryableAndOriginalPayloadExists()
+    {
+        var payload = """
+            {
+              "sourceTopic":"reporting-events",
+              "reason":"Processing failed after retries",
+              "attempts":3,
+              "partition":1,
+              "offset":42,
+              "deadLetteredAtUtc":"2026-07-10T12:00:00Z",
+              "originalPayload":"{\"eventId\":\"evt-99\"}",
+              "replayRequested":false,
+              "replayRequestedBy":null
+            }
+            """;
+
+        var deadLetter = ReportingDeadLetterConsumerHostedService.ParseDeadLetterEnvelope(payload);
+
+        Assert.NotNull(deadLetter);
+        Assert.True(ReportingDeadLetterConsumerHostedService.ShouldReplay(deadLetter!));
+    }
+
+    [Fact]
     public async Task StartAsync_WithoutKafkaConfiguration_DoesNotThrow()
     {
         var configuration = new ConfigurationBuilder()

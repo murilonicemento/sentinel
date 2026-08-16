@@ -17,6 +17,7 @@ public static class DependencyInjection
         services.AddSingleton<IReportingRepository, ElasticsearchReportingRepository>();
         services.AddSingleton<IReportingAuditRepository, ReportingAuditRepository>();
         services.AddHostedService<ReportingKafkaConsumerHostedService>();
+        services.AddHostedService<ReportingDeadLetterConsumerHostedService>();
         return services;
     }
 

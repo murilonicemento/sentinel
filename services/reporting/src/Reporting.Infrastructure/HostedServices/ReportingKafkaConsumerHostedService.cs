@@ -79,7 +79,15 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                     if (envelopes.Count == 0)
                     {
                         _logger.LogWarning("Received invalid reporting envelope payload on topic {Topic}. Sending to dead-letter queue.", topic);
-                        await PublishDeadLetterAsync(consumeResult.Message.Value, deadLetterTopic, topic, "Invalid payload structure", stoppingToken);
+                        await PublishDeadLetterAsync(
+                            consumeResult.Message.Value,
+                            deadLetterTopic,
+                            topic,
+                            "Invalid payload structure",
+                            consumeResult.Partition.Value,
+                            consumeResult.Offset.Value,
+                            0,
+                            stoppingToken);
                         consumer.Commit(consumeResult);
                         continue;
                     }
@@ -105,7 +113,15 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                     }
                     else
                     {
-                        await PublishDeadLetterAsync(consumeResult.Message.Value, deadLetterTopic, topic, "Processing failed after retries", stoppingToken);
+                        await PublishDeadLetterAsync(
+                            consumeResult.Message.Value,
+                            deadLetterTopic,
+                            topic,
+                            "Processing failed after retries",
+                            consumeResult.Partition.Value,
+                            consumeResult.Offset.Value,
+                            maxAttempts,
+                            stoppingToken);
                         consumer.Commit(consumeResult);
                     }
                 }
@@ -292,7 +308,39 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
         return auditRepository.SaveAsync(audit, cancellationToken);
     }
 
-    private async Task PublishDeadLetterAsync(string payload, string deadLetterTopic, string sourceTopic, string reason, CancellationToken cancellationToken)
+    public static string BuildDeadLetterMessage(string payload, string sourceTopic, string reason, int attempts, int partition, long offset)
+    {
+        var payloadToStore = string.IsNullOrWhiteSpace(payload) ? string.Empty : payload.Trim();
+
+        return JsonSerializer.Serialize(new
+        {
+            sourceTopic,
+            reason,
+            attempts,
+            partition,
+            offset,
+            deadLetteredAtUtc = DateTime.UtcNow,
+            originalPayload = payloadToStore,
+            replayRequested = false,
+            replayRequestedBy = (string?)null
+        });
+    }
+
+    public static string BuildReprocessingMessage(string payload, string sourceTopic, string reprocessedBy)
+    {
+        var payloadToStore = string.IsNullOrWhiteSpace(payload) ? string.Empty : payload.Trim();
+
+        return JsonSerializer.Serialize(new
+        {
+            sourceTopic,
+            reprocessedBy,
+            replayRequested = true,
+            requestedAtUtc = DateTime.UtcNow,
+            originalPayload = payloadToStore
+        });
+    }
+
+    private async Task PublishDeadLetterAsync(string payload, string deadLetterTopic, string sourceTopic, string reason, int partition, long offset, int attempts, CancellationToken cancellationToken)
     {
         try
         {
@@ -306,6 +354,7 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
             };
 
             using var producer = new ProducerBuilder<Null, string>(producerConfig).Build();
+            var messageBody = BuildDeadLetterMessage(payload, sourceTopic, reason, attempts, partition, offset);
             var headers = new Headers();
             headers.Add("source-topic", System.Text.Encoding.UTF8.GetBytes(sourceTopic));
             headers.Add("dead-letter-reason", System.Text.Encoding.UTF8.GetBytes(reason));
@@ -313,7 +362,7 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
 
             var message = new Message<Null, string>
             {
-                Value = payload,
+                Value = messageBody,
                 Headers = headers
             };
 
