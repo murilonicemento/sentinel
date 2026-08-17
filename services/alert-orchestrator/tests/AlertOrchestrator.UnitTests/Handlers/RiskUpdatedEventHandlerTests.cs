@@ -4,6 +4,7 @@ using AlertOrchestrator.Application.Events;
 using AlertOrchestrator.Application.Handlers;
 using AlertOrchestrator.Application.Interfaces.Messaging;
 using AlertOrchestrator.Application.Interfaces.Observability;
+using AlertOrchestrator.Application.Interfaces.Services;
 using AlertOrchestrator.Application.Ports;
 using AlertOrchestrator.Domain.Aggregates;
 using AlertOrchestrator.Domain.Configuration;
@@ -24,6 +25,15 @@ public class RiskUpdatedEventHandlerTests
     private readonly Mock<IAlertConfigurationPort> _configurationPort = new();
     private readonly Mock<IAlertMetrics> _metrics = new();
     private readonly Mock<ILogger<RiskUpdatedEventHandler>> _logger = new();
+    private readonly Mock<ITenantBillingGateway> _tenantBillingGateway = new();
+
+    public RiskUpdatedEventHandlerTests()
+    {
+        // Default tenant billing gateway to return true (active tenant)
+        _tenantBillingGateway
+            .Setup(x => x.ValidateTenantAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+    }
 
     private RiskUpdatedEventHandler CreateHandler() => new(
         _windowRepository.Object,
@@ -32,7 +42,8 @@ public class RiskUpdatedEventHandlerTests
         _idempotencyService.Object,
         _configurationPort.Object,
         _metrics.Object,
-        _logger.Object);
+        _logger.Object,
+        _tenantBillingGateway.Object);
 
     [Fact]
     public async Task Handle_WhenRiskScoreBelowThreshold_ShouldOpenWindowWithoutTriggeringAlert()

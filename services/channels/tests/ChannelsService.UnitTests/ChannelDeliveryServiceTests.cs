@@ -1,5 +1,6 @@
 using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
+using ChannelsService.Application.Interfaces.Services;
 using ChannelsService.Application.Services;
 using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
@@ -38,7 +39,8 @@ public sealed class ChannelDeliveryServiceTests
             new NoOpRetryPolicyEngine(),
             new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms }),
             new NoOpChannelMetrics(),
-            NullLogger<ChannelDeliveryService>.Instance);
+            NullLogger<ChannelDeliveryService>.Instance,
+            new StubTenantBillingGateway(isActive: true));
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -85,7 +87,8 @@ public sealed class ChannelDeliveryServiceTests
             new NoOpRetryPolicyEngine(),
             new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }),
             new NoOpChannelMetrics(),
-            NullLogger<ChannelDeliveryService>.Instance);
+            NullLogger<ChannelDeliveryService>.Instance,
+            new StubTenantBillingGateway(isActive: true));
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -131,7 +134,8 @@ public sealed class ChannelDeliveryServiceTests
             new NoOpRetryPolicyEngine(),
             new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }),
             new NoOpChannelMetrics(),
-            NullLogger<ChannelDeliveryService>.Instance);
+            NullLogger<ChannelDeliveryService>.Instance,
+            new StubTenantBillingGateway(isActive: true));
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -180,7 +184,8 @@ public sealed class ChannelDeliveryServiceTests
             new NoOpRetryPolicyEngine(),
             new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }),
             new NoOpChannelMetrics(),
-            NullLogger<ChannelDeliveryService>.Instance);
+            NullLogger<ChannelDeliveryService>.Instance,
+            new StubTenantBillingGateway(isActive: true));
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -188,6 +193,43 @@ public sealed class ChannelDeliveryServiceTests
         Assert.Contains("All configured channels failed", result.Error);
         Assert.Equal(2, repository.Attempts.Count);
         Assert.All(repository.Attempts, attempt => Assert.Equal(DeliveryStatusEnum.Failed, attempt.StatusEnum));
+    }
+
+    [Fact]
+    public async Task DeliverAsync_ReturnsFailure_WhenTenantIsNotActive()
+    {
+        var notification = new NotificationEvent
+        {
+            EventId = "evt-5",
+            TenantId = "inactive-tenant",
+            Channels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms }
+        };
+
+        var settings = new TenantChannelDTO
+        {
+            TenantId = "inactive-tenant",
+            EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms },
+            PriorityOrder = new Dictionary<ChannelTypeEnum, int> { [ChannelTypeEnum.Sms] = 1 },
+            MaxRetries = new Dictionary<ChannelTypeEnum, int> { [ChannelTypeEnum.Sms] = 1 }
+        };
+
+        var provider = new TestChannelProvider(ChannelTypeEnum.Sms, true, "sms-provider");
+        var repository = new InMemoryDeliveryRepository();
+        var service = new ChannelDeliveryService(
+            new[] { provider },
+            repository,
+            new StubTenantChannelSettingsProvider(settings),
+            new NoOpRetryPolicyEngine(),
+            new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms }),
+            new NoOpChannelMetrics(),
+            NullLogger<ChannelDeliveryService>.Instance,
+            new StubTenantBillingGateway(isActive: false));
+
+        var result = await service.DeliverAsync(notification, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Contains("not active or not authorized", result.Error);
+        Assert.Empty(repository.Attempts);
     }
 
     private sealed class TestChannelProvider : IChannelProvider
@@ -291,6 +333,21 @@ public sealed class ChannelDeliveryServiceTests
 
         public void RecordDeadLetterPublished(bool success)
         {
+        }
+    }
+
+    private sealed class StubTenantBillingGateway : ITenantBillingGateway
+    {
+        private readonly bool _isActive;
+
+        public StubTenantBillingGateway(bool isActive = true)
+        {
+            _isActive = isActive;
+        }
+
+        public Task<bool> ValidateTenantAsync(string tenantId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_isActive);
         }
     }
 }

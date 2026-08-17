@@ -14,6 +14,7 @@ using AlertOrchestrator.Infrastructure.Observability;
 using AlertOrchestrator.Infrastructure.Options;
 using AlertOrchestrator.Infrastructure.Persistence;
 using AlertOrchestrator.Infrastructure.Persistence.Repositories;
+using AlertOrchestrator.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
@@ -68,6 +69,16 @@ public static class ServiceCollectionExtensions
 
         // Application Services
         services.AddScoped<IAlertWindowQueryService, AlertWindowQueryService>();
+
+        // Tenant Billing Gateway
+        services.AddHttpClient<TenantBillingGateway>((sp, client) =>
+        {
+            var baseUrl = options.TenantsBillingBaseUrl ?? "http://localhost:5055";
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+        services.AddScoped<ITenantBillingGateway>(sp => 
+            sp.GetRequiredService<TenantBillingGateway>());
 
         // Cooldown Service
         services.AddSingleton<IAlertCooldownService, DistributedAlertCooldownService>();

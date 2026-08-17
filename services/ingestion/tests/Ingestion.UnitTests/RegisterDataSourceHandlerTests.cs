@@ -1,5 +1,7 @@
 using Ingestion.Application.Commands;
 using Ingestion.Application.Handlers;
+using Ingestion.Application.Interfaces.Services;
+using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Interfaces.Repositories;
 using Moq;
 
@@ -9,6 +11,7 @@ public class RegisterDataSourceHandlerTests
 {
     private readonly Mock<IDataSourceRepository> _mockDataSourceRepository;
     private readonly Mock<ITenantRepository> _mockTenantRepository;
+    private readonly Mock<ITenantBillingGateway> _mockTenantBillingGateway;
     private readonly RegisterDataSourceHandler _handler;
     private readonly Mock<IEventTypePermissionRepository> _mockEventTypePermissionRepository;
 
@@ -16,11 +19,19 @@ public class RegisterDataSourceHandlerTests
     {
         _mockTenantRepository = new Mock<ITenantRepository>();
         _mockDataSourceRepository = new Mock<IDataSourceRepository>();
+        _mockTenantBillingGateway = new Mock<ITenantBillingGateway>();
         _mockEventTypePermissionRepository = new Mock<IEventTypePermissionRepository>();
+        _mockTenantBillingGateway
+            .Setup(x => x.ValidateTenantAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _mockEventTypePermissionRepository
+            .Setup(x => x.RegisterManyAsync(It.IsAny<List<Ingestion.Domain.Aggregates.EventTypePermission>>()))
+            .ReturnsAsync(true);
         _handler = new RegisterDataSourceHandler(
             _mockTenantRepository.Object,
             _mockDataSourceRepository.Object,
-            _mockEventTypePermissionRepository.Object
+            _mockEventTypePermissionRepository.Object,
+            _mockTenantBillingGateway.Object
         );
     }
 
@@ -28,6 +39,14 @@ public class RegisterDataSourceHandlerTests
     {
         _mockTenantRepository.Reset();
         _mockDataSourceRepository.Reset();
+        _mockTenantBillingGateway.Reset();
+        _mockEventTypePermissionRepository.Reset();
+        _mockTenantBillingGateway
+            .Setup(x => x.ValidateTenantAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _mockEventTypePermissionRepository
+            .Setup(x => x.RegisterManyAsync(It.IsAny<List<Ingestion.Domain.Aggregates.EventTypePermission>>()))
+            .ReturnsAsync(true);
     }
 
     #region Success
@@ -65,6 +84,7 @@ public class RegisterDataSourceHandlerTests
         Assert.Equal(expectedDataSourceId, result.dataSourceId);
         Assert.Equal(expectedTenantId, result.tenantId);
         _mockTenantRepository.Verify(x => x.ExistsAsync(expectedTenantId), Times.Once);
+        _mockTenantBillingGateway.Verify(x => x.ValidateTenantAsync(expectedTenantId, It.IsAny<CancellationToken>()), Times.Once);
         _mockDataSourceRepository.Verify(
             x => x.GetByNameAndTenantAsync("Temperature Sensor", expectedTenantId), Times.Once);
         _mockDataSourceRepository.Verify(
@@ -74,6 +94,35 @@ public class RegisterDataSourceHandlerTests
                                                                                ds.MeasurementType == "Temperature" &&
                                                                                ds.CollectionFrequency == "Hourly")),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WhenBillingRejectsTenant_ThrowsInvalidOperationException()
+    {
+        ResetMocks();
+        var tenantId = Guid.NewGuid();
+        var command = new RegisterDataSourceCommand
+        {
+            TenantId = tenantId,
+            Name = "Temperature Sensor",
+            Endpoint = "http://sensor.api",
+            DataSourceType = "Sensor",
+            MeasurementType = "Temperature",
+            CollectionFrequency = "Hourly"
+        };
+
+        _mockTenantRepository
+            .Setup(x => x.ExistsAsync(tenantId))
+            .ReturnsAsync(true);
+
+        _mockTenantBillingGateway
+            .Setup(x => x.ValidateTenantAsync(tenantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => _handler.Handle(command, CancellationToken.None));
+
+        Assert.Contains("tenant", exception.Message, StringComparison.OrdinalIgnoreCase);
+        _mockDataSourceRepository.Verify(x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()), Times.Never);
     }
 
     [Fact]

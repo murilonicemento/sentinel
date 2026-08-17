@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
+using ChannelsService.Application.Interfaces.Services;
 using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
 using ChannelsService.Domain.Events;
@@ -17,6 +18,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
     private readonly IFallbackExecutor _fallbackExecutor;
     private readonly IChannelMetrics _metrics;
     private readonly ILogger<ChannelDeliveryService> _logger;
+    private readonly ITenantBillingGateway _tenantBillingGateway;
 
     public ChannelDeliveryService(
         IEnumerable<IChannelProvider> providers,
@@ -25,7 +27,8 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
         IRetryPolicyEngine retryPolicyEngine,
         IFallbackExecutor fallbackExecutor,
         IChannelMetrics metrics,
-        ILogger<ChannelDeliveryService> logger)
+        ILogger<ChannelDeliveryService> logger,
+        ITenantBillingGateway tenantBillingGateway)
     {
         _providers = providers;
         _deliveryRepository = deliveryRepository;
@@ -34,10 +37,27 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
         _fallbackExecutor = fallbackExecutor;
         _metrics = metrics;
         _logger = logger;
+        _tenantBillingGateway = tenantBillingGateway;
     }
 
     public async Task<DeliveryResultDTO> DeliverAsync(NotificationEvent notification, CancellationToken cancellationToken)
     {
+        // Validate tenant is active and authorized
+        if (!string.IsNullOrWhiteSpace(notification.TenantId))
+        {
+            var isTenantActive = await _tenantBillingGateway.ValidateTenantAsync(notification.TenantId, cancellationToken);
+            if (!isTenantActive)
+            {
+                _logger.LogWarning("Tenant {TenantId} is not active or not authorized. Skipping notification delivery for event {EventId}",
+                    notification.TenantId, notification.EventId);
+                return new DeliveryResultDTO
+                {
+                    Success = false,
+                    Error = "Tenant is not active or not authorized for delivery."
+                };
+            }
+        }
+
         var attemptedChannels = 0;
         var settings = _settingsProvider.GetSettings(notification.TenantId);
         var orderedChannels = _fallbackExecutor.GetFallbackOrder(notification, settings);

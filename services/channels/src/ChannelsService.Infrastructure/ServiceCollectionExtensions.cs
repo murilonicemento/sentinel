@@ -1,4 +1,5 @@
 using ChannelsService.Application.Interfaces;
+using ChannelsService.Application.Interfaces.Services;
 using ChannelsService.Application.Services;
 using ChannelsService.Infrastructure.HostedServices;
 using ChannelsService.Infrastructure.Messaging;
@@ -7,6 +8,7 @@ using ChannelsService.Infrastructure.Options;
 using ChannelsService.Infrastructure.Persistence;
 using ChannelsService.Infrastructure.Persistence.Repositories;
 using ChannelsService.Infrastructure.Providers;
+using ChannelsService.Infrastructure.Services;
 using ChannelsService.Infrastructure.Settings;
 using Confluent.Kafka;
 using Microsoft.EntityFrameworkCore;
@@ -25,10 +27,10 @@ public static class ServiceCollectionExtensions
 
         return services
             .AddDatabases(configuration)
-            .AddOptions()
+            .AddOptions(configuration)
             .AddProviders()
             .AddPublishers(configuration)
-            .AddServices();
+            .AddServices(configuration);
     }
 
     private static IServiceCollection AddDatabases(this IServiceCollection services, IConfiguration configuration)
@@ -57,7 +59,9 @@ public static class ServiceCollectionExtensions
             .Configure<ChannelProviderSettings<TwilioProviderOptions>>(
                 configuration.GetSection("ChannelsService:Providers:Sms"))
             .Configure<ChannelProviderSettings<TwilioProviderOptions>>(
-                configuration.GetSection("ChannelsService:Providers:WhatsApp"));
+                configuration.GetSection("ChannelsService:Providers:WhatsApp"))
+            .Configure<ChannelsServiceInfrastructureOptions>(
+                configuration.GetSection("Services"));
 
     private static IServiceCollection AddProviders(this IServiceCollection services) =>
         services
@@ -85,8 +89,16 @@ public static class ServiceCollectionExtensions
             .AddSingleton<INotificationPublisher, KafkaNotificationPublisher>()
             .AddSingleton<IDeadLetterPublisher, KafkaDeadLetterPublisher>();
 
-    private static IServiceCollection AddServices(this IServiceCollection services) =>
+    private static IServiceCollection AddServices(this IServiceCollection services, IConfiguration configuration) =>
         services
+            .AddHttpClient<TenantBillingGateway>((sp, client) =>
+            {
+                var baseUrl = configuration.GetValue<string>("Services:TenantsBillingBaseUrl") ?? "http://localhost:5055";
+                client.BaseAddress = new Uri(baseUrl);
+                client.Timeout = TimeSpan.FromSeconds(10);
+            })
+            .Services
+            .AddScoped<ITenantBillingGateway>(sp => sp.GetRequiredService<TenantBillingGateway>())
             .AddScoped<IChannelDeliveryService, ChannelDeliveryService>()
             .AddScoped<IRetryPolicyEngine, RetryPolicyEngine>()
             .AddScoped<IFallbackExecutor, FallbackExecutor>()

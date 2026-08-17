@@ -20,14 +20,14 @@ services:
     container_name: ingestion
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__IngestionWriteDatabase=${ConnectionStrings__IngestionWriteDatabase}
-      - ConnectionStrings__IngestionReadDatabase=${ConnectionStrings__IngestionReadDatabase}
-      - ConnectionStrings__Redis=${ConnectionStrings__Redis}
-      - ConnectionStrings__Kafka=${ConnectionStrings__Kafka}
-      - MinIO__Host=${MinIO__Host}
-      - MinIO__Port=${MinIO__Port}
-      - MinIO__AccessKey=${MINIO_ROOT_USER}
-      - MinIO__SecretKey=${MINIO_ROOT_PASSWORD}
+      - ConnectionStrings__IngestionWriteDatabase=${ConnectionStrings__IngestionWriteDatabase:-Host=postgres;Port=5432;Database=ingestion;Username=postgres;Password=postgres}
+      - ConnectionStrings__IngestionReadDatabase=${ConnectionStrings__IngestionReadDatabase:-Host=postgres;Port=5432;Database=ingestion;Username=postgres;Password=postgres}
+      - ConnectionStrings__Redis=${ConnectionStrings__Redis:-redis:6379}
+      - ConnectionStrings__Kafka=${ConnectionStrings__Kafka:-kafka:9092}
+      - MinIO__Host=${MinIO__Host:-minio}
+      - MinIO__Port=${MinIO__Port:-9000}
+      - MinIO__AccessKey=${MINIO_ROOT_USER:-minioadmin}
+      - MinIO__SecretKey=${MINIO_ROOT_PASSWORD:-minioadmin}
       - Geospatial__BaseUrl=http://geospatial:8080
     ports:
       - "7001:8080"
@@ -50,9 +50,9 @@ services:
     container_name: risk-catalog
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__RiskCatalogDatabase=${ConnectionStrings__IngestionDatabase}
-      - ConnectionStrings__Redis=${ConnectionStrings__Redis}
-      - ConnectionStrings__Kafka=${ConnectionStrings__Kafka}
+      - ConnectionStrings__RiskCatalogDatabase=${ConnectionStrings__IngestionDatabase:-Host=postgres;Port=5432;Database=risk_catalog;Username=postgres;Password=postgres}
+      - ConnectionStrings__Redis=${ConnectionStrings__Redis:-redis:6379}
+      - ConnectionStrings__Kafka=${ConnectionStrings__Kafka:-kafka:9092}
       - Redis__MaxMemory=256mb
       - Redis__EvictionPolicy=allkeys-lru
       - GEOSPATIAL_SERVICE_URL=http://geospatial:8080
@@ -137,13 +137,37 @@ services:
     restart: unless-stopped
     networks:
       - sentinel-network
+  tenants-billing:
+    image: tenants-billing
+    build:
+      context: ../services/tenants-billing
+      dockerfile: Dockerfile
+    container_name: tenants-billing
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__TenantsBillingDatabase=Host=postgres;Port=5432;Database=tenants_billing;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__Topic=tenants-billing-events
+      - Kafka__UsageTopic=tenant-usage-events
+      - Kafka__DeadLetterTopic=tenant-usage-events-dlq
+      - Kafka__ReplayTopic=tenant-usage-events-replay
+      - Kafka__ConsumerGroupId=tenants-billing-consumer-group
+      - Kafka__DeadLetterConsumerGroupId=tenants-billing-dlq-group
+    ports:
+      - "7006:8080"
+    depends_on:
+      - postgres
+      - kafka
+    restart: unless-stopped
+    networks:
+      - sentinel-network
   postgres:
     image: postgres:15.5
     container_name: postgres
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-sentinel}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -156,8 +180,8 @@ services:
     image: mongo:7
     container_name: mongodb
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME:-mongoadmin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD:-mongoadmin}
     ports:
       - "27017:27017"
     volumes:
@@ -181,8 +205,8 @@ services:
     image: minio/minio:RELEASE.2025-12-11T05-00-58Z
     container_name: minio
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
     command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
@@ -252,6 +276,14 @@ services:
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic alert-orchestrator-events --partitions 1 --replication-factor 1
 
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic alert-commands --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic tenants-billing-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic tenant-usage-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic tenant-usage-events-dlq --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic tenant-usage-events-replay --partitions 1 --replication-factor 1
 
       echo 'Tópicos criados:'
       kafka-topics --bootstrap-server kafka:9092 --list
@@ -345,6 +377,7 @@ volumes:
   prometheus-data:
   postgres-data:
   mongo-data:
+  mongo-config:
   redis-data:
   minio-data:
   elasticsearch-data:
