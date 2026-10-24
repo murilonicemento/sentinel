@@ -4,6 +4,7 @@ using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Application.Interfaces.Providers;
 using Ingestion.Application.Interfaces.Publishers;
+using Ingestion.Application.Interfaces.Services;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Infrastructure.Write.Cache.Deduplicators;
 using Ingestion.Infrastructure.Write.HostedServices;

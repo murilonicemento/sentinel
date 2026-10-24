@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using Ingestion.Application.Interfaces.Services;
+using Microsoft.Extensions.Logging;
 
 namespace Ingestion.Infrastructure.Write.Services;
 
