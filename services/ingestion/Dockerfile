@@ -11,7 +11,8 @@ COPY --from=repo-root Directory.Packages.props /
 COPY ["src/Ingestion.Api/Ingestion.Api.csproj", "src/Ingestion.Api/"]
 COPY ["src/Ingestion.Application/Ingestion.Application.csproj", "src/Ingestion.Application/"]
 COPY ["src/Ingestion.Domain/Ingestion.Domain.csproj", "src/Ingestion.Domain/"]
-COPY ["src/Ingestion.Infrastructure/Ingestion.Infrastructure.csproj", "src/Ingestion.Infrastructure/"]
+COPY ["src/Ingestion.Infrastructure.Read/Ingestion.Infrastructure.Read.csproj", "src/Ingestion.Infrastructure.Read/"]
+COPY ["src/Ingestion.Infrastructure.Write/Ingestion.Infrastructure.Write.csproj", "src/Ingestion.Infrastructure.Write/"]
 COPY ["tests/Ingestion.IntegrationTests/Ingestion.IntegrationTests.csproj", "tests/Ingestion.IntegrationTests/"]
 COPY ["tests/Ingestion.UnitTests/Ingestion.UnitTests.csproj", "tests/Ingestion.UnitTests/"]
 RUN dotnet restore "src/Ingestion.Api/Ingestion.Api.csproj"
