@@ -52,7 +52,7 @@ The repository must have a single .NET solution: `Sentinel.sln`, located at the 
 - Build and test the entire platform from the root solution using `dotnet build Sentinel.sln` and `dotnet test Sentinel.sln`.
 - Individual projects may still be built, tested, or executed directly using their `.csproj` paths when necessary. This does not justify creating additional solution files.
 
-**Current repository state:** `Sentinel.sln` already contains most service projects, but `tenants-billing` has a separate `TenantsBilling.sln`. Treat this as a deviation from the required architecture. Do not reproduce this pattern when creating new services. When working on solution organization, migrate the existing `tenants-billing` projects into `Sentinel.sln` and remove the service-specific solution file, after verifying that all required projects and configurations are preserved.
+**Current repository state:** `Sentinel.sln` contains every .NET project in the repository, including `tenants-billing` (its former `TenantsBilling.sln` was migrated and removed). Verify with `dotnet sln Sentinel.sln list`.
 
 **Non-negotiable rule:** One repository, one solution (`Sentinel.sln`), multiple microservices, and independently organized projects.
 
