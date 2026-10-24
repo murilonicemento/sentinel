@@ -37,7 +37,24 @@ dotnet ef migrations add <Name> \
 
 Tests use xUnit and Moq. Integration tests use `WebApplicationFactory`, and some use Testcontainers (Postgres, Redis, Kafka).
 
-**Solution membership:** `Sentinel.sln` includes every service except `tenants-billing`, which only has its own `services/tenants-billing/TenantsBilling.sln`. The constitution says each service should have its own `.sln`. In practice, the root solution is what holds most services, so when you add a project, add it to the right solution(s).
+**Solution and Project Organization**
+
+The repository must have a single .NET solution: `Sentinel.sln`, located at the repository root.
+
+- `Sentinel.sln` is the solution for the entire Sentinel platform, not for an individual microservice.
+- Every application, infrastructure, domain, API, unit test, and integration test project must be included in `Sentinel.sln`.
+- Microservices are organized into separate directories under `services/<service-name>/`, but their projects remain members of the root solution.
+- **Never create a separate `.sln` file for an individual microservice.** Do not create files such as `services/tenants-billing/TenantsBilling.sln`.
+- When creating a new project, add it to the existing `Sentinel.sln` using `dotnet sln Sentinel.sln add <project-path>`.
+- When creating a new microservice, add all its projects to `Sentinel.sln`, including test projects.
+- When modifying an existing service, preserve the single-solution structure and ensure all new projects are registered in `Sentinel.sln`.
+- Project references must follow the dependency rules defined in `docs/constitution.md`. Solution membership does not imply that projects may reference one another freely.
+- Build and test the entire platform from the root solution using `dotnet build Sentinel.sln` and `dotnet test Sentinel.sln`.
+- Individual projects may still be built, tested, or executed directly using their `.csproj` paths when necessary. This does not justify creating additional solution files.
+
+**Current repository state:** `Sentinel.sln` already contains most service projects, but `tenants-billing` has a separate `TenantsBilling.sln`. Treat this as a deviation from the required architecture. Do not reproduce this pattern when creating new services. When working on solution organization, migrate the existing `tenants-billing` projects into `Sentinel.sln` and remove the service-specific solution file, after verifying that all required projects and configurations are preserved.
+
+**Non-negotiable rule:** One repository, one solution (`Sentinel.sln`), multiple microservices, and independently organized projects.
 
 ## Architecture
 
@@ -75,7 +92,8 @@ Topics are created by the `kafka-init` container in `platform/docker-compose.yml
 6. **channels** delivers notifications (SMS/WhatsApp via Twilio, email via SendGrid, push, MQTT, sirens) with retry, fallback and DLQ handling (`notification-events`, `notification-events-dlq`).
 7. **reporting** consumes events for dashboards, analytics and exports, with a DLQ consumer. Its implementation status is tracked in `docs/reporting-service-status.md`.
 8. **tenants-billing** manages tenants and plans. It consumes `tenant-usage-events` (with `-dlq` / `-replay` topics) and publishes `tenants-billing-events`. Other services check whether a tenant is active over synchronous HTTP (`GET /api/v1/tenants/{id}`) through their own `TenantBillingGateway`.
-9. **api-gateway** uses Ocelot (`ocelot.json`) to route to the services.
+9. **audit-compliance** consumes auditable events from `audit-events` (and `audit-events-replay`), persists append-only records in MongoDB, and sends invalid messages to `audit-events-dlq`. It exposes queries and async CSV/JSON exports under `/api/v1/audit-compliance`. No source service publishes to `audit-events` yet. Status and contract are in `docs/audit-compliance-service-status.md`, decisions in `docs/adr/ADR-0001-audit-compliance-service.md`.
+10. **api-gateway** uses Ocelot (`ocelot.json`) to route to the services.
 
 ### Conventions worth knowing
 
