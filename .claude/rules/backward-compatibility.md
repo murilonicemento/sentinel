@@ -41,6 +41,7 @@ The file `platform/init-db/postgres/2-schema.sql` is outdated: it does not inclu
 
 - **ingestion (read):** `climaticEvents` and `disasterEvents` collections, with unique indexes on `EventId`.
 - **risk-evaluation:** `RiskEvaluations`, `RiskModels`, and `RiskFactors` collections.
+- **audit-compliance:** `AuditComplianceDatabase` with `auditRecords` (append-only, unique index on `SourceService` + `EventId`), `auditExports`, and the GridFS bucket `auditExportFiles`. The custom role `auditComplianceApp` denies `update`/`remove` on `auditRecords`. Index and role definitions live in `platform/init-db/mongodb` and `MongoIndexInitializer`.
 
 **Redis 7**
 
@@ -75,6 +76,8 @@ The following event topics, producers, consumers, and payloads are part of the c
 | `tenant-usage-events` and associated `-dlq` and `-replay` topics      | Not identified                                                         | tenants-billing    | `TenantUsageEvent { TenantId, EventsConsumed, AlertsTriggered, ApiRequests, ChannelUsage }`                                |
 | `reporting-events` and associated `-dead-letter` and `-replay` topics | Not identified                                                         | reporting          | `ReportingEventEnvelope { EventId, EventType, TenantId, Region, Severity, Channel, RiskScore, Status, Timestamp, Source }` |
 | `geospatial-dead-letter`                                              | geospatial                                                             | Not identified     | `DeadLetterEnvelope`                                                                                                       |
+| `audit-events` and associated `-replay` topic                        | Not identified (no source service publishes yet)                       | audit-compliance   | `AuditEventEnvelope` v1 `{ EventId, EventType, EventVersion, SourceService, OccurredAt, TenantId, CorrelationId, CausationId, Action, Actor, Resource, Metadata, BeforeState, AfterState }` |
+| `audit-events-dlq`                                                    | audit-compliance                                                       | Not identified     | `DeadLetterEnvelope { OriginalTopic, Partition, Offset, Key, Payload, ErrorCode, ErrorReason, FailedAt, ConsumerGroup }` |
 
 ### Shared Libraries
 

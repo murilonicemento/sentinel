@@ -57,3 +57,24 @@ db.disasterEvents.insertMany([
         CollectedAt: ISODate()
     }
 ]);
+
+// Audit & Compliance database schema (manter em paridade com MongoIndexInitializer)
+var adb = db.getSiblingDB("AuditComplianceDatabase");
+
+adb.createCollection("auditRecords");
+adb.createCollection("auditExports");
+adb.createCollection("auditExportFiles.files");
+adb.createCollection("auditExportFiles.chunks");
+
+adb.auditRecords.createIndex({ SourceService: 1, EventId: 1 }, { unique: true, name: "ux_source_service_event_id" });
+adb.auditRecords.createIndex({ TenantId: 1, OccurredAt: -1, _id: -1 }, { name: "ix_tenant_occurred_at" });
+adb.auditRecords.createIndex({ TenantId: 1, EventType: 1, OccurredAt: -1 }, { name: "ix_tenant_event_type_occurred_at" });
+adb.auditRecords.createIndex({ TenantId: 1, "Actor.Id": 1, OccurredAt: -1 }, { name: "ix_tenant_actor_occurred_at" });
+adb.auditRecords.createIndex({ TenantId: 1, "Resource.Id": 1, OccurredAt: -1 }, { name: "ix_tenant_resource_occurred_at" });
+adb.auditRecords.createIndex({ TenantId: 1, CorrelationId: 1 }, { name: "ix_tenant_correlation_id" });
+
+adb.auditExports.createIndex({ Status: 1, RequestedAt: 1 }, { name: "ix_status_requested_at" });
+adb.auditExports.createIndex({ Status: 1, ExpiresAt: 1 }, { name: "ix_status_expires_at" });
+
+adb.getCollection("auditExportFiles.files").createIndex({ filename: 1, uploadDate: 1 });
+adb.getCollection("auditExportFiles.chunks").createIndex({ files_id: 1, n: 1 }, { unique: true });

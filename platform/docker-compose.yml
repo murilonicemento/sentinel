@@ -161,6 +161,35 @@ services:
     restart: unless-stopped
     networks:
       - sentinel-network
+  audit-compliance:
+    image: audit-compliance
+    build:
+      context: ../services/audit-compliance
+      dockerfile: Dockerfile
+    container_name: audit-compliance
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - MongoDb__ConnectionString=mongodb://audit_compliance_app:${AUDIT_COMPLIANCE_DB_PASSWORD:-audit_compliance_local}@mongodb:27017/AuditComplianceDatabase?authSource=AuditComplianceDatabase
+      - MongoDb__DatabaseName=AuditComplianceDatabase
+      - MongoDb__EnsureIndexesOnStartup=false
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__ConsumerGroupId=audit-compliance-group
+      - Kafka__AuditEventsTopic=audit-events
+      - Kafka__ReplayTopic=audit-events-replay
+      - Kafka__DeadLetterTopic=audit-events-dlq
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${AUDIT_COMPLIANCE_JWT_SIGNING_KEY:-}
+      - Serilog__WriteTo__1__Args__uri=http://loki:3100
+    ports:
+      - "7007:8080"
+    depends_on:
+      - mongodb
+      - kafka
+      - loki
+    restart: unless-stopped
+    networks:
+      - sentinel-network
   postgres:
     image: postgres:15.5
     container_name: postgres
@@ -182,6 +211,7 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME:-mongoadmin}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD:-mongoadmin}
+      - AUDIT_COMPLIANCE_DB_PASSWORD=${AUDIT_COMPLIANCE_DB_PASSWORD:-audit_compliance_local}
     ports:
       - "27017:27017"
     volumes:
@@ -284,6 +314,12 @@ services:
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic tenant-usage-events-dlq --partitions 1 --replication-factor 1
 
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic tenant-usage-events-replay --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic audit-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic audit-events-replay --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic audit-events-dlq --partitions 1 --replication-factor 1
 
       echo 'Tópicos criados:'
       kafka-topics --bootstrap-server kafka:9092 --list
