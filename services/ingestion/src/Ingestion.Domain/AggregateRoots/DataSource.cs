@@ -76,6 +76,13 @@ public class DataSource
         return mapping[MeasurementType](value, baseline);
     }
 
+    public SensorDomainEnum ResolveSensorDomain() => MeasurementType switch
+    {
+        "Temperature" or "Humidity" or "WindSpeed" or "Rainfall" or "Pressure" => SensorDomainEnum.Climatic,
+        "Fire" or "Earthquake" => SensorDomainEnum.Disaster,
+        _ => throw new ArgumentException($"Invalid measurement type: {MeasurementType}")
+    };
+
     public bool CanSendEvent(string eventDomain, string eventType)
     {
         return EventPermissions.Any(p =>
