@@ -3,6 +3,7 @@ using AlertOrchestrator.Application.DTOs;
 using AlertOrchestrator.Application.Events;
 using AlertOrchestrator.Application.Interfaces.Messaging;
 using AlertOrchestrator.Application.Interfaces.Observability;
+using AlertOrchestrator.Application.Interfaces.Services;
 using AlertOrchestrator.Application.Ports;
 using AlertOrchestrator.Domain.Aggregates;
 using AlertOrchestrator.Domain.Configuration;
@@ -23,6 +24,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
     private readonly ILogger<RiskUpdatedEventHandler> _logger;
     private readonly IAlertMetrics _metrics;
     private readonly IAlertWindowRepository _windowRepository;
+    private readonly ITenantBillingGateway _tenantBillingGateway;
 
     public RiskUpdatedEventHandler(
         IAlertWindowRepository windowRepository,
@@ -31,7 +33,8 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
         IIdempotencyService idempotencyService,
         IAlertConfigurationPort configurationPort,
         IAlertMetrics metrics,
-        ILogger<RiskUpdatedEventHandler> logger)
+        ILogger<RiskUpdatedEventHandler> logger,
+        ITenantBillingGateway tenantBillingGateway)
     {
         _windowRepository = windowRepository;
         _eventPublisher = eventPublisher;
@@ -40,6 +43,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
         _configurationPort = configurationPort;
         _metrics = metrics;
         _logger = logger;
+        _tenantBillingGateway = tenantBillingGateway;
     }
 
     public async Task Handle(RiskUpdatedEvent notification, CancellationToken cancellationToken)
@@ -52,6 +56,19 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
 
         try
         {
+            if (!string.IsNullOrWhiteSpace(notification.TenantId))
+            {
+                var isTenantActive = await _tenantBillingGateway.ValidateTenantAsync(notification.TenantId, cancellationToken);
+                if (!isTenantActive)
+                {
+                    _logger.LogWarning(
+                        "Tenant {TenantId} is not active or not authorized. Skipping RiskUpdatedEvent {EventId}",
+                        notification.TenantId, notification.EventId);
+                    await _idempotencyService.MarkAsProcessedAsync(notification.EventId, cancellationToken);
+                    return;
+                }
+            }
+
             var config =
                 await _configurationPort.GetConfigurationAsync(notification.RiskType, notification.TenantId,
                     cancellationToken);

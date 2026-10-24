@@ -18,4 +18,6 @@ public sealed class AlertOrchestratorInfrastructureOptions
     public TimeSpan IdempotencyExpiration { get; set; } = TimeSpan.FromHours(24);
     public TimeSpan? ExpirationCheckInterval { get; set; }
     public TimeSpan? EscalationCheckInterval { get; set; }
+
+    public string? TenantsBillingBaseUrl { get; set; } = "http://localhost:5055";
 }

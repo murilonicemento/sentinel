@@ -1,4 +1,5 @@
 using Ingestion.Application.Commands;
+using Ingestion.Application.Interfaces.Services;
 using Ingestion.Domain.AggregateRoots;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Interfaces.Repositories;
@@ -12,13 +13,15 @@ public class RegisterDataSourceHandler : IRequestHandler<RegisterDataSourceComma
     private readonly ITenantRepository _tenantRepository;
     private readonly IDataSourceRepository _dataSourceRepository;
     private readonly IEventTypePermissionRepository _eventTypePermissionRepository;
+    private readonly ITenantBillingGateway _tenantBillingGateway;
 
     public RegisterDataSourceHandler(ITenantRepository tenantRepository, IDataSourceRepository dataSourceRepository,
-        IEventTypePermissionRepository eventTypePermissionRepository)
+        IEventTypePermissionRepository eventTypePermissionRepository, ITenantBillingGateway tenantBillingGateway)
     {
         _tenantRepository = tenantRepository;
         _dataSourceRepository = dataSourceRepository;
         _eventTypePermissionRepository = eventTypePermissionRepository;
+        _tenantBillingGateway = tenantBillingGateway;
     }
 
     public async Task<(Guid dataSourceId, Guid tenantId)> Handle(
@@ -29,6 +32,10 @@ public class RegisterDataSourceHandler : IRequestHandler<RegisterDataSourceComma
 
         if (!tenantExists)
             throw new KeyNotFoundException($"Tenant {request.TenantId} not found.");
+
+        var isTenantActive = await _tenantBillingGateway.ValidateTenantAsync(request.TenantId, cancellationToken);
+        if (!isTenantActive)
+            throw new InvalidOperationException($"Tenant {request.TenantId} is not active or is not authorized in Tenants Billing.");
 
         var existing = await _dataSourceRepository.GetByNameAndTenantAsync(request.Name, request.TenantId);
 
@@ -54,11 +61,11 @@ public class RegisterDataSourceHandler : IRequestHandler<RegisterDataSourceComma
                 EventType = eventTypePermission.EventType
             }).ToList();
 
-        var (_, tenantId) = await _dataSourceRepository.RegisterAsync(dataSource);
+        var (registeredDataSourceId, tenantId) = await _dataSourceRepository.RegisterAsync(dataSource);
 
         if (!await _eventTypePermissionRepository.RegisterManyAsync(eventPermissions))
             throw new Exception("Unexpected exception occurred.");
 
-        return (dataSourceId, tenantId);
+        return (registeredDataSourceId, tenantId);
     }
 }

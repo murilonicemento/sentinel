@@ -12,6 +12,7 @@ using Ingestion.Infrastructure.Write.Messaging.Publishers;
 using Ingestion.Infrastructure.Write.Persistence.DbContext;
 using Ingestion.Infrastructure.Write.Persistence.Repositories;
 using Ingestion.Infrastructure.Write.Providers;
+using Ingestion.Infrastructure.Write.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Minio;
@@ -94,6 +95,9 @@ public static class ServiceCollectionExtension
 
     private static IServiceCollection AddHttpClients(this IServiceCollection services, IConfiguration configuration)
     {
+        var billingBaseUrl = configuration["TenantsBilling:BaseUrl"]
+                            ?? "http://tenants-billing:8080";
+
         var geospatialUrl = configuration["Geospatial:BaseUrl"]
                             ?? throw new InvalidOperationException("Geospatial:BaseUrl configuration is required");
         var fireSensorPollingUrl = configuration["Polling:Fire:BaseUrl"]
@@ -123,6 +127,13 @@ public static class ServiceCollectionExtension
         var pressureChangeSensorPollingUrl = configuration["Polling:PressureChange:BaseUrl"]
                                              ?? throw new InvalidOperationException(
                                                  "Polling:PressureChange:BaseUrl configuration is required");
+
+        services
+            .AddHttpClient<ITenantBillingGateway, TenantBillingGateway>(client =>
+            {
+                client.BaseAddress = new Uri(billingBaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(10);
+            });
 
         services
             .AddHttpClient<IGeospatialClient, GeospatialClient>(client =>

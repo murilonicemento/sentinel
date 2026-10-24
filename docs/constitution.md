@@ -46,7 +46,7 @@ O sistema segue:
 - Domain-Driven Design (DDD)
 - Clean Architecture
 - CQRS (quando aplicável)
-- Event-driven architecture
+- Event-driven Architecture
 - Microsserviços com isolamento total de dados
 - Observabilidade como padrão
 - Resiliência obrigatória
@@ -55,31 +55,35 @@ O sistema segue:
 
 ## 4. Regras fundamentais
 
-- Cada serviço é independente
-- Não há compartilhamento de banco entre serviços
-- Comunicação preferencialmente assíncrona
-- Nenhuma camada pode “furar” boundaries
-- Toda decisão arquitetural relevante deve ser registrada em ADR
+- Cada serviço é independente.
+- Não há compartilhamento de banco de dados entre serviços.
+- Comunicação preferencialmente assíncrona.
+- Nenhuma camada pode "furar" os boundaries.
+- Toda decisão arquitetural relevante deve ser registrada em um ADR.
 
 ---
 
 ## 5. Estrutura padrão de um serviço
 
-Cada microservice possui **UMA solution única (.sln)**.
+Cada microsserviço possui **uma única Solution (.sln)**.
 
-### Estrutura:
+### Estrutura
 
-```bash
+```text
 services/<nome-servico>/
-  <NomeServico>.sln
-  src/
-    <NomeServico>.Api/
-    <NomeServico>.Application/
-    <NomeServico>.Domain/
-    <NomeServico>.Infrastructure/
-  tests/
-    <NomeServico>.UnitTests/
-    <NomeServico>.IntegrationTests/
+│
+├── Dockerfile
+├── .dockerignore
+│
+├── src/
+│   ├── <NomeServico>.Api/
+│   ├── <NomeServico>.Application/
+│   ├── <NomeServico>.Domain/
+│   └── <NomeServico>.Infrastructure/
+│
+└── tests/
+    ├── <NomeServico>.UnitTests/
+    └── <NomeServico>.IntegrationTests/
 ```
 
 ---
@@ -88,7 +92,10 @@ services/<nome-servico>/
 
 ### Ferramentas permitidas
 
+Somente as seguintes ferramentas devem ser utilizadas para criação da estrutura do serviço:
+
 - `dotnet new`
+- `dotnet new sln`
 - `dotnet sln`
 - `dotnet sln add`
 - `dotnet add reference`
@@ -101,86 +108,164 @@ services/<nome-servico>/
 
 ```bash
 mkdir -p services/<nome-servico>/src
+mkdir -p services/<nome-servico>/tests
 cd services/<nome-servico>
-```
 
----
-
-### 2. Criar solution
-
-```bash
 dotnet new sln -n <NomeServico>
 ```
 
 ---
 
-### 3. Criar projetos
+### 2. Criar projetos
 
 ```bash
 dotnet new webapi -n <NomeServico>.Api -o src/<NomeServico>.Api
+
 dotnet new classlib -n <NomeServico>.Application -o src/<NomeServico>.Application
+
 dotnet new classlib -n <NomeServico>.Domain -o src/<NomeServico>.Domain
+
 dotnet new classlib -n <NomeServico>.Infrastructure -o src/<NomeServico>.Infrastructure
 ```
 
----
-
 ### (Opcional) CQRS
 
-```bash
-src/<NomeServico>.Infrastructure.Read
-src/<NomeServico>.Infrastructure.Write
+Caso exista separação física de leitura e escrita:
+
+```text
+src/
+├── <NomeServico>.Infrastructure.Read/
+└── <NomeServico>.Infrastructure.Write/
 ```
 
 ---
 
-### 4. Criar testes
+### 3. Criar projetos de testes
 
 ```bash
 dotnet new xunit -n <NomeServico>.UnitTests -o tests/<NomeServico>.UnitTests
+
 dotnet new xunit -n <NomeServico>.IntegrationTests -o tests/<NomeServico>.IntegrationTests
 ```
 
 ---
 
-### 5. Adicionar tudo na solution (OBRIGATÓRIO)
+### 4. Adicionar todos os projetos à Solution (OBRIGATÓRIO)
 
 ```bash
 dotnet sln add src/<NomeServico>.Api/<NomeServico>.Api.csproj
+
 dotnet sln add src/<NomeServico>.Application/<NomeServico>.Application.csproj
+
 dotnet sln add src/<NomeServico>.Domain/<NomeServico>.Domain.csproj
+
 dotnet sln add src/<NomeServico>.Infrastructure/<NomeServico>.Infrastructure.csproj
 
 dotnet sln add tests/<NomeServico>.UnitTests/<NomeServico>.UnitTests.csproj
+
 dotnet sln add tests/<NomeServico>.IntegrationTests/<NomeServico>.IntegrationTests.csproj
+```
+
+---
+
+### 5. Configurar as referências entre projetos
+
+#### Application → Domain
+
+```bash
+dotnet add src/<NomeServico>.Application reference src/<NomeServico>.Domain
+```
+
+#### Infrastructure → Application + Domain
+
+```bash
+dotnet add src/<NomeServico>.Infrastructure reference src/<NomeServico>.Application
+
+dotnet add src/<NomeServico>.Infrastructure reference src/<NomeServico>.Domain
+```
+
+#### API → Application
+
+```bash
+dotnet add src/<NomeServico>.Api reference src/<NomeServico>.Application
+```
+
+---
+
+### 6. Criar arquivos de containerização (OBRIGATÓRIO)
+
+Todo serviço deve possuir os arquivos abaixo na raiz do serviço:
+
+```text
+services/<nome-servico>/
+├── Dockerfile
+└── .dockerignore
+```
+
+#### Dockerfile
+
+O Dockerfile deve obrigatoriamente:
+
+- utilizar **multi-stage build**;
+- utilizar imagens oficiais do .NET;
+- restaurar dependências separadamente para otimizar cache;
+- publicar apenas o projeto `.Api`;
+- gerar uma imagem final contendo apenas os artefatos necessários para execução.
+
+#### .dockerignore
+
+O `.dockerignore` deve conter, no mínimo:
+
+```text
+**/bin/
+**/obj/
+
+.vs/
+.vscode/
+
+.git/
+.gitignore
+
+README.md
+docs/
+
+tests/
 ```
 
 ---
 
 ## 7. Referências entre projetos
 
-### Application → Domain
+A arquitetura deve respeitar rigorosamente as seguintes dependências.
 
-```bash
-dotnet add src/<NomeServico>.Application reference src/<NomeServico>.Domain
-```
+### Domain
 
----
-
-### Infrastructure → Application + Domain
-
-```bash
-dotnet add src/<NomeServico>.Infrastructure reference src/<NomeServico>.Application
-dotnet add src/<NomeServico>.Infrastructure reference src/<NomeServico>.Domain
-```
+Não depende de nenhum projeto.
 
 ---
 
-### API → Application
+### Application
 
-```bash
-dotnet add src/<NomeServico>.Api reference src/<NomeServico>.Application
-```
+Depende apenas de:
+
+- Domain
+
+---
+
+### Infrastructure
+
+Depende apenas de:
+
+- Application
+- Domain
+
+---
+
+### API
+
+Depende apenas de:
+
+- Application
 
 ---
 
@@ -192,14 +277,19 @@ Responsável por:
 
 - Entidades
 - Value Objects
+- Aggregates
 - Domain Services
 - Domain Events
+- Interfaces do domínio
 
 Proibido:
 
-- banco de dados
-- frameworks externos
+- Entity Framework
+- Banco de dados
+- HTTP
+- Mensageria
 - DTOs
+- Frameworks externos
 
 ---
 
@@ -208,15 +298,21 @@ Proibido:
 Responsável por:
 
 - Casos de uso
-- Commands e Queries
+- Commands
+- Queries
+- Handlers
+- DTOs
+- Validações
+- Interfaces (Ports)
 - Orquestração
-- Interfaces (ports)
 
 Proibido:
 
-- EF Core
+- Entity Framework
+- Banco de dados
 - HTTP direto
-- infraestrutura
+- Mensageria direta
+- Infraestrutura
 
 ---
 
@@ -224,10 +320,14 @@ Proibido:
 
 Responsável por:
 
-- Banco de dados
-- mensageria
-- cache
-- integrações externas
+- Entity Framework
+- Persistência
+- Cache
+- Mensageria
+- Integrações externas
+- Implementação das interfaces da Application
+- Repositórios
+- Providers
 
 ---
 
@@ -236,13 +336,20 @@ Responsável por:
 Responsável por:
 
 - Controllers
+- Endpoints
 - Middleware
-- autenticação
-- validação de entrada
+- Autenticação
+- Autorização
+- Configuração de DI
+- Health Checks
+- Swagger
+- Validação de entrada
 
 Proibido:
 
-- regra de negócio
+- Regra de negócio
+- Acesso direto ao banco
+- Implementação de casos de uso
 
 ---
 
@@ -250,78 +357,101 @@ Proibido:
 
 ### Estrutura
 
-```bash
+```text
 tests/
-  UnitTests/
-  IntegrationTests/
+├── UnitTests/
+└── IntegrationTests/
 ```
 
 ---
 
 ### Unit Tests
 
-- regras de domínio
-- casos de uso isolados
-- validações puras
+Devem testar:
 
-Proibido:
+- regras de domínio;
+- casos de uso;
+- validações;
+- lógica pura.
 
-- banco
-- HTTP
-- mensageria
+Não podem utilizar:
+
+- banco de dados;
+- HTTP;
+- mensageria;
+- infraestrutura real.
 
 ---
 
 ### Integration Tests
 
-- fluxo completo da API
-- integração com infraestrutura
-- testes de pipeline real
+Devem validar:
 
-Pode usar:
+- fluxo completo da API;
+- integração com infraestrutura;
+- banco de dados;
+- mensageria;
+- pipelines reais.
 
-- Testcontainers
-- Docker Compose
-- banco de teste
+Podem utilizar:
+
+- Testcontainers;
+- Docker Compose;
+- banco de testes.
 
 ---
 
 ### Regra de integridade
 
-Um serviço é inválido se:
+Um serviço é considerado inválido caso:
 
-- não tiver testes
-- testes não estiverem na solution
-- dependências estiverem erradas
-- arquitetura for violada
+- não possua testes;
+- os testes não estejam adicionados à Solution;
+- existam dependências incorretas;
+- exista violação da arquitetura.
 
 ---
 
 ## 10. Comunicação entre serviços
 
-### Síncrona (limitada)
+### Comunicação síncrona (limitada)
 
-- API Gateway → serviços
+Permitida apenas quando realmente necessária.
 
-### Assíncrona (preferencial)
+Exemplos:
 
-- eventos
-- mensageria
-- integração via contratos
+- API Gateway → Serviços
+
+---
+
+### Comunicação assíncrona (preferencial)
+
+Deve ser utilizada para:
+
+- eventos de domínio;
+- integração entre serviços;
+- processamento assíncrono;
+- publicação de contratos.
 
 ---
 
 ## 11. Infraestrutura obrigatória
 
-Todos os serviços devem suportar:
+Todo microsserviço deve possuir obrigatoriamente:
 
-- Docker
-- ambiente local via `platform/`
-- multi-tenant
-- observabilidade:
-  - logs estruturados
-  - tracing distribuído
-  - métricas
+- `Dockerfile`
+- `.dockerignore`
+
+Além disso, deve oferecer suporte a:
+
+- Docker;
+- ambiente local via `platform/`;
+- multi-tenancy;
+- logs estruturados;
+- tracing distribuído;
+- métricas;
+- Health Checks;
+- configuração via variáveis de ambiente.
 
 ---
 
@@ -329,28 +459,50 @@ Todos os serviços devem suportar:
 
 ### Serviços
 
-- kebab-case: `risk-catalog`
+Utilizar **kebab-case**.
+
+Exemplos:
+
+- `risk-catalog`
+- `risk-evaluation`
+- `alert-orchestrator`
+
+---
 
 ### Projetos
 
-- PascalCase:
-  - `RiskCatalog.Api`
-  - `RiskCatalog.Domain`
+Utilizar **PascalCase**.
+
+Exemplos:
+
+- `RiskCatalog.Api`
+- `RiskCatalog.Application`
+- `RiskCatalog.Domain`
+- `RiskCatalog.Infrastructure`
 
 ---
 
 ## 13. Regras de validação do serviço
 
-Um serviço é considerado inválido se:
+Um serviço será considerado inválido caso:
 
-- não estiver na `.sln`
-- tiver dependência circular
-- Domain depender de outras camadas
-- Application depender de API
-- violar boundaries
+- não possua uma Solution própria;
+- algum projeto não esteja adicionado à Solution;
+- exista dependência circular;
+- Domain dependa de outra camada;
+- Application dependa da API;
+- API dependa diretamente da Infrastructure;
+- exista compartilhamento de banco de dados entre serviços;
+- não possua Dockerfile;
+- não possua `.dockerignore`;
+- viole os boundaries definidos pela arquitetura.
 
 ---
 
 ## 14. Regra de ouro
 
 > Nenhuma camada pode conhecer detalhes de infraestrutura sem abstração.
+
+Toda dependência deve apontar para dentro da arquitetura (Dependency Rule da Clean Architecture).
+
+A arquitetura deve permanecer desacoplada, testável, evolutiva e independente de frameworks.

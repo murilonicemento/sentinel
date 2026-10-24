@@ -1,10 +1,12 @@
 # Channels Service — Especificação Técnica
 
 ## Objetivo
+
 O `Channels Service` é um microserviço de orquestração de entrega de notificações multi-canal.
 Ele é responsável por receber eventos de notificação, resolver a configuração de tenant, selecionar provedores e garantir entrega resiliente.
 
 ## Responsabilidades
+
 - Receber notificações via API e via evento Kafka.
 - Resolver configuração tenant-aware para canais habilitados, prioridade e fallback.
 - Executar envio em múltiplos canais através de provedores abstratos.
@@ -13,19 +15,25 @@ Ele é responsável por receber eventos de notificação, resolver a configuraç
 - Emitir logs estruturados e métricas para observabilidade.
 
 ## Contratos
+
 ### API
+
 `POST /api/v1/notifications`
+
 - Payload: `NotificationEvent`
 - Resposta:
   - `200 OK` quando qualquer canal for entregue com sucesso
   - `500 Internal Server Error` quando todas as tentativas falharem
 
 ### Evento Kafka
+
 - Tópico padrão: `notification-events`
 - Payload JSON compatível com `NotificationEvent`
 
 ## Modelo de domínio
+
 ### NotificationEvent
+
 - eventId
 - tenantId
 - userId
@@ -38,6 +46,7 @@ Ele é responsável por receber eventos de notificação, resolver a configuraç
 - metadata
 
 ### DeliveryAttempt
+
 - attemptId
 - eventId
 - tenantId
@@ -49,11 +58,13 @@ Ele é responsável por receber eventos de notificação, resolver a configuraç
 - timestamp
 
 ### DeliveryResult
+
 - success
 - error
 - providerName
 
 ## Comportamento de entrega
+
 1. Receber `NotificationEvent`.
 2. Resolver configurações do tenant com `ITenantChannelSettingsProvider`.
 3. Determinar canais candidatos:
@@ -70,16 +81,19 @@ Ele é responsável por receber eventos de notificação, resolver a configuraç
 6. Se todas as tentativas falharem, registrar erro final e retornar falha.
 
 ## Resiliência
+
 - Retry com backoff exponencial e jitter.
 - Circuit breaker ou timeout podem ser adicionados posteriormente.
 - DLQ para eventos que não obtiverem entrega após todas as tentativas.
 
 ## Observabilidade
+
 - Métricas e tracing via OpenTelemetry.
 - Logs estruturados com Serilog.
 - Health check em `/health`.
 
 ## Configuração
+
 - `Kafka:BootstrapServers`
 - `Kafka:Topic`
 - `Kafka:ConsumerGroupId`
@@ -87,6 +101,7 @@ Ele é responsável por receber eventos de notificação, resolver a configuraç
 - `ChannelsService:Tenants:{tenantId}`
 
 ## Implementação atual e próximos passos
+
 - Implementado fluxo de entrega básico, providers simulados e consumidor Kafka.
 - Ainda a evoluir:
   - persistência real em PostgreSQL;

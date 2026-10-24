@@ -57,6 +57,7 @@ var kafkaTopicsConfig = kafkaConfig.GetSection("Topics");
 var databaseConfig = builder.Configuration.GetSection("Database");
 var cacheConfig = builder.Configuration.GetSection("Cache");
 var idempotencyConfig = builder.Configuration.GetSection("Idempotency");
+var servicesConfig = builder.Configuration.GetSection("Services");
 
 var infrastructureOptions = new AlertOrchestratorInfrastructureOptions
 {
@@ -71,7 +72,8 @@ var infrastructureOptions = new AlertOrchestratorInfrastructureOptions
     UseRedis = cacheConfig.GetValue("UseRedis", false),
     RedisConnectionString = cacheConfig.GetValue("RedisConnectionString", string.Empty),
     IdempotencyExpiration = TimeSpan.FromHours(idempotencyConfig.GetValue("ExpirationHours", 24)),
-    ExpirationCheckInterval = TimeSpan.FromMinutes(idempotencyConfig.GetValue("CheckIntervalMinutes", 1))
+    ExpirationCheckInterval = TimeSpan.FromMinutes(idempotencyConfig.GetValue("CheckIntervalMinutes", 1)),
+    TenantsBillingBaseUrl = servicesConfig.GetValue("TenantsBillingBaseUrl", "http://localhost:5055")
 };
 
 builder.Services.AddAlertOrchestratorInfrastructure(infrastructureOptions);
