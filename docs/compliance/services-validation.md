@@ -85,7 +85,7 @@ Legenda: ✅ conforme · ⚠️ desvio parcial · ❌ não conforme · — não 
 | X-04 | P2 | Nenhuma rota segue `/api/v1/<service-name>` exceto audit-compliance; tenants-billing usa `/api/v1/tenants` e `/api/v1/plans` | seção 5 de cada serviço | api-design.md (API Conventions) | 5 |
 | X-05 | P2 | Nenhum endpoint de coleção tem paginação `page`/`pageSize` (exceto audit-compliance) | risk-catalog, alert-orchestrator, risk-evaluation, ingestion, channels, reporting | api-design.md (Pagination) | 5 |
 | X-06 | P2 | Sem `Directory.Build.props` nem `Directory.Packages.props`; 33 pacotes com versões divergentes (ex.: Confluent.Kafka 2.2.0–2.13.2, MongoDB.Driver 3.1.0–3.12.0, `Microsoft.Extensions.Logging.Abstractions 10.0.5` em projeto `net9.0`) | `services/**/*.csproj` | constituição §2.2, §15.1 | 2 |
-| X-07 | P1 | Pacotes vulneráveis (diretos e transitivos), ver tabela abaixo | `dotnet list package --vulnerable` | dependencies.md (Vulnerability Assessment) | 2 |
+| X-07 | P1 | ~~Pacotes vulneráveis (diretos e transitivos), ver tabela abaixo~~ **Resolvido na Fase 2:** `dotnet list Sentinel.sln package --vulnerable --include-transitive` não reporta nenhum pacote (ver tabela) | `dotnet list package --vulnerable` | dependencies.md (Vulnerability Assessment) | concluído |
 | X-08 | P2 | Nenhuma opção validada no startup (`ValidateOnStart`) exceto audit-compliance; fallbacks fixos para `localhost` em reporting (4), risk-evaluation (3), alert-orchestrator, channels, tenants-billing | `?? "localhost..."` em DI / `Program.cs` | configuration.md (Configuration Validation) | 4 |
 | X-09 | P2 | Health checks ausentes em geospatial, ingestion, risk-catalog, risk-evaluation; tenants-billing tem só `/health` estático; nenhum serviço além de audit-compliance separa liveness/readiness | `Program.cs` | observability.md (Health Checks) | 7 |
 | X-10 | P2 | Observabilidade heterogênea: OTel tracing ausente em geospatial, ingestion, risk-catalog, risk-evaluation, tenants-billing; ingestion e risk-catalog usam sink Serilog do Elasticsearch em vez de Loki; channels e reporting sem Loki; tenants-billing sem Serilog | `Program.cs`, `appsettings.json` | CLAUDE.md (Conventions), observability.md | 7 |
@@ -110,6 +110,16 @@ Legenda: ✅ conforme · ⚠️ desvio parcial · ❌ não conforme · — não 
 
 `Microsoft.VisualStudio.Web.CodeGeneration.Design` é ferramenta de scaffolding e não deveria ser dependência de runtime dos projetos Api.
 
+**Remediação aplicada (Fase 2):**
+
+| Origem | Ação |
+|---|---|
+| `CodeGeneration.Design` | Removido de `Ingestion.Api` e `RiskCatalog.Api` (nenhum código o utiliza) |
+| MongoDB.Driver 3.1.0 / 3.5.0 | → 3.12.0 (mesma versão do audit-compliance) em ingestion e risk-evaluation |
+| Testcontainers 4.0.0 / 4.9.0 | → 4.14.0 nos integration tests de ingestion e risk-catalog; imagens passadas pelo construtor do builder (o construtor sem parâmetros ficou obsoleto) |
+| OpenTelemetry 1.11.2 | → 1.15.3 (`Extensions.Hosting`) e 1.15.3-beta.1 (`Exporter.Prometheus.AspNetCore`) em alert-orchestrator, channels e reporting |
+| Twilio 6.0.0 → JWT 6.19.0 | `System.IdentityModel.Tokens.Jwt` fixado em 6.36.0 (mesma major) em `ChannelsService.Infrastructure`, sem upgrade de major do Twilio |
+
 ## 5. Achados por serviço
 
 ### 5.1 api-gateway
@@ -117,7 +127,7 @@ Legenda: ✅ conforme · ⚠️ desvio parcial · ❌ não conforme · — não 
 | ID | Sev. | Achado | Evidência | Fase |
 |---|---|---|---|---|
 | GW-01 | P2 | Sem rotas para alert-orchestrator, channels, reporting e tenants-billing | `ocelot.json` | 5 |
-| GW-02 | P2 | Rota `/gateway/ingestion/sensor-collection` aponta para endpoint comentado no controller; `climatic` e `disaster` não têm rota | `ocelot.json`; `IngestionController.cs:79-87` | 5 |
+| GW-02 | P2 | `climatic` e `disaster` não têm rota no gateway. (O endpoint `sensor-collection`, antes comentado, foi reativado com roteamento automático Climatic/Disaster pelo `MeasurementType` do data source.) | `ocelot.json` | 5 |
 | GW-03 | P2 | Sem logging estruturado, tracing, health check ou rate limiting | `ApiGateway.Api/Program.cs` | 7 |
 | GW-04 | P2 | Layout fora do padrão (`services/api-gateway/ApiGateway.Api/` sem `src/`) e sem testes | estrutura | 2 / 8 |
 
@@ -128,7 +138,7 @@ Legenda: ✅ conforme · ⚠️ desvio parcial · ❌ não conforme · — não 
 | ING-01 | P0 | `TenantId` vem do body dos comandos e não é verificado contra as claims do JWT; qualquer identidade com `IngestionWrite` escreve em qualquer tenant | `Application/Commands/Register*Command.cs:10-11`; `IngestionController.cs:46-77` | 4 |
 | ING-02 | P1 | Application referencia `Infrastructure.Read` e usa `MongoDB.Driver` / `Minio` diretamente (inversão de dependência) | `Ingestion.Application.csproj:18`; `Handlers/GetCollectionStatisticsHandler.cs`, `Handlers/GetLatestDetectedEventsHandler.cs`, `Services/SensorCollectionService.cs`; `DTO/CollectionStatisticsResponseDTO.cs` (atributos Bson) | 3 |
 | ING-03 | P1 | Credenciais versionadas em `appsettings.json`: senha na connection string, MinIO `minioadmin`, `AuthKey: "changeme"` | `Ingestion.Api/appsettings.json:11,19-20,34` | 4 |
-| ING-04 | P1 | Integration tests 0/21. A exceção de serializer Bson duplicado foi corrigida (`TryRegisterSerializer`), mas a suíte segue quebrada por causas independentes: (a) `RemoveAll<OutboxHostedService>()` não remove o hosted service (registrado como `IHostedService`), e o outbox derruba o host porque a tabela `outbox` não existe no Postgres do Testcontainers; (b) nenhum teste envia JWT para endpoints `[Authorize]` (401); (c) os comandos não preenchem `TenantId`, hoje `[Required]`; (d) 6 testes e o setup de outros 8 usam `POST sensor-collection`, comentado no controller (ver GW-02) | `IngestionWebApplicationFactory.cs:50`; `IngestionController.cs:79-87` | 8 (requer decisão sobre o endpoint) |
+| ING-04 | P1 | Integration tests 0/21. A exceção de serializer Bson duplicado foi corrigida (`TryRegisterSerializer`), mas a suíte segue quebrada por causas independentes: (a) `RemoveAll<OutboxHostedService>()` não remove o hosted service (registrado como `IHostedService`), e o outbox derruba o host porque a tabela `outbox` não existe no Postgres do Testcontainers; (b) nenhum teste envia JWT para endpoints `[Authorize]` (401); (c) os comandos não preenchem `TenantId`, hoje `[Required]`; (d) os testes de `sensor-collection` foram escritos para o handler antigo; o endpoint foi reativado com roteamento automático e os testes precisam ser revistos | `IngestionWebApplicationFactory.cs:50` | 8 |
 | ING-05 | P2 | API devolve `SensorEventDetected` (evento de aplicação) e objetos anônimos em vez de DTOs; `limit` sem paginação | `IngestionController.cs:25,66,76` | 5 |
 | ING-06 | P2 | Retry HTTP com `retryCount: 3` = 4 tentativas (limite é 3 incluindo a inicial) | `Infrastructure.Write/ServiceCollectionExtension.cs:238-245` | 6 |
 | ING-07 | P2 | Deduplicação Redis em duas operações (`KeyExistsAsync` + `StringSetAsync`), não atômica entre instâncias | `Cache/Deduplicators/RedisEventDeduplicator.cs:22,33` | 6 |
@@ -160,7 +170,7 @@ Legenda: ✅ conforme · ⚠️ desvio parcial · ❌ não conforme · — não 
 | GEO-04 | P2 | Placeholder de chave em `appsettings.json` (`CHANGE_ME_...`), aceito no startup | `Geospatial.Api/appsettings.json:65` | 4 |
 | GEO-05 | P2 | Sem OTel, métricas e health checks | `Program.cs` | 7 |
 | GEO-06 | P2 | Integration tests vazios | `tests/Geospatial.IntegrationTests` | 8 |
-| GEO-07 | P3 | NU1603 (Confluent.Kafka 2.7.0 inexistente), 9 CS8618, 2 CS8602 | csproj / build | 2 / 8 |
+| GEO-07 | P3 | ~~NU1603 (Confluent.Kafka 2.7.0 inexistente)~~ resolvido fixando 2.8.0, a versão já resolvida; restam 9 CS8618 e 2 CS8602 | csproj / build | 8 |
 
 O consumer (`SensorEventDetectedConsumer.cs`) está conforme: commit manual após processamento e envio para `geospatial-dead-letter`.
 
@@ -204,7 +214,7 @@ O consumer (`SensorEventDetectedConsumer.cs`) está conforme: commit manual apó
 | CH-05 | P1 | Falha de entrega retorna `500` com o resultado interno no body | `NotificationsController.cs:42` | 5 |
 | CH-06 | P2 | Senha em connection string no `appsettings.json` | `ChannelsService.Api/appsettings.json:23` | 4 |
 | CH-07 | P2 | Polly na camada Application | `ChannelsService.Application.csproj:13` | 3 |
-| CH-08 | P2 | Sem projeto de IntegrationTests; diretório órfão `services/channels-service/` (só `obj/`); spec duplicada `services/channels/ChannelsService.Spec.md` × `docs/services/Channels-Service.md` | estrutura | 2 / 8 |
+| CH-08 | P2 | Sem projeto de IntegrationTests; ~~diretório órfão `services/channels-service/`~~ (removido, nunca foi versionado); spec duplicada `services/channels/ChannelsService.Spec.md` × `docs/services/Channels-Service.md` | estrutura | 2 / 8 |
 | CH-09 | P2 | Sem exception handler; sem sink Loki | `Program.cs`, `appsettings.json` | 5 / 7 |
 
 ### 5.8 reporting
@@ -224,7 +234,7 @@ O consumer (`SensorEventDetectedConsumer.cs`) está conforme: commit manual apó
 | ID | Sev. | Achado | Evidência | Fase |
 |---|---|---|---|---|
 | TB-01 | P0 | API sem autenticação: qualquer cliente cria tenants e planos e registra uso; outros serviços confiam nesse serviço para decidir se um tenant está ativo | `TenantsBilling.Api/Program.cs:36-72` | 4 |
-| TB-02 | P1 | Projetos fora da `Sentinel.sln` e `TenantsBilling.sln` próprio | `services/tenants-billing/TenantsBilling.sln` | 2 |
+| TB-02 | P1 | ~~Projetos fora da `Sentinel.sln` e `TenantsBilling.sln` próprio~~ **Resolvido na Fase 2:** 6 projetos registrados na `Sentinel.sln` (pasta `services/tenants-billing`), `TenantsBilling.sln` removido; `dotnet sln list` cobre os 55 `.csproj` do repositório | `Sentinel.sln` | concluído |
 | TB-03 | P1 | `GET /api/v1/tenants/{id}` devolve a entidade de domínio; endpoints acessam `ITenantRepository` direto | `Program.cs:50-54` | 3 / 5 |
 | TB-04 | P2 | Api referencia Confluent.Kafka e monta producer/publisher no `Program.cs` | `TenantsBilling.Api.csproj:10`; `Program.cs:18-22` | 3 |
 | TB-05 | P2 | Rotas `/api/v1/tenants` e `/api/v1/plans` sem o nome do serviço. **Atenção:** ingestion, alert-orchestrator e channels consomem `GET /api/v1/tenants/{id}` | `TenantBillingGateway` em cada serviço | 5 |

@@ -14,31 +14,26 @@ namespace Ingestion.IntegrationTests;
 
 public class IngestionWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgreSqlContainer = new PostgreSqlBuilder()
-        .WithImage("postgres")
+    private readonly PostgreSqlContainer _postgreSqlContainer = new PostgreSqlBuilder("postgres")
         .WithDatabase("ingestion")
         .WithUsername("postgres")
         .WithPassword("postgres")
         .Build();
 
-    private readonly MongoDbContainer _mongoDbContainer = new MongoDbBuilder()
-        .WithImage("mongo")
+    private readonly MongoDbContainer _mongoDbContainer = new MongoDbBuilder("mongo")
         .WithUsername("mongodb")
         .WithPassword("mongodb")
         .Build();
 
-    private readonly RedisContainer _redisContainer = new RedisBuilder()
-        .WithImage("redis")
+    private readonly RedisContainer _redisContainer = new RedisBuilder("redis")
         .Build();
 
-    private readonly KafkaContainer _kafkaContainer = new KafkaBuilder()
-        .WithImage("confluentinc/cp-kafka:7.6.0")
+    private readonly KafkaContainer _kafkaContainer = new KafkaBuilder("confluentinc/cp-kafka:7.6.0")
         .WithEnvironment("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "true")
         .WithEnvironment("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
         .Build();
 
-    private readonly MinioContainer _minioContainer = new MinioBuilder()
-        .WithImage("minio/minio")
+    private readonly MinioContainer _minioContainer = new MinioBuilder("minio/minio")
         .WithUsername("minioadmin")
         .WithPassword("minioadmin")
         .Build();

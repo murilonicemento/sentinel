@@ -16,21 +16,18 @@ namespace RiskCatalog.IntegrationTests;
 
 public class RiskCatalogWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgreSqlContainer = new PostgreSqlBuilder()
-        .WithImage("postgres:15.5")
+    private readonly PostgreSqlContainer _postgreSqlContainer = new PostgreSqlBuilder("postgres:15.5")
         .WithCleanUp(true)
         .WithDatabase("risk_catalog")
         .WithUsername("postgres")
         .WithPassword("postgrespw")
         .Build();
 
-    private readonly RedisContainer _redisContainer = new RedisBuilder()
-        .WithImage("redis:7")
+    private readonly RedisContainer _redisContainer = new RedisBuilder("redis:7")
         .WithCleanUp(true)
         .Build();
 
-    private readonly KafkaContainer _kafkaContainer = new KafkaBuilder()
-        .WithImage("confluentinc/cp-kafka:7.6.0")
+    private readonly KafkaContainer _kafkaContainer = new KafkaBuilder("confluentinc/cp-kafka:7.6.0")
         .WithCleanUp(true)
         .Build();
 
