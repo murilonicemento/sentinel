@@ -22,6 +22,7 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\AlertOrchestrator.Application\AlertOrchestrator.Application.csproj" />
         <ProjectReference Include="..\..\src\AlertOrchestrator.Domain\AlertOrchestrator.Domain.csproj" />
+        <ProjectReference Include="..\..\src\AlertOrchestrator.Infrastructure\AlertOrchestrator.Infrastructure.csproj" />
     </ItemGroup>
 
 </Project>

@@ -21,15 +21,17 @@ public sealed class RegionIntersectedEventConsumer : BackgroundService
         string groupId,
         IServiceProvider serviceProvider,
         ILogger<RegionIntersectedEventConsumer> logger)
+        : this(BuildConsumer(bootstrapServers, groupId), topic, serviceProvider, logger)
     {
-        var config = new ConsumerConfig
-        {
-            BootstrapServers = bootstrapServers,
-            GroupId = groupId,
-            AutoOffsetReset = AutoOffsetReset.Earliest,
-            EnableAutoCommit = false
-        };
-        _consumer = new ConsumerBuilder<string, string>(config).Build();
+    }
+
+    public RegionIntersectedEventConsumer(
+        IConsumer<string, string> consumer,
+        string topic,
+        IServiceProvider serviceProvider,
+        ILogger<RegionIntersectedEventConsumer> logger)
+    {
+        _consumer = consumer;
         _topic = topic;
         _serviceProvider = serviceProvider;
         _logger = logger;
@@ -37,6 +39,9 @@ public sealed class RegionIntersectedEventConsumer : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Consume() blocks; without yielding first, the loop would run synchronously inside StartAsync and block host startup.
+        await Task.Yield();
+
         _consumer.Subscribe(_topic);
         _logger.LogInformation("RegionIntersectedEventConsumer started. Subscribed to topic: {Topic}", _topic);
 
@@ -47,8 +52,8 @@ public sealed class RegionIntersectedEventConsumer : BackgroundService
 
                 if (consumeResult == null)
                 {
-                    _logger.LogInformation("No messages received yet");
-                    return;
+                    _logger.LogDebug("No messages received from topic {Topic} in the last poll", _topic);
+                    continue;
                 }
 
                 _logger.LogInformation("Received message from topic: {Topic}, Partition: {Partition}, Offset: {Offset}",
@@ -75,5 +80,18 @@ public sealed class RegionIntersectedEventConsumer : BackgroundService
             }
 
         _consumer.Close();
+    }
+
+    private static IConsumer<string, string> BuildConsumer(string bootstrapServers, string groupId)
+    {
+        var config = new ConsumerConfig
+        {
+            BootstrapServers = bootstrapServers,
+            GroupId = groupId,
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+            EnableAutoCommit = false
+        };
+
+        return new ConsumerBuilder<string, string>(config).Build();
     }
 }
