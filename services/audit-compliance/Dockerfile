@@ -1,5 +1,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
+COPY --from=repo-root Directory.Packages.props /
 
 COPY src/AuditCompliance.Api/AuditCompliance.Api.csproj src/AuditCompliance.Api/
 COPY src/AuditCompliance.Application/AuditCompliance.Application.csproj src/AuditCompliance.Application/

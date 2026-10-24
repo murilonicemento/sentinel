@@ -7,6 +7,7 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /
+COPY --from=repo-root Directory.Packages.props /
 COPY ["src/Geospatial.Api/Geospatial.Api.csproj", "src/Geospatial.Api/"]
 COPY ["src/Geospatial.Application/Geospatial.Application.csproj", "src/Geospatial.Application/"]
 COPY ["src/Geospatial.Domain/Geospatial.Domain.csproj", "src/Geospatial.Domain/"]

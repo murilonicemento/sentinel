@@ -7,16 +7,16 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Confluent.Kafka" Version="2.10.0"/>
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.4"/>
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4"/>
-        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.4"/>
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.4"/>
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.4"/>
-        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.4"/>
-        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.4"/>
-        <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.4"/>
-        <PackageReference Include="MediatR" Version="12.5.0"/>
+        <PackageReference Include="Confluent.Kafka"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore"/>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL"/>
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory"/>
+        <PackageReference Include="Microsoft.Extensions.Http"/>
+        <PackageReference Include="MediatR"/>
     </ItemGroup>
 
     <ItemGroup>

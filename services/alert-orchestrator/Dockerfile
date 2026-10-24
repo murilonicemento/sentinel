@@ -7,6 +7,7 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /
+COPY --from=repo-root Directory.Packages.props /
 COPY ["src/AlertOrchestrator.Api/AlertOrchestrator.Api.csproj", "src/AlertOrchestrator.Api/"]
 COPY ["src/AlertOrchestrator.Application/AlertOrchestrator.Application.csproj", "src/AlertOrchestrator.Application/"]
 COPY ["src/AlertOrchestrator.Domain/AlertOrchestrator.Domain.csproj", "src/AlertOrchestrator.Domain/"]

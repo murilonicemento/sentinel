@@ -84,7 +84,7 @@ Legenda: ✅ conforme · ⚠️ desvio parcial · ❌ não conforme · — não 
 | X-03 | P1 | Erros não usam RFC 9457 Problem Details (exceto audit-compliance); não há códigos de erro estáveis nem `traceId` | middlewares acima; channels, reporting e tenants-billing sem handler | error-handling.md (Public HTTP Error Response) | 5 |
 | X-04 | P2 | Nenhuma rota segue `/api/v1/<service-name>` exceto audit-compliance; tenants-billing usa `/api/v1/tenants` e `/api/v1/plans` | seção 5 de cada serviço | api-design.md (API Conventions) | 5 |
 | X-05 | P2 | Nenhum endpoint de coleção tem paginação `page`/`pageSize` (exceto audit-compliance) | risk-catalog, alert-orchestrator, risk-evaluation, ingestion, channels, reporting | api-design.md (Pagination) | 5 |
-| X-06 | P2 | Sem `Directory.Build.props` nem `Directory.Packages.props`; 33 pacotes com versões divergentes (ex.: Confluent.Kafka 2.2.0–2.13.2, MongoDB.Driver 3.1.0–3.12.0, `Microsoft.Extensions.Logging.Abstractions 10.0.5` em projeto `net9.0`) | `services/**/*.csproj` | constituição §2.2, §15.1 | 2 |
+| X-06 | P2 | ~~Sem `Directory.Packages.props`; 33 pacotes com versões divergentes~~ **Resolvido na Fase 2:** versões centralizadas em `Directory.Packages.props` (71 pacotes, ver seção 4.1). `Directory.Build.props` não foi criado: só traria ganho removendo as propriedades repetidas dos `.csproj` | `Directory.Packages.props` | constituição §2.2, §15.1 | concluído |
 | X-07 | P1 | ~~Pacotes vulneráveis (diretos e transitivos), ver tabela abaixo~~ **Resolvido na Fase 2:** `dotnet list Sentinel.sln package --vulnerable --include-transitive` não reporta nenhum pacote (ver tabela) | `dotnet list package --vulnerable` | dependencies.md (Vulnerability Assessment) | concluído |
 | X-08 | P2 | Nenhuma opção validada no startup (`ValidateOnStart`) exceto audit-compliance; fallbacks fixos para `localhost` em reporting (4), risk-evaluation (3), alert-orchestrator, channels, tenants-billing | `?? "localhost..."` em DI / `Program.cs` | configuration.md (Configuration Validation) | 4 |
 | X-09 | P2 | Health checks ausentes em geospatial, ingestion, risk-catalog, risk-evaluation; tenants-billing tem só `/health` estático; nenhum serviço além de audit-compliance separa liveness/readiness | `Program.cs` | observability.md (Health Checks) | 7 |
@@ -93,6 +93,27 @@ Legenda: ✅ conforme · ⚠️ desvio parcial · ❌ não conforme · — não 
 | X-12 | P3 | `dotnet format --verify-no-changes` falha em 6 serviços: risk-catalog (142), ingestion (82), risk-evaluation (82), alert-orchestrator (6), geospatial (4), channels (2) | saída do comando | coding-standarts.md (Formatting) | 8 |
 | X-13 | P3 | 95 warnings CS8618 (ingestion 38, risk-catalog 44, geospatial 9, risk-evaluation 3, channels 1) | build | coding-standarts.md (Validation) | 8 |
 | X-14 | P3 | Enums sem sufixo `Enum` em alert-orchestrator (3), geospatial (2), risk-evaluation (2), tenants-billing (2); demais serviços usam o sufixo | `public enum` | constituição §5.1 × coding-standarts.md (conflito, ver §6) | decisão |
+
+### 4.1 Centralização de versões (X-06)
+
+Regra adotada: maior versão já usada no repositório, dentro da mesma major, com as decisões abaixo.
+
+| Pacote | Versão central | Decisão |
+|---|---|---|
+| `Microsoft.Extensions.*`, `Microsoft.EntityFrameworkCore.*`, `Microsoft.AspNetCore.*` | 9.0.20 | Família alinhada num único patch: o EF Core mais novo em uso (Design 9.0.16) exige `Microsoft.Extensions.*` no mesmo patch ou acima (NU1605), e 9.0.20 é a maior versão já usada (OpenApi), sem downgrade |
+| MediatR | 12.5.0 | Mantém Apache-2.0. `Ingestion.Application` voltou de 13.0.0 (licença dupla RPL-1.5/comercial a partir da 13) |
+| StackExchange.Redis | 2.9.17 | **Exceção:** `Reporting.Infrastructure` mantém 3.0.0 via `VersionOverride` |
+| Microsoft.Extensions.Logging.Abstractions | 9.0.20 | **Exceção:** `Reporting.Infrastructure` mantém 10.0.5 via `VersionOverride`, exigido pelo StackExchange.Redis 3.0.0 |
+| Microsoft.IdentityModel.Tokens / JsonWebTokens | 8.19.2 | Exigido pelo JwtBearer 9.0.20 (antes 8.0.1 direto em `RiskCatalog.Application`) |
+| System.IdentityModel.Tokens.Jwt | 6.36.0 | Usado só pelo channels (dependência do Twilio 6.x) |
+| Confluent.Kafka | 2.13.2 | channels e tenants-billing sobem de 2.2.0; demais de 2.8–2.11 |
+| Serilog.AspNetCore | 9.0.0 | geospatial e risk-evaluation sobem de 8.0.3 (os outros 6 serviços já usavam 9.0.0) |
+
+As exceções `VersionOverride` devem ser eliminadas quando ingestion, risk-catalog e risk-evaluation migrarem para StackExchange.Redis 3.x ou o reporting voltar para 2.x.
+
+Os Dockerfiles copiam `Directory.Packages.props` do contexto adicional `repo-root`, definido em `platform/docker-compose.yml`. Build avulso: `docker build --build-context repo-root=. -t <service> services/<service>`.
+
+Achado lateral: `services/alert-orchestrator/Dockerfile` usa `mcr.microsoft.com/dotnet/sdk:10.0-preview` no estágio de build, enquanto o projeto é `net9.0` e o `global.json` fixa o SDK 9.0.115 (AO-09).
 
 ### Vulnerabilidades (X-07)
 
@@ -202,6 +223,7 @@ O consumer (`SensorEventDetectedConsumer.cs`) está conforme: commit manual apó
 | AO-06 | P2 | DbContext sem migrations EF versionadas | `Infrastructure/Persistence` | 6 |
 | AO-07 | P2 | Tracing sem métricas; integration tests vazios | `Program.cs`; `tests/AlertOrchestrator.IntegrationTests` | 7 / 8 |
 | AO-08 | P3 | Enums sem sufixo `Enum` (3); 6 violações de formatação | | 8 |
+| AO-09 | P2 | Estágio de build do Dockerfile usa `sdk:10.0-preview` (SDK preview, diferente do `global.json` 9.0.115) | `services/alert-orchestrator/Dockerfile:7` | 7 |
 
 ### 5.7 channels
 

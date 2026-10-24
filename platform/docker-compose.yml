@@ -4,6 +4,8 @@ services:
     build:
       context: ../services/api-gateway
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: api-gateway
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
@@ -17,6 +19,8 @@ services:
     build:
       context: ../services/ingestion
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: ingestion
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
@@ -47,6 +51,8 @@ services:
     build:
       context: ../services/risk-catalog
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: risk-catalog
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
@@ -72,6 +78,8 @@ services:
     build:
       context: ../services/geospatial
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: geospatial
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
@@ -93,6 +101,8 @@ services:
     build:
       context: ../services/risk-evaluation
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: risk-evaluation
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
@@ -116,6 +126,8 @@ services:
     build:
       context: ../services/alert-orchestrator
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: alert-orchestrator
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
@@ -142,6 +154,8 @@ services:
     build:
       context: ../services/tenants-billing
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: tenants-billing
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
@@ -166,6 +180,8 @@ services:
     build:
       context: ../services/audit-compliance
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: audit-compliance
     environment:
       - ASPNETCORE_ENVIRONMENT=Development

@@ -29,6 +29,9 @@ dotnet run --project services/<service>/src/<Service>.Api
 docker compose -f platform/docker-compose.yml up -d
 docker compose -f platform/docker-compose.yml down
 
+# Build one service image outside compose (Dockerfiles read Directory.Packages.props from the repo root)
+docker build --build-context repo-root=. -t <service> services/<service>
+
 # EF Core migrations (example: tenants-billing)
 dotnet ef migrations add <Name> \
   --project services/tenants-billing/src/TenantsBilling.Infrastructure \
@@ -36,6 +39,8 @@ dotnet ef migrations add <Name> \
 ```
 
 Tests use xUnit and Moq. Integration tests use `WebApplicationFactory`, and some use Testcontainers (Postgres, Redis, Kafka).
+
+NuGet versions are managed centrally in `Directory.Packages.props` (`ManagePackageVersionsCentrally`). `PackageReference` items in `.csproj` files carry no `Version`; add or bump versions only in `Directory.Packages.props`. A per-project exception uses `VersionOverride` and must be documented in `docs/compliance/services-validation.md` (X-06). Every Dockerfile copies that file from the `repo-root` build context, which `platform/docker-compose.yml` defines for each service.
 
 **Solution and Project Organization**
 

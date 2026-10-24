@@ -7,6 +7,7 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /
+COPY --from=repo-root Directory.Packages.props /
 COPY ["src/Ingestion.Api/Ingestion.Api.csproj", "src/Ingestion.Api/"]
 COPY ["src/Ingestion.Application/Ingestion.Application.csproj", "src/Ingestion.Application/"]
 COPY ["src/Ingestion.Domain/Ingestion.Domain.csproj", "src/Ingestion.Domain/"]
