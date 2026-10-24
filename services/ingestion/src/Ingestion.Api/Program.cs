@@ -32,7 +32,7 @@ public class Program
         {
             new IgnoreExtraElementsConvention(true)
         };
-        BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+        BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
         ConventionRegistry.Register("IgnoreExtra", pack, _ => true);
 
         var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
