@@ -1,12 +1,10 @@
 using System.Net;
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RiskCatalog.Api.Filters;
 using RiskCatalog.Api.Middlewares;
+using RiskCatalog.Api.Security;
 using RiskCatalog.Application;
 using RiskCatalog.Infrastructure;
 using Scalar.AspNetCore;
@@ -109,33 +107,13 @@ builder.Services
             return new BadRequestObjectResult(responseObj);
         };
     });
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
-        };
-    });
-builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("RiskCatalogWrite", policy =>
-        policy.RequireRole("RiskCatalog.Admin", "RiskCatalog.Write"))
-    .AddPolicy("RiskCatalogRead", policy =>
-        policy.RequireRole("RiskCatalog.Admin", "RiskCatalog.Read"));
+builder.Services.AddRiskCatalogAuthentication(builder.Configuration);
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
     app.MapScalarApiReference(options =>
     {
         options
@@ -144,7 +122,7 @@ if (app.Environment.IsDevelopment())
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
             .AddPreferredSecuritySchemes("BearerAuth")
             .AddHttpAuthentication("BearerAuth", auth => { auth.Token = builder.Configuration["Scalar:AuthToken"]; });
-    });
+    }).AllowAnonymous();
 }
 
 app.UseHttpsRedirection();

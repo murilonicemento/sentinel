@@ -11,6 +11,7 @@ using Polly.Extensions.Http;
 using RiskCatalog.Infrastructure.HttpClients;
 using RiskCatalog.Infrastructure.Persistence.DatabaseContext;
 using RiskCatalog.Infrastructure.Persistence.Repositories;
+using RiskCatalog.Infrastructure.Security;
 using StackExchange.Redis;
 
 namespace RiskCatalog.Infrastructure;
@@ -27,6 +28,7 @@ public static class InfrastructureServiceCollectionExtension
             .AddRedisCache(configuration)
             .AddKafkaPublisher(configuration)
             .AddRepositories()
+            .AddServiceTokens(configuration)
             .AddGeospatialClient(configuration);
 
     private static IServiceCollection AddRedisCache(this IServiceCollection services, IConfiguration configuration)
@@ -97,6 +99,7 @@ public static class InfrastructureServiceCollectionExtension
                 client.BaseAddress = new Uri(geospatialUrl);
                 client.Timeout = TimeSpan.FromSeconds(30);
             })
+            .AddHttpMessageHandler<ServiceTokenHandler>()
             .AddPolicyHandler(CreateGeospatialRetryPolicy());
 
         return services;

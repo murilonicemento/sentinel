@@ -39,7 +39,8 @@ public class RiskCatalogWebApplicationFactory : WebApplicationFactory<Program>, 
             {
                 {"Jwt:Issuer", "TestIssuer"},
                 {"Jwt:Audience", "TestAudience"},
-                {"Jwt:Key", "ThisIsASecretKeyForJWTTokenGeneration123456789"},
+                {"Jwt:SigningKey", "ThisIsASecretKeyForJWTTokenGeneration123456789"},
+                {"ServiceToken:SigningKey", "ThisIsTheRiskCatalogServiceTokenKeyForTests123456789"},
                 {"ElasticSearch:URI", "http://localhost:9200"}
             };
             
