@@ -13,6 +13,7 @@ using MediatR;
 using RiskEvaluation.Application.Interfaces.HttpClients;
 using RiskEvaluation.Application.Interfaces.Messaging;
 using RiskEvaluation.Infrastructure.HttpClients;
+using RiskEvaluation.Infrastructure.Security;
 using StackExchange.Redis;
 
 namespace RiskEvaluation.Infrastructure;
@@ -41,18 +42,21 @@ public static class ServiceCollectionExtension
             return ConnectionMultiplexer.Connect(connectionString);
         });
 
+        services.AddServiceTokens(configuration);
+
         services.AddHttpClient<IRiskCatalogClient, RiskCatalogHttpClient>(client =>
         {
             client.BaseAddress = new Uri(configuration["Services:RiskCatalog:BaseUrl"] ?? "http://localhost:5002/");
             client.DefaultRequestHeaders.Add("Accept", "application/json");
-        });
+        })
+        .AddHttpMessageHandler<ServiceTokenHandler>();
 
         services.AddHttpClient<IGeospatialClient, GeospatialHttpClient>(client =>
         {
             client.BaseAddress = new Uri(configuration["Services:Geospatial:BaseUrl"] ?? "http://localhost:5003/");
             client.DefaultRequestHeaders.Add("Accept", "application/json");
-            client.DefaultRequestHeaders.Add("X-Api-Key", configuration["Services:Geospatial:ApiKey"] ?? string.Empty);
-        });
+        })
+        .AddHttpMessageHandler<ServiceTokenHandler>();
 
         // Repositories
         services.AddScoped<IRiskEvaluationRepository, RiskEvaluationRepository>();

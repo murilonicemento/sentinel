@@ -7,6 +7,7 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using RiskEvaluation.Api.Filters;
 using RiskEvaluation.Api.Middlewares;
+using RiskEvaluation.Api.Security;
 using RiskEvaluation.Infrastructure.HostedServices;
 using Scalar.AspNetCore;
 using Serilog;
@@ -16,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
 builder.Services.AddOpenApi();
+builder.Services.AddRiskEvaluationAuthentication(builder.Configuration);
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
@@ -45,7 +47,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 builder.Host.UseSerilog((context, config) => { config.ReadFrom.Configuration(context.Configuration); });
 
 // MongoDB Serialization
-BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
 
 // Layered Service Registration
 builder.Services
@@ -60,14 +62,14 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
     app.MapScalarApiReference(options =>
     {
         options
             .WithTitle("Sentinel - Risk Evaluation API")
             .WithTheme(ScalarTheme.DeepSpace)
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
-    });
+    }).AllowAnonymous();
 }
 
 app.UseHttpsRedirection();
@@ -77,3 +79,5 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program;
