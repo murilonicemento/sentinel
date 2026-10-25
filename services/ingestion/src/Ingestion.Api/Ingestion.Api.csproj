@@ -27,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Ingestion.Application\Ingestion.Application.csproj" />
     <ProjectReference Include="..\Ingestion.Infrastructure.Write\Ingestion.Infrastructure.Write.csproj" />
+    <ProjectReference Include="..\Ingestion.Infrastructure.Read\Ingestion.Infrastructure.Read.csproj" />
   </ItemGroup>
 
 </Project>

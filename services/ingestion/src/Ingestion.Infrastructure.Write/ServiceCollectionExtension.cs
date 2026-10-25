@@ -16,6 +16,7 @@ using Ingestion.Infrastructure.Write.Providers;
 using Ingestion.Infrastructure.Write.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Minio;
 using Polly;
 using Polly.Extensions.Http;
@@ -60,7 +61,11 @@ public static class ServiceCollectionExtension
                     .WithSSL(false)
                     .Build();
             })
-            .AddScoped<IObjectStorageProvider, MinioProvider>();
+            .AddScoped<IObjectStorageProvider>(sp => new MinioProvider(
+                sp.GetRequiredService<IMinioClient>(),
+                configuration["MinIO:BucketName"]
+                ?? throw new InvalidOperationException("MinIO:BucketName configuration is required"),
+                sp.GetRequiredService<ILogger<MinioProvider>>()));
 
     private static IServiceCollection AddPublishers(this IServiceCollection services, IConfiguration configuration) =>
         services.AddSingleton<IProducer<Null, string>>(sp =>

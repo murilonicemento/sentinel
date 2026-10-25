@@ -2,14 +2,13 @@ using System.Text.Json;
 using Ingestion.Application.DTO;
 using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.Providers;
+using Ingestion.Application.Interfaces.Repositories;
 using Ingestion.Application.Interfaces.Services;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Enums;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Outbox;
 using Ingestion.Domain.ValueObjects;
-using Ingestion.Infrastructure.Read.Persistence.DbContext;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Ingestion.Application.Services;
@@ -21,8 +20,7 @@ public class SensorCollectionService : ISensorCollectionService
     private readonly IEventDeduplicator _eventDeduplicator;
     private readonly IObjectStorageProvider _minioProvider;
     private readonly IOutboxRepository _outboxRepository;
-    private readonly ReadDbContext _readDbContext;
-    private readonly IConfiguration _configuration;
+    private readonly IDetectedEventReadRepository _detectedEventReadRepository;
     private readonly IGeospatialValidationService _geospatialValidationService;
     private readonly ILogger<SensorCollectionService> _logger;
 
@@ -32,8 +30,7 @@ public class SensorCollectionService : ISensorCollectionService
         IEventDeduplicator eventDeduplicator,
         IObjectStorageProvider minioProvider,
         IOutboxRepository outboxRepository,
-        ReadDbContext readDbContext,
-        IConfiguration configuration,
+        IDetectedEventReadRepository detectedEventReadRepository,
         IGeospatialValidationService geospatialValidationService,
         ILogger<SensorCollectionService> logger)
     {
@@ -42,8 +39,7 @@ public class SensorCollectionService : ISensorCollectionService
         _eventDeduplicator = eventDeduplicator;
         _minioProvider = minioProvider;
         _outboxRepository = outboxRepository;
-        _readDbContext = readDbContext;
-        _configuration = configuration;
+        _detectedEventReadRepository = detectedEventReadRepository;
         _geospatialValidationService = geospatialValidationService;
         _logger = logger;
     }
@@ -95,15 +91,11 @@ public class SensorCollectionService : ISensorCollectionService
 
         var collectionGuid = Guid.NewGuid();
         var objectName = $"raw/{collectionGuid}.json";
-        var putResponse =
-            await _minioProvider.UploadJsonAsync(_configuration["MinIO:BucketName"]!, objectName, payload);
+        var putResponse = await _minioProvider.UploadJsonAsync(objectName, payload);
 
         var dataCollection = new DataCollection(collectionGuid, dataSourceId, collectedAt,
             JsonSerializer.Serialize(putResponse), tenantId);
         await _dataCollectionRepository.RegisterAsync(dataCollection);
-
-        var collectionName = domain == "Climatic" ? "climaticEvents" : "disasterEvents";
-        var mongoCollection = _readDbContext.GetCollection<TEvent>(collectionName);
 
         foreach (var sample in samples)
         {
@@ -142,7 +134,7 @@ public class SensorCollectionService : ISensorCollectionService
                 "Inserting climatic event to mongodb. Json event: {evt}",
                 evt
             );
-            await mongoCollection.InsertOneAsync(evt, cancellationToken);
+            await _detectedEventReadRepository.AddAsync(domain, evt, cancellationToken);
 
             var outbox = new OutboxMessage(Guid.NewGuid(), collectionGuid,
                 $"{domain.ToLower()}-event-detected", JsonSerializer.Serialize(evt));

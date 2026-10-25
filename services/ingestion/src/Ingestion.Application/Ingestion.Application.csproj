@@ -7,15 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CsvHelper" />
     <PackageReference Include="MediatR" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
-    <PackageReference Include="Minio" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Ingestion.Domain\Ingestion.Domain.csproj" />
-    <ProjectReference Include="..\Ingestion.Infrastructure.Read\Ingestion.Infrastructure.Read.csproj" />
   </ItemGroup>
 
 </Project>

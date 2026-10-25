@@ -11,32 +11,34 @@ namespace Ingestion.Infrastructure.Write.Providers;
 public class MinioProvider : IObjectStorageProvider
 {
     private readonly IMinioClient _minioClient;
+    private readonly string _bucketName;
     private readonly ILogger<MinioProvider> _logger;
 
-    public MinioProvider(IMinioClient minioClient, ILogger<MinioProvider> logger)
+    public MinioProvider(IMinioClient minioClient, string bucketName, ILogger<MinioProvider> logger)
     {
         _minioClient = minioClient;
+        _bucketName = bucketName;
         _logger = logger;
     }
 
-    public async Task<UploadResultDTO> UploadJsonAsync(string bucketName, string objectName, string payload)
+    public async Task<UploadResultDTO> UploadJsonAsync(string objectName, string payload)
     {
         try
         {
-            var bucketExistsArgs = new BucketExistsArgs().WithBucket(bucketName);
+            var bucketExistsArgs = new BucketExistsArgs().WithBucket(_bucketName);
             var bucketExist = await _minioClient.BucketExistsAsync(bucketExistsArgs);
 
             if (!bucketExist)
             {
-                var makeBucketArgs = new MakeBucketArgs().WithBucket(bucketName);
+                var makeBucketArgs = new MakeBucketArgs().WithBucket(_bucketName);
 
                 await _minioClient.MakeBucketAsync(makeBucketArgs);
-                _logger.LogInformation("Bucket with name {bucketName} created.", bucketName);
+                _logger.LogInformation("Bucket with name {bucketName} created.", _bucketName);
             }
 
             var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(payload));
             var putObjectArgs = new PutObjectArgs()
-                .WithBucket(bucketName)
+                .WithBucket(_bucketName)
                 .WithObject(objectName)
                 .WithStreamData(memoryStream)
                 .WithObjectSize(memoryStream.Length)

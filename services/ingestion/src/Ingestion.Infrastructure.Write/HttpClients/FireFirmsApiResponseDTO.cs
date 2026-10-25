@@ -1,6 +1,6 @@
 using CsvHelper.Configuration.Attributes;
 
-namespace Ingestion.Application.DTO;
+namespace Ingestion.Infrastructure.Write.HttpClients;
 
 public record FireFirmsApiResponseDTO
 {
