@@ -1,9 +1,5 @@
-using Confluent.Kafka;
 using TenantsBilling.Application.Services;
-using TenantsBilling.Domain.Events;
-using TenantsBilling.Domain.Repositories;
 using TenantsBilling.Infrastructure;
-using TenantsBilling.Infrastructure.Messaging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,13 +9,11 @@ var postgresConnectionString = builder.Configuration.GetConnectionString("Tenant
 var kafkaBootstrapServers = builder.Configuration["Kafka:BootstrapServers"] ?? "localhost:9092";
 var kafkaTopic = builder.Configuration["Kafka:Topic"] ?? "tenants-billing-events";
 
-builder.Services.AddTenantsBillingInfrastructure(postgresConnectionString, usePostgres: !string.IsNullOrWhiteSpace(postgresConnectionString));
-
-builder.Services.AddSingleton<IProducer<Null, string>>(_ =>
-    new ProducerBuilder<Null, string>(new ProducerConfig { BootstrapServers = kafkaBootstrapServers }).Build());
-
-builder.Services.AddSingleton<ITenantEventPublisher>(sp =>
-    new KafkaTenantEventPublisher(sp.GetRequiredService<IProducer<Null, string>>(), kafkaTopic));
+builder.Services.AddTenantsBillingInfrastructure(
+    postgresConnectionString,
+    kafkaBootstrapServers,
+    kafkaTopic,
+    usePostgres: !string.IsNullOrWhiteSpace(postgresConnectionString));
 
 builder.Services.AddScoped<TenantManagementService>();
 builder.Services.AddScoped<PlanManagementService>();
@@ -47,9 +41,9 @@ app.MapPost("/api/v1/tenants", async (CreateTenantCommand command, TenantManagem
     });
 });
 
-app.MapGet("/api/v1/tenants/{tenantId:guid}", async (Guid tenantId, ITenantRepository repository) =>
+app.MapGet("/api/v1/tenants/{tenantId:guid}", async (Guid tenantId, TenantManagementService service) =>
 {
-    var tenant = await repository.GetByIdAsync(tenantId);
+    var tenant = await service.GetTenantAsync(tenantId);
     return tenant is null ? Results.NotFound() : Results.Ok(tenant);
 });
 

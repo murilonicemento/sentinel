@@ -63,6 +63,9 @@ public sealed class TenantManagementService
         return status;
     }
 
+    public Task<Tenant?> GetTenantAsync(Guid tenantId, CancellationToken cancellationToken = default)
+        => _tenantRepository.GetByIdAsync(tenantId, cancellationToken);
+
     public async Task<Tenant> SuspendTenantAsync(Guid tenantId, CancellationToken cancellationToken = default)
     {
         var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)

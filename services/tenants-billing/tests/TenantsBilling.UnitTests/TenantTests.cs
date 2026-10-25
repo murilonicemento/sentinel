@@ -118,6 +118,24 @@ public class TenantManagementServiceTests
         Assert.Contains("TenantSuspended", eventPublisher.Events);
     }
 
+    [Fact]
+    public async Task GetTenantAsync_ReturnsExistingTenantOrNull()
+    {
+        var tenantRepository = new InMemoryTenantRepository();
+        var planRepository = new InMemoryPlanRepository();
+        var service = new TenantManagementService(tenantRepository, planRepository, new FakeTenantEventPublisher());
+        var plan = new Plan(Guid.NewGuid(), "Pro", 1000, 200, 80, 25);
+        await planRepository.AddAsync(plan);
+        var tenant = await service.CreateTenantAsync(new CreateTenantCommand("Fabrikam", plan.Id));
+
+        var found = await service.GetTenantAsync(tenant.Id);
+        var missing = await service.GetTenantAsync(Guid.NewGuid());
+
+        Assert.NotNull(found);
+        Assert.Equal(tenant.Id, found.Id);
+        Assert.Null(missing);
+    }
+
     private sealed class InMemoryTenantRepository : ITenantRepository
     {
         private readonly Dictionary<Guid, Tenant> _items = new();
