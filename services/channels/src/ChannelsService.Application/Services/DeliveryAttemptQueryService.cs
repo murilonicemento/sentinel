@@ -1,3 +1,4 @@
+using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Entities;
 
@@ -12,6 +13,10 @@ public sealed class DeliveryAttemptQueryService : IDeliveryAttemptQueryService
         _deliveryRepository = deliveryRepository;
     }
 
-    public Task<IReadOnlyList<DeliveryAttempt>> GetByEventAsync(string eventId, CancellationToken cancellationToken)
-        => _deliveryRepository.GetByEventAsync(eventId);
+    public async Task<IReadOnlyList<DeliveryAttempt>> GetByEventAsync(string eventId, TenantAccessScope scope,
+        CancellationToken cancellationToken)
+    {
+        var attempts = await _deliveryRepository.GetByEventAsync(eventId);
+        return attempts.Where(attempt => scope.Allows(attempt.TenantId)).ToList();
+    }
 }

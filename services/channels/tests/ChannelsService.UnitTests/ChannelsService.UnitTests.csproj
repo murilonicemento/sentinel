@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/ChannelsService.Application/ChannelsService.Application.csproj" />
     <ProjectReference Include="../../src/ChannelsService.Infrastructure/ChannelsService.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\ChannelsService.Api\ChannelsService.Api.csproj" />
   </ItemGroup>
 
 </Project>

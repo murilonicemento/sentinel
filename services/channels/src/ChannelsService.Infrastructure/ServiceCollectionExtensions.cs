@@ -8,6 +8,7 @@ using ChannelsService.Infrastructure.Options;
 using ChannelsService.Infrastructure.Persistence;
 using ChannelsService.Infrastructure.Persistence.Repositories;
 using ChannelsService.Infrastructure.Providers;
+using ChannelsService.Infrastructure.Security;
 using ChannelsService.Infrastructure.Services;
 using ChannelsService.Infrastructure.Settings;
 using Confluent.Kafka;
@@ -97,7 +98,9 @@ public static class ServiceCollectionExtensions
                 client.BaseAddress = new Uri(baseUrl);
                 client.Timeout = TimeSpan.FromSeconds(10);
             })
+            .AddHttpMessageHandler<ServiceTokenHandler>()
             .Services
+            .AddServiceTokens(configuration)
             .AddScoped<ITenantBillingGateway>(sp => sp.GetRequiredService<TenantBillingGateway>())
             .AddScoped<IChannelDeliveryService, ChannelDeliveryService>()
             .AddScoped<IRetryPolicyEngine, RetryPolicyEngine>()
