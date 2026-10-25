@@ -40,6 +40,41 @@ public sealed class AlertWindowQueryService : IAlertWindowQueryService
         return windows.Where(w => scope.Allows(w.TenantId)).Select(MapToDto).ToList();
     }
 
+    public async Task<PagedResultDTO<AlertWindowDTO>> SearchAsync(string? region, string? status,
+        AlertWindowAccessScope scope, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(region) && string.IsNullOrWhiteSpace(status))
+            throw new ArgumentException("Provide a region or a status filter.", nameof(region));
+
+        AlertStatus? alertStatus = null;
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<AlertStatus>(status, true, out var parsed) || !Enum.IsDefined(parsed))
+                throw new ArgumentException($"Unknown status '{status}'.", nameof(status));
+            alertStatus = parsed;
+        }
+
+        var windows = string.IsNullOrWhiteSpace(region)
+            ? await _repository.GetByStatusAsync(alertStatus!.Value, cancellationToken)
+            : await _repository.GetByRegionAsync(region, cancellationToken);
+
+        var matching = windows
+            .Where(w => scope.Allows(w.TenantId))
+            .Where(w => alertStatus is null || w.Status == alertStatus)
+            .OrderByDescending(w => w.OpenedAt)
+            .ThenBy(w => w.Id)
+            .ToList();
+
+        return new PagedResultDTO<AlertWindowDTO>
+        {
+            Items = matching.Skip((page - 1) * pageSize).Take(pageSize).Select(MapToDto).ToList(),
+            Page = page,
+            PageSize = pageSize,
+            TotalItems = matching.Count,
+            TotalPages = (int)Math.Ceiling(matching.Count / (double)pageSize)
+        };
+    }
+
     private static AlertWindowDTO MapToDto(AlertWindow window)
     {
         return new AlertWindowDTO(

@@ -1,3 +1,4 @@
+using AlertOrchestrator.Api.Contracts;
 using AlertOrchestrator.Api.Security;
 using AlertOrchestrator.Application.DTOs;
 using AlertOrchestrator.Application.Interfaces.Services;
@@ -9,6 +10,7 @@ namespace AlertOrchestrator.Api.Controllers;
 [ApiController]
 [Route("api/alert-windows")]
 [Authorize(Policy = AlertOrchestratorPolicies.Read)]
+[DeprecatedRoute("/" + AlertWindowsV1Controller.BasePath)]
 public class AlertWindowsController : ControllerBase
 {
     private readonly IAlertWindowQueryService _queryService;
