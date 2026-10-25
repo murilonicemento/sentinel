@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RiskEvaluation.Api.Contracts;
 using RiskEvaluation.Api.Security;
 using RiskEvaluation.Application.Commands;
 using RiskEvaluation.Application.DTOs;
@@ -10,6 +11,7 @@ namespace RiskEvaluation.Api.Controllers;
 
 [ApiController]
 [Route("api/risk-evaluation")]
+[DeprecatedRoute("/" + RiskEvaluationV1Controller.BasePath)]
 public class RiskEvaluationController : ControllerBase
 {
     private readonly IMediator _mediator;

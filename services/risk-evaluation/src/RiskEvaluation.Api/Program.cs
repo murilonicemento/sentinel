@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
+using RiskEvaluation.Api.Contracts;
 using RiskEvaluation.Api.Filters;
 using RiskEvaluation.Api.Middlewares;
 using RiskEvaluation.Api.Security;
@@ -16,12 +17,23 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.MarkDeprecatedOperations());
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        var status = context.ProblemDetails.Status ?? StatusCodes.Status500InternalServerError;
+        ApiProblems.Enrich(context.ProblemDetails, context.HttpContext, ApiProblems.DefaultCodeFor(status));
+    };
+});
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddRiskEvaluationAuthentication(builder.Configuration);
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
     {
+        if (ApiProblems.IsVersionedApi(context.HttpContext)) return ModelValidationProblems.For(context);
+
         var errors = context.ModelState
             .Values
             .SelectMany(v => v.Errors)
@@ -72,6 +84,8 @@ if (app.Environment.IsDevelopment())
     }).AllowAnonymous();
 }
 
+app.UseExceptionHandler();
+app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePages());
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();

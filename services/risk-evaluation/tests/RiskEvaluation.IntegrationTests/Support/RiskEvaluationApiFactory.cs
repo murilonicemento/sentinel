@@ -2,8 +2,15 @@ using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Moq;
+using RiskEvaluation.Application.Interfaces.HttpClients;
+using RiskEvaluation.Application.Interfaces.Messaging;
+using RiskEvaluation.Domain.Entities;
+using RiskEvaluation.Domain.Interfaces;
+using RiskEvaluation.Domain.Repositories;
 
 namespace RiskEvaluation.IntegrationTests.Support;
 
@@ -20,8 +27,28 @@ public sealed class RiskEvaluationApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ServiceToken:SigningKey", "integration-tests-risk-evaluation-service-key-0123456789");
         builder.UseSetting("ServiceToken:Roles:0", "Geospatial.Read");
 
-        builder.ConfigureTestServices(services => services.RemoveAll<IHostedService>());
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IHostedService>();
+
+            // Mongo, Redis, Kafka and the geospatial service are replaced so the HTTP contract can run in memory.
+            services.RemoveAll<IRiskEvaluationRepository>();
+            services.AddSingleton<IRiskEvaluationRepository>(Evaluations);
+            services.RemoveAll<IRiskFactorRepository>();
+            services.AddSingleton(Mock.Of<IRiskFactorRepository>(r =>
+                r.GetAllAsync(It.IsAny<CancellationToken>()) == Task.FromResult<IReadOnlyList<RiskFactor>>(new List<RiskFactor>())));
+            services.RemoveAll<IRiskModelRepository>();
+            services.AddSingleton(Mock.Of<IRiskModelRepository>());
+            services.RemoveAll<IRecentScoresCache>();
+            services.AddSingleton(Mock.Of<IRecentScoresCache>());
+            services.RemoveAll<IEventPublisher>();
+            services.AddSingleton(Mock.Of<IEventPublisher>());
+            services.RemoveAll<IGeospatialClient>();
+            services.AddSingleton(Mock.Of<IGeospatialClient>());
+        });
     }
+
+    public InMemoryRiskEvaluationRepository Evaluations { get; } = new();
 
     public HttpClient CreateClientWithToken(string? token)
     {
@@ -30,4 +57,28 @@ public sealed class RiskEvaluationApiFactory : WebApplicationFactory<Program>
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
     }
+}
+
+public sealed class InMemoryRiskEvaluationRepository : IRiskEvaluationRepository
+{
+    private readonly List<RiskEvaluationEntity> _items = [];
+    private readonly Lock _lock = new();
+
+    public Task AddAsync(RiskEvaluationEntity evaluation)
+    {
+        lock (_lock) _items.Add(evaluation);
+        return Task.CompletedTask;
+    }
+
+    public Task<RiskEvaluationEntity?> GetByIdAsync(Guid id)
+    {
+        lock (_lock) return Task.FromResult(_items.FirstOrDefault(e => e.Id == id));
+    }
+
+    public Task<List<RiskEvaluationEntity>> GetByLocationAsync(int latitude, int longitude)
+    {
+        lock (_lock) return Task.FromResult(_items.Where(e => e.Latitude == latitude && e.Longitude == longitude).ToList());
+    }
+
+    public Task UpdateAsync(RiskEvaluationEntity evaluation) => Task.CompletedTask;
 }
