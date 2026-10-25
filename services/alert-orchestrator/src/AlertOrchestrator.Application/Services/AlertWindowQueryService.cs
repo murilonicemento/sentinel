@@ -15,26 +15,29 @@ public sealed class AlertWindowQueryService : IAlertWindowQueryService
         _repository = repository;
     }
 
-    public async Task<AlertWindowDTO?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<AlertWindowDTO?> GetByIdAsync(Guid id, AlertWindowAccessScope scope,
+        CancellationToken cancellationToken = default)
     {
         var window = await _repository.GetByIdAsync(id, cancellationToken);
-        return window is null ? null : MapToDto(window);
+
+        // A window outside the caller's tenants is reported as missing so its existence is not disclosed.
+        return window is null || !scope.Allows(window.TenantId) ? null : MapToDto(window);
     }
 
-    public async Task<IReadOnlyList<AlertWindowDTO>> GetByRegionAsync(string region,
+    public async Task<IReadOnlyList<AlertWindowDTO>> GetByRegionAsync(string region, AlertWindowAccessScope scope,
         CancellationToken cancellationToken = default)
     {
         var windows = await _repository.GetByRegionAsync(region, cancellationToken);
-        return windows.Select(MapToDto).ToList();
+        return windows.Where(w => scope.Allows(w.TenantId)).Select(MapToDto).ToList();
     }
 
-    public async Task<IReadOnlyList<AlertWindowDTO>> GetByStatusAsync(string status,
+    public async Task<IReadOnlyList<AlertWindowDTO>> GetByStatusAsync(string status, AlertWindowAccessScope scope,
         CancellationToken cancellationToken = default)
     {
         if (!Enum.TryParse<AlertStatus>(status, true, out var alertStatus)) return Array.Empty<AlertWindowDTO>();
 
         var windows = await _repository.GetByStatusAsync(alertStatus, cancellationToken);
-        return windows.Select(MapToDto).ToList();
+        return windows.Where(w => scope.Allows(w.TenantId)).Select(MapToDto).ToList();
     }
 
     private static AlertWindowDTO MapToDto(AlertWindow window)

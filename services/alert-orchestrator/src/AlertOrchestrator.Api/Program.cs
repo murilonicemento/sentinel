@@ -1,9 +1,11 @@
 using System.Net;
 using System.Text.Json.Serialization;
 using AlertOrchestrator.Api.Middlewares;
+using AlertOrchestrator.Api.Security;
 using AlertOrchestrator.Application.Events;
 using AlertOrchestrator.Infrastructure;
 using AlertOrchestrator.Infrastructure.Options;
+using AlertOrchestrator.Infrastructure.Security;
 using Microsoft.AspNetCore.Mvc;
 using Scalar.AspNetCore;
 using Serilog;
@@ -18,6 +20,7 @@ builder.Services.AddControllers()
     });
 
 builder.Services.AddOpenApi();
+builder.Services.AddAlertOrchestratorAuthentication(builder.Configuration);
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
@@ -76,6 +79,7 @@ var infrastructureOptions = new AlertOrchestratorInfrastructureOptions
     TenantsBillingBaseUrl = servicesConfig.GetValue("TenantsBillingBaseUrl", "http://localhost:5055")
 };
 
+builder.Services.AddServiceTokens(builder.Configuration);
 builder.Services.AddAlertOrchestratorInfrastructure(infrastructureOptions);
 
 builder.Services.AddHealthChecks();
@@ -87,20 +91,23 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
     app.MapScalarApiReference(options =>
     {
         options
             .WithTitle("Sentinel - Alert Orchestrator API")
             .WithTheme(ScalarTheme.DeepSpace)
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
-    });
+    }).AllowAnonymous();
 }
 
 app.UseHttpsRedirection();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health").AllowAnonymous();
 
 app.Run();
+
+public partial class Program;

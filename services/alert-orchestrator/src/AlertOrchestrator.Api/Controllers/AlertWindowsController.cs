@@ -1,24 +1,34 @@
+using AlertOrchestrator.Api.Security;
 using AlertOrchestrator.Application.DTOs;
 using AlertOrchestrator.Application.Interfaces.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AlertOrchestrator.Api.Controllers;
 
 [ApiController]
 [Route("api/alert-windows")]
+[Authorize(Policy = AlertOrchestratorPolicies.Read)]
 public class AlertWindowsController : ControllerBase
 {
     private readonly IAlertWindowQueryService _queryService;
+    private readonly TenantAccessEvaluator _tenantAccess;
 
-    public AlertWindowsController(IAlertWindowQueryService queryService)
+    public AlertWindowsController(IAlertWindowQueryService queryService, TenantAccessEvaluator tenantAccess)
     {
         _queryService = queryService;
+        _tenantAccess = tenantAccess;
     }
+
+    private AlertWindowAccessScope AccessScope() =>
+        _tenantAccess.IsServicePrincipal(User)
+            ? AlertWindowAccessScope.Platform
+            : AlertWindowAccessScope.ForTenants(User.FindAll(SentinelClaims.TenantId).Select(c => c.Value));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<AlertWindowDTO>> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var window = await _queryService.GetByIdAsync(id, cancellationToken);
+        var window = await _queryService.GetByIdAsync(id, AccessScope(), cancellationToken);
 
         if (window is null) return NoContent();
 
@@ -30,7 +40,7 @@ public class AlertWindowsController : ControllerBase
         string region,
         CancellationToken cancellationToken)
     {
-        var windows = await _queryService.GetByRegionAsync(region, cancellationToken);
+        var windows = await _queryService.GetByRegionAsync(region, AccessScope(), cancellationToken);
         return Ok(windows);
     }
 
@@ -39,7 +49,7 @@ public class AlertWindowsController : ControllerBase
         string status,
         CancellationToken cancellationToken)
     {
-        var windows = await _queryService.GetByStatusAsync(status, cancellationToken);
+        var windows = await _queryService.GetByStatusAsync(status, AccessScope(), cancellationToken);
         return Ok(windows);
     }
 }
