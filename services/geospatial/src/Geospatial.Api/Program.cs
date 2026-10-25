@@ -53,7 +53,8 @@ builder.Services
     .AddScoped<IWithinRadiusUseCase, WithinRadiusUseCase>()
     .AddScoped<IIntersectsUseCase, IntersectsUseCase>()
     .AddScoped<IDistanceUseCase, DistanceUseCase>()
-    .AddScoped<IContainsPointUseCase, ContainsPointUseCase>();
+    .AddScoped<IContainsPointUseCase, ContainsPointUseCase>()
+    .AddScoped<ISearchGeospatialEventsUseCase, SearchGeospatialEventsUseCase>();
 
 var app = builder.Build();
 
