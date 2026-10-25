@@ -36,6 +36,9 @@ public sealed class SensorEventDetectedConsumer : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Consume() blocks; without yielding first, the loop would run synchronously inside StartAsync and block host startup.
+        await Task.Yield();
+
         _consumer.Subscribe(_options.TopicName);
         _logger.LogInformation("Subscribed to topic {Topic} for {EventType}", _options.TopicName,
             nameof(SensorEventDetected));
