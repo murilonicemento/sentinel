@@ -1,6 +1,6 @@
 using MediatR;
 
-namespace RiskEvaluation.Domain.Contracts;
+namespace RiskEvaluation.Application.Contracts;
 
 public class SensorEventDetected : INotification
 {

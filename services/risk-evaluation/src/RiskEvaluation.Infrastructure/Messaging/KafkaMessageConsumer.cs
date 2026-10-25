@@ -3,7 +3,7 @@ using Confluent.Kafka;
 using MediatR;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using RiskEvaluation.Domain.Contracts;
+using RiskEvaluation.Application.Contracts;
 using Microsoft.Extensions.Logging;
 using RiskEvaluation.Application.Interfaces.Messaging;
 
