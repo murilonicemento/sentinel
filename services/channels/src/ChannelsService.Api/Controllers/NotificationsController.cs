@@ -1,5 +1,4 @@
 using ChannelsService.Application.Interfaces;
-using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Events;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,36 +8,29 @@ namespace ChannelsService.Api.Controllers;
 [Route("api/notifications")]
 public class NotificationsController : ControllerBase
 {
-    private readonly IChannelDeliveryService _deliveryService;
-    private readonly IDeadLetterPublisher _deadLetterPublisher;
-    private readonly IDeliveryRepository _deliveryRepository;
+    private readonly INotificationDispatchService _dispatchService;
+    private readonly IDeliveryAttemptQueryService _deliveryAttemptQueryService;
 
     public NotificationsController(
-        IChannelDeliveryService deliveryService,
-        IDeadLetterPublisher deadLetterPublisher,
-        IDeliveryRepository deliveryRepository)
+        INotificationDispatchService dispatchService,
+        IDeliveryAttemptQueryService deliveryAttemptQueryService)
     {
-        _deliveryService = deliveryService;
-        _deadLetterPublisher = deadLetterPublisher;
-        _deliveryRepository = deliveryRepository;
+        _dispatchService = dispatchService;
+        _deliveryAttemptQueryService = deliveryAttemptQueryService;
     }
 
     [HttpGet("{eventId}/attempts")]
     public async Task<IActionResult> GetAttempts(string eventId, CancellationToken cancellationToken)
     {
-        var attempts = await _deliveryRepository.GetByEventAsync(eventId);
+        var attempts = await _deliveryAttemptQueryService.GetByEventAsync(eventId, cancellationToken);
         return Ok(attempts);
     }
 
     [HttpPost]
     public async Task<IActionResult> Post(NotificationEvent notification, CancellationToken cancellationToken)
     {
-        var result = await _deliveryService.DeliverAsync(notification, cancellationToken);
+        var result = await _dispatchService.DispatchAsync(notification, cancellationToken);
 
-        if (result.Success)
-            return Ok(result);
-
-        await _deadLetterPublisher.PublishAsync(notification, result, cancellationToken);
-        return StatusCode(500, result);
+        return result.Success ? Ok(result) : StatusCode(500, result);
     }
 }

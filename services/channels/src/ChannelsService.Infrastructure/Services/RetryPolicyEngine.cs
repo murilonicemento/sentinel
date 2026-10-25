@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Timeout;
 
-namespace ChannelsService.Application.Services;
+namespace ChannelsService.Infrastructure.Services;
 
 public sealed class RetryPolicyEngine : IRetryPolicyEngine
 {

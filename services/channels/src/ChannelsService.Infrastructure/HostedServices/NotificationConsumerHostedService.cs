@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ChannelsService.Application.Interfaces;
-using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Events;
 using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
@@ -89,20 +88,9 @@ public sealed class NotificationConsumerHostedService : BackgroundService
                         notification.CorrelationId);
 
                     using var scope = _serviceScopeFactory.CreateScope();
-                    var deliveryService =
-                        scope.ServiceProvider.GetRequiredService<IChannelDeliveryService>();
-                    var deadLetterPublisher =
-                        scope.ServiceProvider.GetRequiredService<IDeadLetterPublisher>();
-                    var deliveryResult = await deliveryService.DeliverAsync(notification, stoppingToken);
-
-                    if (deliveryResult.Success) continue;
-
-                    _logger.LogError(
-                        "Notification event {EventId} failed processing: {Error}",
-                        notification.EventId,
-                        deliveryResult.Error);
-
-                    await deadLetterPublisher.PublishAsync(notification, deliveryResult, stoppingToken);
+                    var dispatchService =
+                        scope.ServiceProvider.GetRequiredService<INotificationDispatchService>();
+                    await dispatchService.DispatchAsync(notification, stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
