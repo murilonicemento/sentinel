@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\Ingestion.Application\Ingestion.Application.csproj" />
     <ProjectReference Include="..\..\src\Ingestion.Domain\Ingestion.Domain.csproj" />
     <ProjectReference Include="..\..\src\Ingestion.Infrastructure.Read\Ingestion.Infrastructure.Read.csproj" />
+    <ProjectReference Include="..\..\src\Ingestion.Api\Ingestion.Api.csproj" />
   </ItemGroup>
 
 </Project>

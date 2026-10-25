@@ -1,14 +1,12 @@
 using System.Net;
-using System.Text;
 using Ingestion.Api.Filters;
 using Ingestion.Api.Middlewares;
+using Ingestion.Api.Security;
 using Ingestion.Application;
 using Ingestion.Infrastructure.Read;
 using Ingestion.Infrastructure.Write;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
@@ -130,34 +128,13 @@ public class Program
                 };
             });
 
-        builder.Services
-            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options =>
-            {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                    ValidAudience = builder.Configuration["Jwt:Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
-                };
-            });
-
-        builder.Services.AddAuthorizationBuilder()
-            .AddPolicy("IngestionRead", policy =>
-                policy.RequireRole("Ingestion.Admin", "Ingestion.Read"))
-            .AddPolicy("IngestionWrite", policy =>
-                policy.RequireRole("Ingestion.Admin", "Ingestion.Write"));
+        builder.Services.AddIngestionAuthentication(builder.Configuration);
 
         var app = builder.Build();
 
         if (app.Environment.IsDevelopment())
         {
-            app.MapOpenApi();
+            app.MapOpenApi().AllowAnonymous();
             app.MapScalarApiReference(options =>
             {
                 options
@@ -166,7 +143,7 @@ public class Program
                     .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
                     .AddPreferredSecuritySchemes("BearerAuth")
                     .AddHttpAuthentication("BearerAuth", auth => { auth.Token = builder.Configuration["Scalar:AuthToken"]; });
-            });
+            }).AllowAnonymous();
         }
 
         app.UseHttpsRedirection();

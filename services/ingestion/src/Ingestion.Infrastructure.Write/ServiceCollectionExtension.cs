@@ -13,6 +13,7 @@ using Ingestion.Infrastructure.Write.Messaging.Publishers;
 using Ingestion.Infrastructure.Write.Persistence.DbContext;
 using Ingestion.Infrastructure.Write.Persistence.Repositories;
 using Ingestion.Infrastructure.Write.Providers;
+using Ingestion.Infrastructure.Write.Security;
 using Ingestion.Infrastructure.Write.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -134,22 +135,23 @@ public static class ServiceCollectionExtension
                                              ?? throw new InvalidOperationException(
                                                  "Polling:PressureChange:BaseUrl configuration is required");
 
+        services.AddServiceTokens(configuration);
+
         services
             .AddHttpClient<ITenantBillingGateway, TenantBillingGateway>(client =>
             {
                 client.BaseAddress = new Uri(billingBaseUrl);
                 client.Timeout = TimeSpan.FromSeconds(10);
-            });
+            })
+            .AddHttpMessageHandler<ServiceTokenHandler>();
 
         services
             .AddHttpClient<IGeospatialClient, GeospatialClient>(client =>
             {
-                var apiKey = configuration["Geospatial:APIKey"] ??
-                             throw new ArgumentException("APIKey is required in config");
                 client.BaseAddress = new Uri(geospatialUrl);
-                client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
                 client.Timeout = TimeSpan.FromSeconds(30);
-            });
+            })
+            .AddHttpMessageHandler<ServiceTokenHandler>();
         services
             .AddHttpClient("Fire", client =>
             {
