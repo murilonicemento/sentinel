@@ -1,9 +1,12 @@
+using System.Security.Claims;
+using TenantsBilling.Api.Security;
 using TenantsBilling.Application.Services;
 using TenantsBilling.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddTenantsBillingAuthentication(builder.Configuration);
 
 var postgresConnectionString = builder.Configuration.GetConnectionString("TenantsBillingDatabase");
 var kafkaBootstrapServers = builder.Configuration["Kafka:BootstrapServers"] ?? "localhost:9092";
@@ -20,12 +23,15 @@ builder.Services.AddScoped<PlanManagementService>();
 
 var app = builder.Build();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
 }
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "tenants-billing" }));
+app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "tenants-billing" })).AllowAnonymous();
 
 app.MapPost("/api/v1/tenants", async (CreateTenantCommand command, TenantManagementService service) =>
 {
@@ -39,16 +45,29 @@ app.MapPost("/api/v1/tenants", async (CreateTenantCommand command, TenantManagem
         tenant.Region,
         tenant.TimeZone
     });
-});
+}).RequireAuthorization(TenantsBillingPolicies.Write);
 
-app.MapGet("/api/v1/tenants/{tenantId:guid}", async (Guid tenantId, TenantManagementService service) =>
+app.MapGet("/api/v1/tenants/{tenantId:guid}", async (
+    Guid tenantId,
+    ClaimsPrincipal user,
+    TenantAccessEvaluator tenantAccess,
+    TenantManagementService service) =>
 {
+    if (!tenantAccess.CanAccessTenant(user, tenantId)) return Results.Forbid();
+
     var tenant = await service.GetTenantAsync(tenantId);
     return tenant is null ? Results.NotFound() : Results.Ok(tenant);
-});
+}).RequireAuthorization(TenantsBillingPolicies.Read);
 
-app.MapPost("/api/v1/tenants/{tenantId:guid}/usage", async (Guid tenantId, UsageRequest request, TenantManagementService service) =>
+app.MapPost("/api/v1/tenants/{tenantId:guid}/usage", async (
+    Guid tenantId,
+    UsageRequest request,
+    ClaimsPrincipal user,
+    TenantAccessEvaluator tenantAccess,
+    TenantManagementService service) =>
 {
+    if (!tenantAccess.CanAccessTenant(user, tenantId)) return Results.Forbid();
+
     var status = await service.RegisterUsageAsync(
         tenantId,
         request.EventsConsumed,
@@ -57,15 +76,17 @@ app.MapPost("/api/v1/tenants/{tenantId:guid}/usage", async (Guid tenantId, Usage
         request.ChannelUsage);
 
     return Results.Ok(new { tenantId, status });
-});
+}).RequireAuthorization(TenantsBillingPolicies.Write);
 
 app.MapPost("/api/v1/plans", async (CreatePlanCommand command, PlanManagementService service) =>
 {
     var plan = await service.CreatePlanAsync(command);
     return Results.Created($"/api/v1/plans/{plan.Id}", new { plan.Id, plan.Name, plan.MaxEventsPerMonth, plan.MaxAlertsPerMonth });
-});
+}).RequireAuthorization(TenantsBillingPolicies.Write);
 
 app.Run();
+
+public partial class Program;
 
 public sealed record UsageRequest(
     int EventsConsumed,
