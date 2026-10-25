@@ -440,6 +440,83 @@
           "Port": 8080
         }
       ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/v1/ingestion/{everything}",
+      "DownstreamPathTemplate": "/api/v1/ingestion/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ingestion",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/v1/risk-catalog/{everything}",
+      "DownstreamPathTemplate": "/api/v1/risk-catalog/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-catalog",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/v1/geospatial/{everything}",
+      "DownstreamPathTemplate": "/api/v1/geospatial/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "geospatial",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/v1/risk-evaluation/{everything}",
+      "DownstreamPathTemplate": "/api/v1/risk-evaluation/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-evaluation",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/v1/alert-orchestrator/{everything}",
+      "DownstreamPathTemplate": "/api/v1/alert-orchestrator/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "alert-orchestrator",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/v1/tenants-billing/{everything}",
+      "DownstreamPathTemplate": "/api/v1/tenants-billing/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "tenants-billing",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/v1/audit-compliance/{everything}",
+      "DownstreamPathTemplate": "/api/v1/audit-compliance/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "audit-compliance",
+          "Port": 8080
+        }
+      ]
     }
   ]
 }
