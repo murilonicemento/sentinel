@@ -1,4 +1,5 @@
 using Ingestion.Application.Commands;
+using Ingestion.Application.Errors;
 using Ingestion.Application.Handlers;
 using Ingestion.Application.Interfaces.Services;
 using Ingestion.Domain.Aggregates;
@@ -119,8 +120,9 @@ public class RegisterDataSourceHandlerTests
             .Setup(x => x.ValidateTenantAsync(tenantId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => _handler.Handle(command, CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<IngestionRuleViolationException>(() => _handler.Handle(command, CancellationToken.None));
 
+        Assert.Equal(IngestionErrorCodes.TenantInactive, exception.Code);
         Assert.Contains("tenant", exception.Message, StringComparison.OrdinalIgnoreCase);
         _mockDataSourceRepository.Verify(x => x.RegisterAsync(It.IsAny<Domain.AggregateRoots.DataSource>()), Times.Never);
     }
@@ -550,7 +552,8 @@ public class RegisterDataSourceHandlerTests
             .ReturnsAsync(false);
 
         var exception =
-            await Assert.ThrowsAsync<KeyNotFoundException>(() => _handler.Handle(command, CancellationToken.None));
+            await Assert.ThrowsAsync<IngestionReferenceNotFoundException>(() => _handler.Handle(command, CancellationToken.None));
+        Assert.Equal(IngestionErrorCodes.TenantNotFound, exception.Code);
         Assert.Contains($"Tenant {tenantId} not found", exception.Message);
         _mockTenantRepository.Verify(x => x.ExistsAsync(tenantId), Times.Once);
         _mockDataSourceRepository.Verify(
@@ -592,7 +595,8 @@ public class RegisterDataSourceHandlerTests
             .ReturnsAsync(existingDataSource);
 
         var exception =
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _handler.Handle(command, CancellationToken.None));
+            await Assert.ThrowsAsync<IngestionRuleViolationException>(() => _handler.Handle(command, CancellationToken.None));
+        Assert.Equal(IngestionErrorCodes.DataSourceAlreadyExists, exception.Code);
         Assert.Contains("DataSource 'Test Sensor' already exists for this tenant", exception.Message);
         _mockTenantRepository.Verify(x => x.ExistsAsync(tenantId), Times.Once);
         _mockDataSourceRepository.Verify(

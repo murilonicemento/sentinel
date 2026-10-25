@@ -12,6 +12,18 @@ public interface IDetectedEventReadRepository
         DateTime? endDate,
         CancellationToken cancellationToken);
 
-    public Task AddAsync<TEvent>(string domain, TEvent detectedEvent, CancellationToken cancellationToken)
-        where TEvent : class;
+    /// <summary>Detected events of the scoped tenants, newest first (ties broken by event id).</summary>
+    public Task<PagedResultDTO<DetectedEventDTO>> GetPageAsync(
+        TenantAccessScope scope,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    public Task<DetectedEventStatisticsDTO> GetStatisticsAsync(
+        TenantAccessScope scope,
+        DateTime? initialDate,
+        DateTime? endDate,
+        CancellationToken cancellationToken);
+
+    public Task AddAsync(DetectedEventDTO detectedEvent, CancellationToken cancellationToken);
 }

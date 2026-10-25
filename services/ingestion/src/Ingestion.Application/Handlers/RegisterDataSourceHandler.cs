@@ -1,4 +1,5 @@
 using Ingestion.Application.Commands;
+using Ingestion.Application.Errors;
 using Ingestion.Application.Interfaces.Services;
 using Ingestion.Domain.AggregateRoots;
 using Ingestion.Domain.Aggregates;
@@ -31,16 +32,19 @@ public class RegisterDataSourceHandler : IRequestHandler<RegisterDataSourceComma
         var tenantExists = await _tenantRepository.ExistsAsync(request.TenantId);
 
         if (!tenantExists)
-            throw new KeyNotFoundException($"Tenant {request.TenantId} not found.");
+            throw new IngestionReferenceNotFoundException(IngestionErrorCodes.TenantNotFound,
+                $"Tenant {request.TenantId} not found.");
 
         var isTenantActive = await _tenantBillingGateway.ValidateTenantAsync(request.TenantId, cancellationToken);
         if (!isTenantActive)
-            throw new InvalidOperationException($"Tenant {request.TenantId} is not active or is not authorized in Tenants Billing.");
+            throw new IngestionRuleViolationException(IngestionErrorKind.Unprocessable, IngestionErrorCodes.TenantInactive,
+                $"Tenant {request.TenantId} is not active or is not authorized in Tenants Billing.");
 
         var existing = await _dataSourceRepository.GetByNameAndTenantAsync(request.Name, request.TenantId);
 
         if (existing != null)
-            throw new InvalidOperationException($"DataSource '{request.Name}' already exists for this tenant.");
+            throw new IngestionRuleViolationException(IngestionErrorKind.Conflict, IngestionErrorCodes.DataSourceAlreadyExists,
+                $"DataSource '{request.Name}' already exists for this tenant.");
 
         var dataSourceId = Guid.NewGuid();
         var dataSource = new DataSource(

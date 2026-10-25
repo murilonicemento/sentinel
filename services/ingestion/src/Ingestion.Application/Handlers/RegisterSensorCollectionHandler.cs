@@ -1,4 +1,5 @@
 using Ingestion.Application.Commands;
+using Ingestion.Application.Errors;
 using Ingestion.Application.Events;
 using Ingestion.Application.Interfaces.Services;
 using Ingestion.Domain.Interfaces.Repositories;
@@ -22,7 +23,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
     public async Task<Guid> Handle(RegisterSensorCollectionCommand request, CancellationToken cancellationToken)
     {
         var dataSource = _dataSourceRepository.GetByIdAndTenantId(request.DatasourceId, request.TenantId)
-                         ?? throw new KeyNotFoundException(
+                         ?? throw new IngestionReferenceNotFoundException(IngestionErrorCodes.DataSourceNotFound,
                              $"DataSource or tenant not found. DataSource Id: {request.DatasourceId}, TenantId: {request.TenantId}");
 
         return await _sensorCollectionService.ProcessSensorCollection<SensorEventDetected>(

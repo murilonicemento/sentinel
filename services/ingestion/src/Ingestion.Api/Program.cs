@@ -1,4 +1,5 @@
 using System.Net;
+using Ingestion.Api.Contracts;
 using Ingestion.Api.Filters;
 using Ingestion.Api.Middlewares;
 using Ingestion.Api.Security;
@@ -57,6 +58,7 @@ public class Program
         builder.Services
             .AddOpenApi(options =>
             {
+                options.MarkDeprecatedOperations();
                 options.AddDocumentTransformer((document, context, cancellationToken) =>
                 {
                     document.Components ??= new OpenApiComponents();
@@ -106,6 +108,8 @@ public class Program
             {
                 options.InvalidModelStateResponseFactory = context =>
                 {
+                    if (ApiProblems.IsVersionedApi(context.HttpContext)) return ModelValidationProblems.For(context);
+
                     var errors = context.ModelState
                         .Values
                         .SelectMany(v => v.Errors)
@@ -128,6 +132,15 @@ public class Program
                 };
             });
 
+        builder.Services.AddProblemDetails(options =>
+        {
+            options.CustomizeProblemDetails = context =>
+            {
+                var status = context.ProblemDetails.Status ?? StatusCodes.Status500InternalServerError;
+                ApiProblems.Enrich(context.ProblemDetails, context.HttpContext, ApiProblems.DefaultCodeFor(status));
+            };
+        });
+        builder.Services.AddExceptionHandler<ApiExceptionHandler>();
         builder.Services.AddIngestionAuthentication(builder.Configuration);
 
         var app = builder.Build();
@@ -146,6 +159,8 @@ public class Program
             }).AllowAnonymous();
         }
 
+        app.UseExceptionHandler();
+        app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePages());
         app.UseHttpsRedirection();
         app.UseAuthentication();
         app.UseAuthorization();

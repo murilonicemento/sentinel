@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Ingestion.Application.Interfaces.Services;
 using Microsoft.Extensions.Logging;
 
@@ -26,8 +27,8 @@ public sealed class TenantBillingGateway : ITenantBillingGateway
                 return false;
             }
 
-            var tenant = await response.Content.ReadFromJsonAsync<TenantBillingTenantResponse>(cancellationToken: cancellationToken);
-            return tenant is not null && tenant.Status.Equals("Active", StringComparison.OrdinalIgnoreCase);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+            return TenantStatusResponse.IsActive(body);
         }
         catch (Exception ex)
         {
@@ -35,6 +36,43 @@ public sealed class TenantBillingGateway : ITenantBillingGateway
             return false;
         }
     }
+}
 
-    private sealed record TenantBillingTenantResponse(string Status);
+/// <summary>
+/// Reads the tenant status returned by tenants-billing (TB-09). The legacy route serializes the status as a number
+/// ({"status": 1}); the v1 route wraps a string status in an envelope ({"data": {"status": "Active"}}).
+/// </summary>
+public static class TenantStatusResponse
+{
+    // TenantStatus.Active in tenants-billing.
+    private const int ActiveStatusValue = 1;
+
+    public static bool IsActive(JsonElement body)
+    {
+        if (body.ValueKind == JsonValueKind.Object && TryGetProperty(body, "data", out var data) &&
+            data.ValueKind == JsonValueKind.Object)
+            body = data;
+
+        if (body.ValueKind != JsonValueKind.Object || !TryGetProperty(body, "status", out var status)) return false;
+
+        return status.ValueKind switch
+        {
+            JsonValueKind.String => string.Equals(status.GetString(), "Active", StringComparison.OrdinalIgnoreCase),
+            JsonValueKind.Number => status.TryGetInt32(out var value) && value == ActiveStatusValue,
+            _ => false
+        };
+    }
+
+    private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+            value = property.Value;
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
 }

@@ -1,3 +1,4 @@
+using Ingestion.Api.Contracts;
 using Ingestion.Api.Security;
 using Ingestion.Application.Commands;
 using Ingestion.Application.DTO;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Ingestion.Api.Controllers;
 
 [Route("api/ingestion")]
+[DeprecatedRoute("/" + IngestionV1Controller.BasePath)]
 [ApiController]
 [Authorize]
 public class IngestionController : ControllerBase

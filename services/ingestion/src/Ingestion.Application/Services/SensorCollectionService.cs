@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ingestion.Application.DTO;
+using Ingestion.Application.Errors;
 using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.Providers;
 using Ingestion.Application.Interfaces.Repositories;
@@ -54,7 +55,7 @@ public class SensorCollectionService : ISensorCollectionService
             throw new ArgumentException("Samples unit can't be blank.");
 
         var dataSource = _dataSourceRepository.GetByIdAndTenantId(dataSourceId, tenantId)
-                         ?? throw new KeyNotFoundException(
+                         ?? throw new IngestionReferenceNotFoundException(IngestionErrorCodes.DataSourceNotFound,
                              $"DataSource or tenant not found. DataSource Id: {dataSourceId}, TenantId: {tenantId}");
 
         _logger.LogInformation("Datasource info. Id: {id}; TenantId: {tenantId}", dataSource.Id, dataSource.TenantId);
@@ -134,7 +135,10 @@ public class SensorCollectionService : ISensorCollectionService
                 "Inserting climatic event to mongodb. Json event: {evt}",
                 evt
             );
-            await _detectedEventReadRepository.AddAsync(domain, evt, cancellationToken);
+            await _detectedEventReadRepository.AddAsync(
+                new DetectedEventDTO(Guid.NewGuid(), collectionGuid, tenantId, domain, eventType, intensity,
+                    sample.Latitude, sample.Longitude, collectedAt),
+                cancellationToken);
 
             var outbox = new OutboxMessage(Guid.NewGuid(), collectionGuid,
                 $"{domain.ToLower()}-event-detected", JsonSerializer.Serialize(evt));

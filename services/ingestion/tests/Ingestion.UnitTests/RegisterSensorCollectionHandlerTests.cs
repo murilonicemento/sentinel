@@ -1,5 +1,6 @@
 using Ingestion.Application.Commands;
 using Ingestion.Application.DTO;
+using Ingestion.Application.Errors;
 using Ingestion.Application.Events;
 using Ingestion.Application.Handlers;
 using Ingestion.Application.Interfaces.Services;
@@ -78,7 +79,9 @@ public class RegisterSensorCollectionHandlerTests
             .Returns((DataSource?)null);
 
         // Act & Assert
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _handler.Handle(command, CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<IngestionReferenceNotFoundException>(
+            () => _handler.Handle(command, CancellationToken.None));
+        Assert.Equal(IngestionErrorCodes.DataSourceNotFound, exception.Code);
         _mockSensorCollectionService.Verify(x => x.ProcessSensorCollection<SensorEventDetected>(
             It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<string>(),
             It.IsAny<List<SampleSensorDTO>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);

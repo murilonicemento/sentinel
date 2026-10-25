@@ -15,10 +15,12 @@ bdr.RiskEvaluations.createIndex({ Timestamp: -1 });
 db.climaticEvents.createIndex({EventId: 1}, {unique: true});
 db.climaticEvents.createIndex({EventType: 1});
 db.climaticEvents.createIndex({CollectedAt: -1});
+db.climaticEvents.createIndex({TenantId: 1, CollectedAt: -1, EventId: 1});
 
 db.disasterEvents.createIndex({EventId: 1}, {unique: true});
 db.disasterEvents.createIndex({EventType: 1});
 db.disasterEvents.createIndex({CollectedAt: -1});
+db.disasterEvents.createIndex({TenantId: 1, CollectedAt: -1, EventId: 1});
 
 db.climaticEvents.insertMany([
     {
