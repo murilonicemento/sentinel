@@ -190,6 +190,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TenantsBilling.UnitTests", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TenantsBilling.IntegrationTests", "services\tenants-billing\tests\TenantsBilling.IntegrationTests\TenantsBilling.IntegrationTests.csproj", "{E5EC6D21-C443-4750-BE28-7E9FC1ABEBD7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChannelsService.IntegrationTests", "services\channels\tests\ChannelsService.IntegrationTests\ChannelsService.IntegrationTests.csproj", "{6FD44E54-9D72-4535-899A-8DA41923D6A8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -860,6 +862,18 @@ Global
 		{E5EC6D21-C443-4750-BE28-7E9FC1ABEBD7}.Release|x64.Build.0 = Release|Any CPU
 		{E5EC6D21-C443-4750-BE28-7E9FC1ABEBD7}.Release|x86.ActiveCfg = Release|Any CPU
 		{E5EC6D21-C443-4750-BE28-7E9FC1ABEBD7}.Release|x86.Build.0 = Release|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Debug|x64.Build.0 = Debug|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Debug|x86.Build.0 = Debug|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Release|x64.ActiveCfg = Release|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Release|x64.Build.0 = Release|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Release|x86.ActiveCfg = Release|Any CPU
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -946,5 +960,6 @@ Global
 		{267056BF-B489-454E-ADF8-9D0BC555D534} = {4401D13F-D3F0-45F4-BF1E-7A8660583134}
 		{785BE943-3D85-4E94-9159-7AE69EB09C0F} = {267056BF-B489-454E-ADF8-9D0BC555D534}
 		{E5EC6D21-C443-4750-BE28-7E9FC1ABEBD7} = {267056BF-B489-454E-ADF8-9D0BC555D534}
+		{6FD44E54-9D72-4535-899A-8DA41923D6A8} = {CE19CFA8-6974-4C19-B520-EED60E2F75A4}
 	EndGlobalSection
 EndGlobal

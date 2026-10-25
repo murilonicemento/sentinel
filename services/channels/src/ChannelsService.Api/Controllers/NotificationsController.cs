@@ -1,3 +1,4 @@
+using ChannelsService.Api.Contracts;
 using ChannelsService.Api.Security;
 using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ChannelsService.Api.Controllers;
 
 [ApiController]
+[DeprecatedRoute("/" + ChannelsV1Controller.BasePath + "/notifications")]
 [Route("api/notifications")]
 public class NotificationsController : ControllerBase
 {

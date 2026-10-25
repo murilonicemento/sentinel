@@ -1,3 +1,4 @@
+using ChannelsService.Api.Contracts;
 using ChannelsService.Api.Security;
 using ChannelsService.Application.Interfaces;
 using ChannelsService.Domain.Entities;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ChannelsService.Api.Controllers;
 
 [ApiController]
+[DeprecatedRoute("/" + ChannelsV1Controller.BasePath + "/dead-letters/reprocess")]
 [Route("api/dlq")]
 public class DeadLetterController : ControllerBase
 {

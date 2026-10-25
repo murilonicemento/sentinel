@@ -114,6 +114,10 @@ public sealed class TenantAuthorizationTests
     {
         public Task<IReadOnlyList<DeliveryAttempt>> GetByEventAsync(string eventId, TenantAccessScope scope,
             CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<DeliveryAttempt>>([]);
+
+        public Task<PagedResultDTO<DeliveryAttemptDTO>> GetPageByEventAsync(string eventId, TenantAccessScope scope,
+            int page, int pageSize, CancellationToken cancellationToken) =>
+            Task.FromResult(new PagedResultDTO<DeliveryAttemptDTO> { Items = [], Page = page, PageSize = pageSize });
     }
 
     private sealed class RecordingNotificationPublisher : INotificationPublisher

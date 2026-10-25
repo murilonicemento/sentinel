@@ -1,6 +1,7 @@
 using System.Diagnostics.Metrics;
 using System.Net;
 using System.Text.Json.Serialization;
+using ChannelsService.Api.Contracts;
 using ChannelsService.Api.Security;
 using ChannelsService.Application;
 using ChannelsService.Infrastructure;
@@ -21,13 +22,24 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
     });
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.MarkDeprecatedOperations());
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        var status = context.ProblemDetails.Status ?? StatusCodes.Status500InternalServerError;
+        ApiProblems.Enrich(context.ProblemDetails, context.HttpContext, ApiProblems.DefaultCodeFor(status));
+    };
+});
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddChannelsServiceAuthentication(builder.Configuration);
 
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
     {
+        if (ApiProblems.IsVersionedApi(context.HttpContext)) return ModelValidationProblems.For(context);
+
         var errors = context.ModelState
             .Values
             .SelectMany(v => v.Errors)
@@ -79,7 +91,7 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
 healthChecks.AddCheck<KafkaHealthCheck>("kafka", tags: new[] { "kafka", "messaging" });
 
 builder.Services.AddOpenTelemetry()
-    .WithMetrics(metrics => metrics.AddMeter("ChannelsService"))
+    .WithMetrics(metrics => metrics.AddMeter("ChannelsService").AddPrometheusExporter())
     .WithTracing(tracing => tracing.AddSource("ChannelsService"));
 
 var app = builder.Build();
@@ -96,6 +108,8 @@ if (app.Environment.IsDevelopment())
     }).AllowAnonymous();
 }
 
+app.UseExceptionHandler();
+app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePages());
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
