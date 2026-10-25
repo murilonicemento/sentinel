@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Reporting.Api.Contracts;
 using Reporting.Api.Security;
 using Reporting.Application.Interfaces;
 using Reporting.Application.Services;
@@ -9,6 +10,7 @@ namespace Reporting.Api.Controllers;
 
 [ApiController]
 [Route("api/reporting")]
+[DeprecatedRoute("/" + ReportingV1Controller.BasePath)]
 public class ReportingController : ControllerBase
 {
     private readonly ReportingQueryService _queryService;

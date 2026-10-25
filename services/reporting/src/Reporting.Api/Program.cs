@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Mvc;
 using OpenTelemetry.Metrics;
+using Reporting.Api.Contracts;
 using Reporting.Api.Security;
 using Reporting.Application;
 using Reporting.Infrastructure;
@@ -15,7 +17,22 @@ builder.Host.UseSerilog((context, configuration) =>
 });
 
 builder.Services.AddControllers();
-builder.Services.AddOpenApi();
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    var defaultFactory = options.InvalidModelStateResponseFactory;
+    options.InvalidModelStateResponseFactory = context =>
+        ApiProblems.IsVersionedApi(context.HttpContext) ? ModelValidationProblems.For(context) : defaultFactory(context);
+});
+builder.Services.AddOpenApi(options => options.MarkDeprecatedOperations());
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        var status = context.ProblemDetails.Status ?? StatusCodes.Status500InternalServerError;
+        ApiProblems.Enrich(context.ProblemDetails, context.HttpContext, ApiProblems.DefaultCodeFor(status));
+    };
+});
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddReportingAuthentication(builder.Configuration);
 builder.Services.AddHealthChecks();
 builder.Services.AddApplicationServices();
@@ -34,6 +51,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi().AllowAnonymous();
 }
 
+app.UseExceptionHandler();
+app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePages());
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
