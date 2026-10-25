@@ -1,4 +1,5 @@
 using OpenTelemetry.Metrics;
+using Reporting.Api.Security;
 using Reporting.Application;
 using Reporting.Infrastructure;
 using Serilog;
@@ -15,6 +16,7 @@ builder.Host.UseSerilog((context, configuration) =>
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddReportingAuthentication(builder.Configuration);
 builder.Services.AddHealthChecks();
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices();
@@ -29,14 +31,15 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization();
-app.UseOpenTelemetryPrometheusScrapingEndpoint();
+app.MapPrometheusScrapingEndpoint().AllowAnonymous();
 app.MapControllers();
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health").AllowAnonymous();
 
 app.Run();
 
