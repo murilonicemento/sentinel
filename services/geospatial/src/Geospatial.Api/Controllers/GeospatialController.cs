@@ -1,3 +1,4 @@
+using Geospatial.Api.Contracts;
 using Geospatial.Api.Security;
 using Geospatial.Application.DTOs;
 using Geospatial.Application.Interfaces.UseCases;
@@ -11,6 +12,7 @@ namespace Geospatial.Api.Controllers;
 [ApiController]
 [Route("api/geospatial")]
 [Authorize(Policy = GeospatialPolicies.Read)]
+[DeprecatedRoute("/" + GeospatialV1Controller.BasePath)]
 public class GeospatialController : ControllerBase
 {
     private readonly IContainsPointUseCase _containsPointUseCase;

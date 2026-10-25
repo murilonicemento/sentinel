@@ -13,6 +13,13 @@ public class ExceptionHandlingMiddleware
 
     public async Task InvokeAsync(HttpContext httpContext)
     {
+        // /api/v1 routes report errors as Problem Details through ApiExceptionHandler.
+        if (httpContext.Request.Path.StartsWithSegments("/api/v1"))
+        {
+            await _next(httpContext);
+            return;
+        }
+
         try
         {
             await _next(httpContext);
@@ -38,10 +45,10 @@ public class ExceptionHandlingMiddleware
             await httpContext.Response.WriteAsJsonAsync(new
             {
                 title = "An error occurred.",
-                type = exception.GetType().Name,
+                type = "InternalServerError",
                 statusCode = StatusCodes.Status500InternalServerError,
                 success = false,
-                error = exception.Message
+                error = "An unexpected error occurred."
             });
         }
     }

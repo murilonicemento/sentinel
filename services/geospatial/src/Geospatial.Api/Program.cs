@@ -1,9 +1,11 @@
+using Geospatial.Api.Contracts;
 using Geospatial.Api.Middlewares;
 using Geospatial.Api.Security;
 using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.UseCases;
 using Geospatial.Infrastructure;
 using Geospatial.Infrastructure.Options;
+using Microsoft.AspNetCore.Mvc;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
@@ -43,8 +45,24 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 builder.Services.AddGeospatialAuthentication(builder.Configuration);
 
 builder.Services
-    .AddOpenApi()
+    .AddOpenApi(options => options.MarkDeprecatedOperations())
     .AddInfrastructureWriteServiceCollection(builder.Configuration);
+
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        var status = context.ProblemDetails.Status ?? StatusCodes.Status500InternalServerError;
+        ApiProblems.Enrich(context.ProblemDetails, context.HttpContext, ApiProblems.DefaultCodeFor(status));
+    };
+});
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    var defaultFactory = options.InvalidModelStateResponseFactory;
+    options.InvalidModelStateResponseFactory = context =>
+        ApiProblems.IsVersionedApi(context.HttpContext) ? ModelValidationProblems.For(context) : defaultFactory(context);
+});
 
 builder.Services
     .Configure<ElasticsearchOptions>(builder.Configuration.GetSection("Elasticsearch"))
@@ -75,6 +93,8 @@ if (app.Environment.IsDevelopment())
     }).AllowAnonymous();
 }
 
+app.UseExceptionHandler();
+app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePages());
 app.UseHttpsRedirection();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseAuthentication();

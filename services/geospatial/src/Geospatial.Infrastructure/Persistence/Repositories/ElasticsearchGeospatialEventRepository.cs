@@ -70,6 +70,62 @@ public class ElasticsearchGeospatialEventRepository : IGeospatialEventRepository
         return MapFromDocuments(response.Documents);
     }
 
+    public async Task<GeospatialEventPage> SearchByPointAsync(
+        double lat,
+        double lon,
+        double radiusMeters,
+        int skip,
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _client.SearchAsync<GeospatialEventDocument>(
+            s => s.Index(IndexName)
+                .From(skip)
+                .Size(take)
+                .TrackTotalHits()
+                .Sort(sort => sort.Descending(f => f.Timestamp))
+                .Query(q => q.GeoDistance(g => g
+                    .Field(f => f.MainPoint)
+                    .Location(new Nest.GeoLocation(lat, lon))
+                    .Distance(radiusMeters, Nest.DistanceUnit.Meters))),
+            cancellationToken);
+
+        return ToPage(response);
+    }
+
+    public async Task<GeospatialEventPage> SearchByPolygonAsync(
+        IReadOnlyList<(double Lat, double Lon)> polygon,
+        int skip,
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        var coordinates = polygon.Select(p => new Nest.GeoCoordinate(p.Lat, p.Lon)).ToArray();
+
+        var response = await _client.SearchAsync<GeospatialEventDocument>(
+            s => s.Index(IndexName)
+                .From(skip)
+                .Size(take)
+                .TrackTotalHits()
+                .Sort(sort => sort.Descending(f => f.Timestamp))
+                .Query(q => q.GeoPolygon(g => g
+                    .Field(f => f.MainPoint)
+                    .Points(coordinates))),
+            cancellationToken);
+
+        return ToPage(response);
+    }
+
+    private GeospatialEventPage ToPage(ISearchResponse<GeospatialEventDocument> response)
+    {
+        if (!response.IsValid)
+        {
+            _logger.LogError(response.OriginalException, "Geospatial event search failed");
+            throw new InvalidOperationException("Elasticsearch search failed.", response.OriginalException);
+        }
+
+        return new GeospatialEventPage(MapFromDocuments(response.Documents), response.Total);
+    }
+
     private static GeospatialEventDocument MapToDocument(GeospatialOperationEvent evt)
     {
         Nest.GeoLocation? geoLocation = evt.MainPoint != null

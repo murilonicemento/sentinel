@@ -5,7 +5,8 @@ using Geospatial.IntegrationTests.Support;
 
 namespace Geospatial.IntegrationTests;
 
-public class GeospatialApiAuthorizationTests : IClassFixture<GeospatialApiFactory>
+[Collection(GeospatialApiCollection.Name)]
+public class GeospatialApiAuthorizationTests
 {
     private const string DistancePath = "/api/geospatial/distance";
 

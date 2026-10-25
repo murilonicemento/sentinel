@@ -42,5 +42,27 @@ public sealed class GeospatialApiFactory : WebApplicationFactory<Program>
         public Task<IReadOnlyList<GeospatialOperationEvent>> SearchByPolygonAsync(
             IReadOnlyList<(double Lat, double Lon)> polygon, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<GeospatialOperationEvent>>([]);
+
+        public Task<GeospatialEventPage> SearchByPointAsync(double lat, double lon, double radiusMeters, int skip,
+            int take, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Page(skip, take));
+
+        public Task<GeospatialEventPage> SearchByPolygonAsync(IReadOnlyList<(double Lat, double Lon)> polygon,
+            int skip, int take, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Page(skip, take));
+
+        // 25 events, newest first, so paging can be checked end to end.
+        private static GeospatialEventPage Page(int skip, int take)
+        {
+            var all = Enumerable.Range(0, 25)
+                .Select(i => new GeospatialOperationEvent
+                {
+                    CollectionId = Guid.NewGuid(),
+                    OperationType = "distance",
+                    Timestamp = DateTimeOffset.UnixEpoch.AddMinutes(25 - i)
+                })
+                .ToList();
+            return new GeospatialEventPage(all.Skip(skip).Take(take).ToList(), all.Count);
+        }
     }
 }
