@@ -96,7 +96,7 @@ Topics are created by the `kafka-init` container in `platform/docker-compose.yml
 5. **alert-orchestrator** consumes `risk-updated` and `region-intersected`. It manages the `AlertWindow` aggregate (quorum, cooldown, escalation and expiration workers) and publishes to `alert-orchestrator-events` and `alert-commands`.
 6. **channels** delivers notifications (SMS/WhatsApp via Twilio, email via SendGrid, push, MQTT, sirens) with retry, fallback and DLQ handling (`notification-events`, `notification-events-dlq`).
 7. **reporting** consumes events for dashboards, analytics and exports, with a DLQ consumer. Its implementation status is tracked in `docs/reporting-service-status.md`.
-8. **tenants-billing** manages tenants and plans. It consumes `tenant-usage-events` (with `-dlq` / `-replay` topics) and publishes `tenants-billing-events`. Other services check whether a tenant is active over synchronous HTTP (`GET /api/v1/tenants/{id}`) through their own `TenantBillingGateway`.
+8. **tenants-billing** manages tenants and plans. It consumes `tenant-usage-events` (with `-dlq` / `-replay` topics) and publishes `tenants-billing-events`. Other services check whether a tenant is active over synchronous HTTP (`GET /api/v1/tenants-billing/tenants/{id}`) through their own `TenantBillingGateway`, which also accepts the legacy body (numeric `status`) of the deprecated `GET /api/v1/tenants/{id}`.
 9. **audit-compliance** consumes auditable events from `audit-events` (and `audit-events-replay`), persists append-only records in MongoDB, and sends invalid messages to `audit-events-dlq`. It exposes queries and async CSV/JSON exports under `/api/v1/audit-compliance`. No source service publishes to `audit-events` yet. Status and contract are in `docs/audit-compliance-service-status.md`, decisions in `docs/adr/ADR-0001-audit-compliance-service.md`.
 10. **api-gateway** uses Ocelot (`ocelot.json`) to route to the services.
 
@@ -110,6 +110,7 @@ Each service has its own copy of the `Security` classes (no shared library yet),
 
 ### Conventions worth knowing
 
+- Every service exposes its public contract under `/api/v1/<service>`: `ResponseBaseDTO` envelope, RFC 9457 Problem Details (`code` and `traceId` extensions, built by each API's `Contracts/ApiProblems` and `ApiExceptionHandler`) and `page`/`pageSize` pagination (default 10, max 50). Older routes are frozen and deprecated (`Deprecation`/`Sunset`/`Link` headers, sunset 2027-01-23); add new behavior only to v1. Routes and error codes are listed in `docs/compliance/services-validation.md` §4.2.
 - Several services choose adapters from config flags, for example `UsePostgreSql` / `UseRedis` in `*InfrastructureOptions`. With the flags off, they fall back to in-memory repositories and idempotency services. Check these flags when a service "loses" data or ignores Redis.
 - Consumers that publish domain events are expected to be idempotent, using a Redis-backed idempotency or dedup service.
 - Observability goes through Serilog (console + Loki), OpenTelemetry, and a Prometheus exporter on some services. Dashboards are provisioned from `platform/observability/grafana/provisioning`.

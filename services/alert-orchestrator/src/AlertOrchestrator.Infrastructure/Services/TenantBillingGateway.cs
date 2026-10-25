@@ -21,7 +21,7 @@ public class TenantBillingGateway : ITenantBillingGateway
     {
         try
         {
-            var response = await _httpClient.GetAsync($"/api/v1/tenants/{tenantId}", cancellationToken);
+            var response = await _httpClient.GetAsync($"/api/v1/tenants-billing/tenants/{tenantId}", cancellationToken);
             
             if (!response.IsSuccessStatusCode)
             {
