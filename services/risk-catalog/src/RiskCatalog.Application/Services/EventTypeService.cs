@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using RiskCatalog.Application.DTO;
 using RiskCatalog.Application.Interfaces;
@@ -325,7 +324,7 @@ public class EventTypeService : IEventTypeService
                 severityCriterionDto.Unit,
                 severityCriterionDto.Version);
 
-            throw new BadHttpRequestException("Severity criterion range overlaps with an existing criterion.");
+            throw new ArgumentException("Severity criterion range overlaps with an existing criterion.");
         }
 
         var severityLevel = Enum.Parse<SeverityLevelEnum>(severityCriterionDto.SeverityLevel);
