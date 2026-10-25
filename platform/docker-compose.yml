@@ -24,6 +24,11 @@ services:
     container_name: ingestion
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
+      - ServiceToken__SigningKey=${INGESTION_SERVICE_TOKEN_SIGNING_KEY}
       - ConnectionStrings__IngestionWriteDatabase=${ConnectionStrings__IngestionWriteDatabase:-Host=postgres;Port=5432;Database=ingestion;Username=postgres;Password=postgres}
       - ConnectionStrings__IngestionReadDatabase=${ConnectionStrings__IngestionReadDatabase:-Host=postgres;Port=5432;Database=ingestion;Username=postgres;Password=postgres}
       - ConnectionStrings__Redis=${ConnectionStrings__Redis:-redis:6379}
@@ -56,6 +61,15 @@ services:
     container_name: risk-catalog
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - Jwt__TrustedServices__0__Name=risk-evaluation
+      - Jwt__TrustedServices__0__Issuer=sentinel-service:risk-evaluation
+      - Jwt__TrustedServices__0__SigningKey=${RISK_EVALUATION_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__0__AllowedRoles__0=RiskCatalog.Read
+      - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
+      - ServiceToken__SigningKey=${RISK_CATALOG_SERVICE_TOKEN_SIGNING_KEY}
       - ConnectionStrings__RiskCatalogDatabase=${ConnectionStrings__IngestionDatabase:-Host=postgres;Port=5432;Database=risk_catalog;Username=postgres;Password=postgres}
       - ConnectionStrings__Redis=${ConnectionStrings__Redis:-redis:6379}
       - ConnectionStrings__Kafka=${ConnectionStrings__Kafka:-kafka:9092}
@@ -83,6 +97,21 @@ services:
     container_name: geospatial
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - Jwt__TrustedServices__0__Name=ingestion
+      - Jwt__TrustedServices__0__Issuer=sentinel-service:ingestion
+      - Jwt__TrustedServices__0__SigningKey=${INGESTION_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__0__AllowedRoles__0=Geospatial.Read
+      - Jwt__TrustedServices__1__Name=risk-catalog
+      - Jwt__TrustedServices__1__Issuer=sentinel-service:risk-catalog
+      - Jwt__TrustedServices__1__SigningKey=${RISK_CATALOG_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__1__AllowedRoles__0=Geospatial.Read
+      - Jwt__TrustedServices__2__Name=risk-evaluation
+      - Jwt__TrustedServices__2__Issuer=sentinel-service:risk-evaluation
+      - Jwt__TrustedServices__2__SigningKey=${RISK_EVALUATION_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__2__AllowedRoles__0=Geospatial.Read
       - Elasticsearch__Url=http://elasticsearch:9200
       - Elasticsearch__DefaultIndex=geospatial-events
       - Loki__Url=http://loki:3100
@@ -106,6 +135,11 @@ services:
     container_name: risk-evaluation
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
+      - ServiceToken__SigningKey=${RISK_EVALUATION_SERVICE_TOKEN_SIGNING_KEY}
       - ConnectionStrings__MongoDb=mongodb://mongodb:27017
       - Kafka__BootstrapServers=kafka:9092
       - Kafka__Topic=risk-events
@@ -131,6 +165,11 @@ services:
     container_name: alert-orchestrator
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
+      - ServiceToken__SigningKey=${ALERT_ORCHESTRATOR_SERVICE_TOKEN_SIGNING_KEY}
       - ConnectionStrings__PostgreSql=Host=postgres;Port=5432;Database=alert_orchestrator;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Redis=redis:6379
       - ConnectionStrings__Kafka=kafka:9092
@@ -159,6 +198,21 @@ services:
     container_name: tenants-billing
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - Jwt__TrustedServices__0__Name=ingestion
+      - Jwt__TrustedServices__0__Issuer=sentinel-service:ingestion
+      - Jwt__TrustedServices__0__SigningKey=${INGESTION_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__0__AllowedRoles__0=TenantsBilling.Read
+      - Jwt__TrustedServices__1__Name=alert-orchestrator
+      - Jwt__TrustedServices__1__Issuer=sentinel-service:alert-orchestrator
+      - Jwt__TrustedServices__1__SigningKey=${ALERT_ORCHESTRATOR_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__1__AllowedRoles__0=TenantsBilling.Read
+      - Jwt__TrustedServices__2__Name=channels
+      - Jwt__TrustedServices__2__Issuer=sentinel-service:channels
+      - Jwt__TrustedServices__2__SigningKey=${CHANNELS_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__2__AllowedRoles__0=TenantsBilling.Read
       - ConnectionStrings__TenantsBillingDatabase=Host=postgres;Port=5432;Database=tenants_billing;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - Kafka__BootstrapServers=kafka:9092
       - Kafka__Topic=tenants-billing-events
@@ -195,7 +249,7 @@ services:
       - Kafka__DeadLetterTopic=audit-events-dlq
       - Jwt__Issuer=${JWT_ISSUER:-sentinel}
       - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
-      - Jwt__SigningKey=${AUDIT_COMPLIANCE_JWT_SIGNING_KEY:-}
+      - Jwt__SigningKey=${AUDIT_COMPLIANCE_JWT_SIGNING_KEY:-${JWT_SIGNING_KEY}}
       - Serilog__WriteTo__1__Args__uri=http://loki:3100
     ports:
       - "7007:8080"

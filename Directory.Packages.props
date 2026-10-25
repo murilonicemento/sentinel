@@ -62,7 +62,7 @@
     <PackageVersion Include="Serilog.Sinks.Elasticsearch" Version="9.0.3" />
     <PackageVersion Include="Serilog.Sinks.Grafana.Loki" Version="8.3.2" />
     <PackageVersion Include="StackExchange.Redis" Version="2.9.17" />
-    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="6.36.0" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.19.2" />
     <PackageVersion Include="System.Net.Http.Json" Version="9.0.0" />
     <PackageVersion Include="System.Text.Json" Version="9.0.0" />
     <PackageVersion Include="Testcontainers" Version="4.14.0" />

@@ -100,6 +100,14 @@ Topics are created by the `kafka-init` container in `platform/docker-compose.yml
 9. **audit-compliance** consumes auditable events from `audit-events` (and `audit-events-replay`), persists append-only records in MongoDB, and sends invalid messages to `audit-events-dlq`. It exposes queries and async CSV/JSON exports under `/api/v1/audit-compliance`. No source service publishes to `audit-events` yet. Status and contract are in `docs/audit-compliance-service-status.md`, decisions in `docs/adr/ADR-0001-audit-compliance-service.md`.
 10. **api-gateway** uses Ocelot (`ocelot.json`) to route to the services.
 
+### Authentication and tenant access
+
+`docs/adr/ADR-0002-service-authentication.md` defines the model. Every service API validates HS256 JWTs from `Jwt:Issuer` / `Jwt:Audience` / `Jwt:SigningKey`, with a fallback policy that rejects anonymous requests; only health checks, `/metrics` and dev-only OpenAPI/Scalar are `AllowAnonymous`. Roles are `<Service>.Admin` / `.Read` / `.Write` in the `role` claim, and tenants come from the multi-valued `tenant_id` claim (checked by each API's `Security/TenantAccessEvaluator`).
+
+Service-to-service calls carry a short-lived token signed with the caller's own key (`ServiceToken:*`, attached by `Infrastructure/Security/ServiceTokenHandler`). The called service lists each caller in `Jwt:TrustedServices` with its issuer, key and `AllowedRoles`, and drops any other role. When a service starts calling another one, add it to that service's `Jwt:TrustedServices`, to `platform/docker-compose.yml` and to `platform/.env.example`. Signing keys never go in `appsettings*.json`; use User Secrets locally and `platform/.env` for compose.
+
+Each service has its own copy of the `Security` classes (no shared library yet), so keep the copies in sync when one changes.
+
 ### Conventions worth knowing
 
 - Several services choose adapters from config flags, for example `UsePostgreSql` / `UseRedis` in `*InfrastructureOptions`. With the flags off, they fall back to in-memory repositories and idempotency services. Check these flags when a service "loses" data or ignores Redis.

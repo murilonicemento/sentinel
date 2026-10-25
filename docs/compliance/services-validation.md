@@ -79,7 +79,7 @@ Legenda: ✅ conforme · ⚠️ desvio parcial · ❌ não conforme · — não 
 
 | ID | Sev. | Achado | Evidência | Regra | Fase |
 |---|---|---|---|---|---|
-| X-01 | P0 | 6 serviços e o gateway não têm autenticação: alert-orchestrator, channels, reporting, risk-evaluation, tenants-billing, api-gateway. Geospatial usa apenas API key compartilhada | `Program.cs` sem `AddAuthentication`; `ocelot.json` sem `AuthenticationOptions` | security.md (Authorization Model), constituição §8.1 | 4 |
+| X-01 | P0 | ~~6 serviços e o gateway não têm autenticação: alert-orchestrator, channels, reporting, risk-evaluation, tenants-billing, api-gateway. Geospatial usa apenas API key compartilhada~~ **Resolvido na Fase 4 (ADR-0002):** JWT com fallback que nega por padrão em todos os serviços; geospatial trocou a API key por JWT; chamadas entre serviços usam tokens de serviço com chave própria por chamador. O `api-gateway` só repassa o `Authorization` (pendente: ADR-0002, decisões pendentes) | `Program.cs` sem `AddAuthentication`; `ocelot.json` sem `AuthenticationOptions` | security.md (Authorization Model), constituição §8.1 | concluído |
 | X-02 | P1 | `ExceptionHandlingMiddleware` devolve `exception.Message` em respostas 400 e **500** | `*/Middlewares/ExceptionHandlingMiddleware.cs:31,44` em ingestion, risk-catalog, geospatial, risk-evaluation, alert-orchestrator | error-handling.md (Unexpected Errors), constituição §7.3 | 5 |
 | X-03 | P1 | Erros não usam RFC 9457 Problem Details (exceto audit-compliance); não há códigos de erro estáveis nem `traceId` | middlewares acima; channels, reporting e tenants-billing sem handler | error-handling.md (Public HTTP Error Response) | 5 |
 | X-04 | P2 | Nenhuma rota segue `/api/v1/<service-name>` exceto audit-compliance; tenants-billing usa `/api/v1/tenants` e `/api/v1/plans` | seção 5 de cada serviço | api-design.md (API Conventions) | 5 |
@@ -94,6 +94,7 @@ Legenda: ✅ conforme · ⚠️ desvio parcial · ❌ não conforme · — não 
 | X-13 | P3 | 95 warnings CS8618 (ingestion 38, risk-catalog 44, geospatial 9, risk-evaluation 3, channels 1) | build | coding-standarts.md (Validation) | 8 |
 | X-14 | P3 | Enums sem sufixo `Enum` em alert-orchestrator (3), geospatial (2), risk-evaluation (2), tenants-billing (2); demais serviços usam o sufixo | `public enum` | constituição §5.1 × coding-standarts.md (conflito, ver §6) | decisão |
 | X-15 | P0 | ~~Consumers Kafka que chamam `Consume()` bloqueante no `ExecuteAsync` antes de qualquer `await`: no .NET 9 o loop roda dentro do `StartAsync` e o host não termina de subir enquanto não houver mensagens~~ **Resolvido:** `await Task.Yield()` antes do loop em alert-orchestrator (AO-00), tenants-billing (2), channels (`NotificationConsumerHostedService`) e reporting (`ReportingKafkaConsumerHostedService`, `ReportingDeadLetterConsumerHostedService`), com testes de regressão que falham sem a correção. Reproduzido no tenants-billing: sem "Application started" em 40 s. No geospatial (`SensorEventDetectedConsumer`) o impacto era menor (o `Task.Delay` do fim do loop libera o startup após o primeiro poll, até 5 s de atraso); corrigido da mesma forma | `HostedServices/*`, `Messaging/Consumers/*` | concluído |
+| X-16 | P2 | O `docker-compose` usa defaults locais para credenciais de infraestrutura (`${POSTGRES_PASSWORD:-postgres}`, `${MINIO_ROOT_PASSWORD:-minioadmin}`, `${MONGO_INITDB_ROOT_PASSWORD:-mongoadmin}`, `${AUDIT_COMPLIANCE_DB_PASSWORD:-audit_compliance_local}`) e a senha do Grafana é literal (`GF_SECURITY_ADMIN_PASSWORD=admin`). As novas chaves JWT e de tokens de serviço foram adicionadas sem default | `platform/docker-compose.yml` | 7 |
 
 ### 4.1 Centralização de versões (X-06)
 
@@ -157,9 +158,9 @@ Achado lateral: `services/alert-orchestrator/Dockerfile` usa `mcr.microsoft.com/
 
 | ID | Sev. | Achado | Evidência | Fase |
 |---|---|---|---|---|
-| ING-01 | P0 | `TenantId` vem do body dos comandos e não é verificado contra as claims do JWT; qualquer identidade com `IngestionWrite` escreve em qualquer tenant | `Application/Commands/Register*Command.cs:10-11`; `IngestionController.cs:46-77` | 4 |
+| ING-01 | P0 | ~~`TenantId` vem do body dos comandos e não é verificado contra as claims do JWT; qualquer identidade com `IngestionWrite` escreve em qualquer tenant~~ **Resolvido na Fase 4:** os 4 comandos de escrita conferem o `TenantId` com as claims `tenant_id` (403 se não pertencer) | `Application/Commands/Register*Command.cs:10-11`; `IngestionController.cs:46-77` | concluído |
 | ING-02 | P1 | ~~Application referencia `Infrastructure.Read` e usa `MongoDB.Driver` / `Minio` diretamente (inversão de dependência)~~ **Resolvido na Fase 3:** porta `IDetectedEventReadRepository` na Application, implementação Mongo em `Infrastructure.Read` (que passou a referenciar a Application); `FireFirmsApiResponseDTO` e CsvHelper movidos para `Infrastructure.Write`; bucket do MinIO injetado no provider. Application depende só de Domain, MediatR e Logging.Abstractions | `Ingestion.Application.csproj:18`; `Handlers/GetCollectionStatisticsHandler.cs`, `Handlers/GetLatestDetectedEventsHandler.cs`, `Services/SensorCollectionService.cs`; `DTO/CollectionStatisticsResponseDTO.cs` (atributos Bson) | concluído |
-| ING-03 | P1 | Credenciais versionadas em `appsettings.json`: senha na connection string, MinIO `minioadmin`, `AuthKey: "changeme"` | `Ingestion.Api/appsettings.json:11,19-20,34` | 4 |
+| ING-03 | P1 | ~~Credenciais versionadas em `appsettings.json`: senha na connection string, MinIO `minioadmin`, `AuthKey: "changeme"`~~ **Resolvido na Fase 4:** senha, credenciais MinIO, `Jwt:Key` e `Scalar:AuthToken` removidos dos `appsettings*.json`; valores vêm de variáveis de ambiente/User Secrets | `Ingestion.Api/appsettings.json:11,19-20,34` | concluído |
 | ING-04 | P1 | Integration tests 0/21. A exceção de serializer Bson duplicado foi corrigida (`TryRegisterSerializer`), mas a suíte segue quebrada por causas independentes: (a) `RemoveAll<OutboxHostedService>()` não remove o hosted service (registrado como `IHostedService`), e o outbox derruba o host porque a tabela `outbox` não existe no Postgres do Testcontainers; (b) nenhum teste envia JWT para endpoints `[Authorize]` (401); (c) os comandos não preenchem `TenantId`, hoje `[Required]`; (d) os testes de `sensor-collection` foram escritos para o handler antigo; o endpoint foi reativado com roteamento automático e os testes precisam ser revistos | `IngestionWebApplicationFactory.cs:50` | 8 |
 | ING-05 | P2 | API devolve `SensorEventDetected` (evento de aplicação) e objetos anônimos em vez de DTOs; `limit` sem paginação | `IngestionController.cs:25,66,76` | 5 |
 | ING-06 | P2 | Retry HTTP com `retryCount: 3` = 4 tentativas (limite é 3 incluindo a inicial) | `Infrastructure.Write/ServiceCollectionExtension.cs:238-245` | 6 |
@@ -167,12 +168,13 @@ Achado lateral: `services/alert-orchestrator/Dockerfile` usa `mcr.microsoft.com/
 | ING-08 | P2 | Sem OTel e health checks; logs via sink do Elasticsearch | `Ingestion.Api/Program.cs` | 7 |
 | ING-09 | P3 | 38 warnings CS8618; 82 violações de formatação; CS0114 e CS0618 | build / format | 8 |
 | ING-10 | P1 | `GET last-detected-events` e `GET collection-statistics` consultam a coleção Mongo `events`, mas a ingestão grava em `climaticEvents` / `disasterEvents`: as consultas não enxergam eventos ingeridos. Comportamento preservado na refatoração da Fase 3 | `Infrastructure.Read/Persistence/Repositories/MongoDetectedEventReadRepository.cs` | 5 |
+| ING-11 | P2 | `GET last-detected-events` e `GET collection-statistics` não são isolados por tenant: os eventos do read model não carregam tenant, então qualquer identidade com `Ingestion.Read` lê dados de todos os tenants | `MongoDetectedEventReadRepository.cs` | 5 |
 
 ### 5.3 risk-catalog
 
 | ID | Sev. | Achado | Evidência | Fase |
 |---|---|---|---|---|
-| RC-01 | P1 | `Guid.Parse(User.FindFirst("tenantId")?.Value!)` gera 500 quando a claim falta | `RiskModelController.cs:114` | 4 |
+| RC-01 | P1 | ~~`Guid.Parse(User.FindFirst("tenantId")?.Value!)` gera 500 quando a claim falta~~ **Resolvido na Fase 4:** tenant lido de `tenant_id` (fallback para a claim legada `tenantId`); sem claim válida retorna 403 | `RiskModelController.cs:114` | concluído |
 | RC-02 | P1 | Falhas de operação viram `Problem(... statusCode: 500)` genérico; not found e listas vazias retornam `204` | `EventTypeController.cs:26-117`; `RiskModelController.cs:35-124` | 5 |
 | RC-03 | P1 | 13 integration tests falhando e a suíte não valida comportamento real: GETs usam client sem token; `CreateAuthenticatedClient()` cria uma `new RiskCatalogWebApplicationFactory()` sem `InitializeAsync` (containers parados); nada cria o schema (ver RC-06), por isso as asserções aceitam `500`; `GeospatialIntegrationTests` chama rotas inexistentes (`/api/riskmodel/regional-parameters`) e aceita `404` como sucesso | `EventTypeControllerIntegrationTest.cs:25-33,72,87,100`; `GeospatialIntegrationTests.cs:44,55` | 8 (depende de RC-06) |
 | RC-04 | P2 | ~~Application referencia JwtBearer / IdentityModel e lança `BadHttpRequestException` (tipo HTTP)~~ **Resolvido na Fase 3:** pacotes JwtBearer/IdentityModel/Configuration/Http.Json removidos da Application (JwtBearer agora referenciado pelo Api); `BadHttpRequestException` trocada por `ArgumentException` (mesmo 400, ver RC-11) | `RiskCatalog.Application.csproj:10`; `Services/EventTypeService.cs:1,328` | concluído |
@@ -183,15 +185,16 @@ Achado lateral: `services/alert-orchestrator/Dockerfile` usa `mcr.microsoft.com/
 | RC-09 | P2 | Sem OTel e health checks; sink do Elasticsearch | `Program.cs` | 7 |
 | RC-10 | P3 | 44 CS8618, 142 violações de formatação, xUnit1013 (2) | build / format | 8 |
 | RC-11 | P3 | Efeito colateral do RC-04: para o erro de sobreposição de faixa de severidade, o campo `type` do corpo de erro 400 passou de `"BadHttpRequestException"` para `"ArgumentException"` (status inalterado). O campo expõe nome de tipo interno e será substituído por Problem Details (X-03) | `EventTypeService.cs` | 5 |
+| RC-12 | P1 | ~~O risk-catalog chamava o geospatial sem nenhuma credencial (o geospatial exigia `X-Api-Key`), então essas chamadas falhavam com 401~~ **Resolvido na Fase 4:** risk-catalog usa token de serviço (`Geospatial.Read`) | `InfrastructureServiceCollectionExtension.cs` | concluído |
 
 ### 5.4 geospatial
 
 | ID | Sev. | Achado | Evidência | Fase |
 |---|---|---|---|---|
 | GEO-01 | P1 | Controller usa `IGeospatialEventRepository` (Domain) direto e devolve `GeospatialOperationEvent` (evento de domínio) no contrato **Camadas resolvidas na Fase 3:** buscas via `ISearchGeospatialEventsUseCase`. Pendente (Fase 5): o contrato ainda devolve `GeospatialOperationEvent` | `GeospatialController.cs:5-6,21,39-67` | 5 |
-| GEO-02 | P2 | API key única compartilhada, comparação com `string.Equals` (não constante no tempo), sem contexto de tenant | `Attributes/ApiKeyAuthAttribute.cs:23` | 4 |
+| GEO-02 | P2 | ~~API key única compartilhada, comparação com `string.Equals` (não constante no tempo), sem contexto de tenant~~ **Resolvido na Fase 4:** API key removida; JWT com política `GeospatialRead` e tokens de serviço de ingestion, risk-catalog e risk-evaluation | `Attributes/ApiKeyAuthAttribute.cs:23` | concluído |
 | GEO-03 | P2 | Respostas em objetos anônimos e `BadRequest("...")` em texto | `GeospatialController.cs:60,77,89,104,115` | 5 |
-| GEO-04 | P2 | Placeholder de chave em `appsettings.json` (`CHANGE_ME_...`), aceito no startup | `Geospatial.Api/appsettings.json:65` | 4 |
+| GEO-04 | P2 | ~~Placeholder de chave em `appsettings.json` (`CHANGE_ME_...`), aceito no startup~~ **Resolvido na Fase 4:** `APIKey` removida dos `appsettings` | `Geospatial.Api/appsettings.json:65` | concluído |
 | GEO-05 | P2 | Sem OTel, métricas e health checks | `Program.cs` | 7 |
 | GEO-06 | P2 | Integration tests vazios | `tests/Geospatial.IntegrationTests` | 8 |
 | GEO-07 | P3 | ~~NU1603 (Confluent.Kafka 2.7.0 inexistente)~~ resolvido fixando 2.8.0, a versão já resolvida; restam 9 CS8618 e 2 CS8602 | csproj / build | 8 |
@@ -203,13 +206,13 @@ O consumer (`SensorEventDetectedConsumer.cs`) está conforme: commit manual apó
 | ID | Sev. | Achado | Evidência | Fase |
 |---|---|---|---|---|
 | RE-01 | P0 | Consumer sem `EnableAutoCommit = false` (padrão `true`): offsets podem ser confirmados antes do processamento; sem DLQ e sem idempotência | `Infrastructure/Messaging/KafkaMessageConsumer.cs:24-30` | 6 |
-| RE-02 | P0 | API sem autenticação, incluindo `PUT model` que altera o modelo de risco | `RiskEvaluationController.cs:112` | 4 |
+| RE-02 | P0 | ~~API sem autenticação, incluindo `PUT model` que altera o modelo de risco~~ **Resolvido na Fase 4:** políticas de leitura/escrita e `PUT model` restrito a `RiskEvaluation.Admin` | `RiskEvaluationController.cs:112` | concluído |
 | RE-03 | P1 | ~~Domain depende de MediatR (`INotification` em contratos)~~ **Resolvido na Fase 3:** `SensorEventDetected` e `RiskCatalogPublishedEvent` são contratos de mensagens consumidas e foram movidos para `RiskEvaluation.Application/Contracts`; Domain sem dependências | `RiskEvaluation.Domain.csproj:10`; `Domain/Contracts/*.cs` | concluído |
 | RE-04 | P1 | Resposta de `UpdateRiskModel` inclui `ex.Message` | `Application/Handlers/UpdateRiskModelCommandHandler.cs:81` | 5 |
 | RE-05 | P1 | Validação rejeita latitude/longitude `0` (coordenadas válidas); `history` recebe lat/lon como `int` | `RiskEvaluationController.cs:28-38,67-82` | 5 |
 | RE-06 | P1 | ~~Unit tests 0/10 (mock de classe concreta)~~ **Corrigido:** os testes faziam `Setup` de método não virtual e de método `static`; passaram a usar o `RiskCalculationService` real com entradas derivadas dos pesos padrão (10/10) | `RiskEvaluationServiceTests.cs` | concluído |
 | RE-07 | P2 | HttpClients para risk-catalog e geospatial sem timeout explícito (padrão 100 s > limite de 60 s) e sem retry; API key vazia aceita | `Infrastructure/ServiceCollectionExtension.cs:44-55` | 6 |
-| RE-08 | P2 | Placeholder `"sua-api-key-aqui"` versionado; 3 fallbacks `localhost` | `appsettings.json:74` | 4 |
+| RE-08 | P2 | ~~Placeholder `"sua-api-key-aqui"` versionado; 3 fallbacks `localhost`~~ **Resolvido na Fase 4 (chave):** `ApiKey` removida; os fallbacks `localhost` seguem pendentes em X-08 | `appsettings.json:74` | concluído |
 | RE-09 | P2 | Sem OTel e health checks; integration tests vazios | `Program.cs`; `tests/RiskEvaluation.IntegrationTests` | 7 / 8 |
 | RE-10 | P3 | 82 violações de formatação, 3 CS8618, enums sem sufixo | format / build | 8 |
 
@@ -219,7 +222,7 @@ O consumer (`SensorEventDetectedConsumer.cs`) está conforme: commit manual apó
 |---|---|---|---|---|
 | AO-00 | P0 | ~~Quando `Consume` retorna `null` após 5 s sem mensagens, o `ExecuteAsync` faz `return`: o consumer encerra definitivamente (sem `Close()`) e o serviço deixa de processar `risk-updated` e `region-intersected`~~ **Corrigido:** `continue` no poll vazio e `await Task.Yield()` antes do loop (sem ele, o `Consume` bloqueante rodaria dentro do `StartAsync` e travaria o host); testes de regressão em `UnitTests/Messaging/EventConsumerPollingTests.cs` | `Messaging/Consumers/RiskUpdatedEventConsumer.cs`; `RegionIntersectedEventConsumer.cs` | concluído |
 | AO-01 | P0 | Em erro de processamento o offset não é commitado nem a mensagem vai para DLQ; o próximo commit bem-sucedido avança além dela (perda silenciosa) | `Messaging/Consumers/RiskUpdatedEventConsumer.cs:65-74`; idem `RegionIntersectedEventConsumer.cs` | 6 |
-| AO-02 | P0 | API sem autenticação; consultas por região/status retornam janelas de todos os tenants | `AlertWindowsController.cs` | 4 |
+| AO-02 | P0 | ~~API sem autenticação; consultas por região/status retornam janelas de todos os tenants~~ **Resolvido na Fase 4:** política de leitura; consultas filtradas pelos tenants da identidade na Application; janela de outro tenant por id é tratada como inexistente | `AlertWindowsController.cs` | concluído |
 | AO-03 | P1 | `AlertWindow` sem token de concorrência; quórum/escalonamento com várias instâncias pode sobrescrever atualizações | `AlertOrchestratorDbContext.cs` (sem `IsConcurrencyToken`/`xmin`) | 6 |
 | AO-04 | P2 | Idempotência Redis em get-then-set não atômico | `RedisIdempotencyService.cs:20,31` | 6 |
 | AO-05 | P2 | `GetById` retorna `204` para recurso inexistente; rotas sem versão; sem paginação | `AlertWindowsController.cs:23` | 5 |
@@ -227,17 +230,18 @@ O consumer (`SensorEventDetectedConsumer.cs`) está conforme: commit manual apó
 | AO-07 | P2 | Tracing sem métricas; integration tests vazios | `Program.cs`; `tests/AlertOrchestrator.IntegrationTests` | 7 / 8 |
 | AO-08 | P3 | Enums sem sufixo `Enum` (3); 6 violações de formatação | | 8 |
 | AO-09 | P2 | Estágio de build do Dockerfile usa `sdk:10.0-preview` (SDK preview, diferente do `global.json` 9.0.115) | `services/alert-orchestrator/Dockerfile:7` | 7 |
+| AO-10 | P3 | O filtro de tenant das consultas de janelas é aplicado em memória, depois da leitura do repositório; filtrar na consulta ao banco reduziria leitura desnecessária | `AlertWindowQueryService.cs` | 6 |
 
 ### 5.7 channels
 
 | ID | Sev. | Achado | Evidência | Fase |
 |---|---|---|---|---|
 | CH-01 | P0 | Consumer com `EnableAutoCommit = true`: falha após o commit perde a notificação | `HostedServices/NotificationConsumerHostedService.cs:49` | 6 |
-| CH-02 | P0 | API sem autenticação; `POST api/dlq/reprocess` e `POST api/notifications` disparam envios reais (SMS/WhatsApp/e-mail) | `DeadLetterController.cs:19`; `NotificationsController.cs:33` | 4 |
+| CH-02 | P0 | ~~API sem autenticação; `POST api/dlq/reprocess` e `POST api/notifications` disparam envios reais (SMS/WhatsApp/e-mail)~~ **Resolvido na Fase 4:** políticas de leitura/escrita; envio, reprocessamento e consulta de tentativas conferem o tenant | `DeadLetterController.cs:19`; `NotificationsController.cs:33` | concluído |
 | CH-03 | P1 | Controllers recebem `NotificationEvent` (Domain) e devolvem entidades/repositório de domínio **Camadas resolvidas na Fase 3:** `INotificationDispatchService` (entrega + DLQ, antes duplicada no controller e no consumer) e `IDeliveryAttemptQueryService`. Pendente (Fase 5): contrato ainda usa `NotificationEvent` e `DeliveryAttempt` | `NotificationsController.cs:2-3,29`; `DeadLetterController.cs:20` | 5 |
 | CH-04 | P1 | Retry repete qualquer exceção (incl. não transitórias) em envio não idempotente (risco de SMS duplicado); `maxAttempts` é número de *retries* | `Application/Services/RetryPolicyEngine.cs:24-29` | 6 |
 | CH-05 | P1 | Falha de entrega retorna `500` com o resultado interno no body | `NotificationsController.cs:42` | 5 |
-| CH-06 | P2 | Senha em connection string no `appsettings.json` | `ChannelsService.Api/appsettings.json:23` | 4 |
+| CH-06 | P2 | ~~Senha em connection string no `appsettings.json`~~ **Resolvido na Fase 4:** senha removida da connection string | `ChannelsService.Api/appsettings.json:23` | concluído |
 | CH-07 | P2 | ~~Polly na camada Application~~ **Resolvido na Fase 3:** `RetryPolicyEngine` (Polly) movido para `ChannelsService.Infrastructure/Services`; registro duplicado na Application removido | `ChannelsService.Application.csproj:13` | concluído |
 | CH-08 | P2 | Sem projeto de IntegrationTests; ~~diretório órfão `services/channels-service/`~~ (removido, nunca foi versionado); spec duplicada `services/channels/ChannelsService.Spec.md` × `docs/services/Channels-Service.md` | estrutura | 2 / 8 |
 | CH-09 | P2 | Sem exception handler; sem sink Loki | `Program.cs`, `appsettings.json` | 5 / 7 |
@@ -246,8 +250,8 @@ O consumer (`SensorEventDetectedConsumer.cs`) está conforme: commit manual apó
 
 | ID | Sev. | Achado | Evidência | Fase |
 |---|---|---|---|---|
-| REP-01 | P0 | `tenantId` vem da rota sem autenticação: qualquer cliente lê summary/analytics/export de qualquer tenant | `ReportingController.cs:36-77` | 4 |
-| REP-02 | P0 | `POST events`, `events/envelope` e `events/replay` sem autenticação permitem injetar eventos e publicar no tópico de replay | `ReportingController.cs:86-144` | 4 |
+| REP-01 | P0 | ~~`tenantId` vem da rota sem autenticação: qualquer cliente lê summary/analytics/export de qualquer tenant~~ **Resolvido na Fase 4:** GETs exigem `ReportingRead` e tenant da rota presente nas claims | `ReportingController.cs:36-77` | concluído |
+| REP-02 | P0 | ~~`POST events`, `events/envelope` e `events/replay` sem autenticação permitem injetar eventos e publicar no tópico de replay~~ **Resolvido na Fase 4:** `events` e `events/envelope` exigem `ReportingWrite` e conferem o tenant do evento; `events/replay` restrito a `Reporting.Admin` | `ReportingController.cs:86-144` | concluído |
 | REP-03 | P1 | ~~Controller usa Infrastructure (`ReportingKafkaConsumerHostedService`), repositório de domínio e cria `ProducerBuilder` do Kafka por requisição~~ **Resolvido na Fase 3:** replay via porta `IReportingReplayPublisher` (Kafka em `Infrastructure/Messaging`), `POST events` via `ReportingEventIngestionService`; controller depende só de Application/Domain | `ReportingController.cs:1,8,19,110-119` | concluído |
 | REP-04 | P1 | Contrato expõe entidades de domínio (`DashboardSummary`, `AnalyticsReport`, `ReportingEvent`) | `ReportingController.cs:37,44,87` | 5 |
 | REP-05 | P2 | `GET health` recebe `tenantId` sem binding definido e duplica o papel de health check | `ReportingController.cs:79-84` | 5 / 7 |
@@ -258,7 +262,7 @@ O consumer (`SensorEventDetectedConsumer.cs`) está conforme: commit manual apó
 
 | ID | Sev. | Achado | Evidência | Fase |
 |---|---|---|---|---|
-| TB-01 | P0 | API sem autenticação: qualquer cliente cria tenants e planos e registra uso; outros serviços confiam nesse serviço para decidir se um tenant está ativo | `TenantsBilling.Api/Program.cs:36-72` | 4 |
+| TB-01 | P0 | ~~API sem autenticação: qualquer cliente cria tenants e planos e registra uso; outros serviços confiam nesse serviço para decidir se um tenant está ativo~~ **Resolvido na Fase 4:** políticas de leitura/escrita; consulta e registro de uso conferem o tenant; ingestion, alert-orchestrator e channels chamam com token de serviço (`TenantsBilling.Read`) | `TenantsBilling.Api/Program.cs:36-72` | concluído |
 | TB-02 | P1 | ~~Projetos fora da `Sentinel.sln` e `TenantsBilling.sln` próprio~~ **Resolvido na Fase 2:** 6 projetos registrados na `Sentinel.sln` (pasta `services/tenants-billing`), `TenantsBilling.sln` removido; `dotnet sln list` cobre os 55 `.csproj` do repositório | `Sentinel.sln` | concluído |
 | TB-03 | P1 | `GET /api/v1/tenants/{id}` devolve a entidade de domínio; endpoints acessam `ITenantRepository` direto **Camadas resolvidas na Fase 3:** `GET` via `TenantManagementService.GetTenantAsync`. Pendente (Fase 5): resposta ainda é a entidade (ver TB-09) | `Program.cs:50-54` | 5 |
 | TB-04 | P2 | ~~Api referencia Confluent.Kafka e monta producer/publisher no `Program.cs`~~ **Resolvido na Fase 3:** producer/publisher Kafka registrados em `AddTenantsBillingInfrastructure`; Api sem Confluent.Kafka | `TenantsBilling.Api.csproj:10`; `Program.cs:18-22` | concluído |
