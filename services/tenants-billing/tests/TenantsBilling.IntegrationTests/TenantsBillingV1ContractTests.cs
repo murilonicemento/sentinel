@@ -33,8 +33,11 @@ public class TenantsBillingV1ContractTests : IClassFixture<TenantsBillingApiFact
     {
         var response = await Admin().PostAsJsonAsync($"{BasePath}/plans", new
         {
-            name = $"plan-{Guid.NewGuid():N}", maxEventsPerMonth = 100, maxAlertsPerMonth = 10,
-            maxApiRequestsPerMonth = 100, maxChannelsPerMonth = 5
+            name = $"plan-{Guid.NewGuid():N}",
+            maxEventsPerMonth = 100,
+            maxAlertsPerMonth = 10,
+            maxApiRequestsPerMonth = 100,
+            maxChannelsPerMonth = 5
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data").GetProperty("id").GetGuid();
@@ -148,7 +151,10 @@ public class TenantsBillingV1ContractTests : IClassFixture<TenantsBillingApiFact
     {
         var response = await Admin().PostAsJsonAsync($"{BasePath}/plans", new
         {
-            name = "plan", maxEventsPerMonth = 0, maxAlertsPerMonth = 10, maxApiRequestsPerMonth = 100,
+            name = "plan",
+            maxEventsPerMonth = 0,
+            maxAlertsPerMonth = 10,
+            maxApiRequestsPerMonth = 100,
             maxChannelsPerMonth = 5
         });
 

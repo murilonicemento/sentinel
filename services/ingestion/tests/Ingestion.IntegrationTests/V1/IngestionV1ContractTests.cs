@@ -92,7 +92,9 @@ public class IngestionV1ContractTests : IClassFixture<IngestionV1ApiFactory>
             .Setup(m => m.Send(It.IsAny<GetDetectedEventStatisticsQuery>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DetectedEventStatisticsDTO
             {
-                TotalEvents = 2, TotalByType = new Dictionary<string, int> { ["Flood"] = 2 }, MaxIntensity = 9
+                TotalEvents = 2,
+                TotalByType = new Dictionary<string, int> { ["Flood"] = 2 },
+                MaxIntensity = 9
             });
 
         var body = await Client("Ingestion.Read", Guid.NewGuid())
@@ -170,8 +172,12 @@ public class IngestionV1ContractTests : IClassFixture<IngestionV1ApiFactory>
 
         var response = await Client("Ingestion.Write", tenant).PostAsJsonAsync($"{BasePath}/data-sources", new
         {
-            tenantId = tenant, name = "Rain", dataSourceType = "Api", measurementType = "Rainfall",
-            endpoint = "https://sensors.example.com", collectionFrequency = "Hourly",
+            tenantId = tenant,
+            name = "Rain",
+            dataSourceType = "Api",
+            measurementType = "Rainfall",
+            endpoint = "https://sensors.example.com",
+            collectionFrequency = "Hourly",
             eventPermissions = Array.Empty<object>()
         });
 

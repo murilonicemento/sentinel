@@ -28,8 +28,14 @@ public class ReportingV1ContractTests : IClassFixture<ReportingApiFactory>
         var tenant = $"tenant-{Guid.NewGuid():N}";
         var post = await _factory.CreateWriterClient(tenant).PostAsJsonAsync($"{BasePath}/events", new
         {
-            eventId = "evt-v1", eventType = "AlertTriggered", tenantId = tenant, region = "north",
-            severity = "High", channel = "sms", riskScore = 0.8, status = "Success"
+            eventId = "evt-v1",
+            eventType = "AlertTriggered",
+            tenantId = tenant,
+            region = "north",
+            severity = "High",
+            channel = "sms",
+            riskScore = 0.8,
+            status = "Success"
         });
         Assert.Equal(HttpStatusCode.Accepted, post.StatusCode);
         Assert.Equal("evt-v1", (await post.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data")

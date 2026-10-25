@@ -99,11 +99,11 @@ public class ChannelsV1ContractTests : IClassFixture<ChannelsApiFactory>
         var eventId = $"evt-{Guid.NewGuid():N}";
         var start = new DateTime(2026, 10, 25, 12, 0, 0, DateTimeKind.Utc);
         await _factory.Attempts.AddAsync(new DeliveryAttempt
-            { AttemptId = "b", EventId = eventId, TenantId = "tenant-a", Channel = ChannelTypeEnum.Sms, Timestamp = start.AddSeconds(2) });
+        { AttemptId = "b", EventId = eventId, TenantId = "tenant-a", Channel = ChannelTypeEnum.Sms, Timestamp = start.AddSeconds(2) });
         await _factory.Attempts.AddAsync(new DeliveryAttempt
-            { AttemptId = "a", EventId = eventId, TenantId = "tenant-a", Channel = ChannelTypeEnum.Email, Timestamp = start });
+        { AttemptId = "a", EventId = eventId, TenantId = "tenant-a", Channel = ChannelTypeEnum.Email, Timestamp = start });
         await _factory.Attempts.AddAsync(new DeliveryAttempt
-            { AttemptId = "c", EventId = eventId, TenantId = "tenant-b", Channel = ChannelTypeEnum.Sms, Timestamp = start.AddSeconds(1) });
+        { AttemptId = "c", EventId = eventId, TenantId = "tenant-b", Channel = ChannelTypeEnum.Sms, Timestamp = start.AddSeconds(1) });
 
         var body = await _factory.CreateClientWithToken(TestTokens.User(["Channels.Read"], ["tenant-a"]))
             .GetFromJsonAsync<JsonElement>($"{BasePath}/notifications/{eventId}/attempts");

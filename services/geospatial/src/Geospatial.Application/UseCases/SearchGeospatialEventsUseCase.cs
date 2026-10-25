@@ -48,11 +48,11 @@ public class SearchGeospatialEventsUseCase : ISearchGeospatialEventsUseCase
 
     private static PagedResultDTO<GeospatialEventDTO> ToPagedResult(GeospatialEventPage result, int page,
         int pageSize) => new()
-    {
-        Items = result.Items.Select(GeospatialEventDTO.From).ToList(),
-        Page = page,
-        PageSize = pageSize,
-        TotalItems = result.TotalItems,
-        TotalPages = (int)Math.Ceiling(result.TotalItems / (double)pageSize)
-    };
+        {
+            Items = result.Items.Select(GeospatialEventDTO.From).ToList(),
+            Page = page,
+            PageSize = pageSize,
+            TotalItems = result.TotalItems,
+            TotalPages = (int)Math.Ceiling(result.TotalItems / (double)pageSize)
+        };
 }
