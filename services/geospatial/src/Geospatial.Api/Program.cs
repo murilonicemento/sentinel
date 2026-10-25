@@ -1,4 +1,5 @@
 using Geospatial.Api.Middlewares;
+using Geospatial.Api.Security;
 using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.UseCases;
 using Geospatial.Infrastructure;
@@ -39,6 +40,8 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
 });
 
+builder.Services.AddGeospatialAuthentication(builder.Configuration);
+
 builder.Services
     .AddOpenApi()
     .AddInfrastructureWriteServiceCollection(builder.Configuration);
@@ -62,18 +65,20 @@ app.UseSerilogRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
     app.MapScalarApiReference(options =>
     {
         options
             .WithTitle("Sentinel - Geospatial API")
             .WithTheme(ScalarTheme.DeepSpace)
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
-    });
+    }).AllowAnonymous();
 }
 
 app.UseHttpsRedirection();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 try
@@ -90,3 +95,5 @@ finally
 {
     await Log.CloseAndFlushAsync();
 }
+
+public partial class Program;

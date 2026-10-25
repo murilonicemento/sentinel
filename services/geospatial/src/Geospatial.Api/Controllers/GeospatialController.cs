@@ -1,15 +1,16 @@
-using Geospatial.Api.Attributes;
+using Geospatial.Api.Security;
 using Geospatial.Application.DTOs;
 using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.Mappers;
 using Geospatial.Domain.Events;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Geospatial.Api.Controllers;
 
 [ApiController]
 [Route("api/geospatial")]
-[ApiKeyAuth]
+[Authorize(Policy = GeospatialPolicies.Read)]
 public class GeospatialController : ControllerBase
 {
     private readonly IContainsPointUseCase _containsPointUseCase;
