@@ -30,6 +30,9 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Consume() blocks; without yielding first, the loop would run synchronously inside StartAsync and block host startup.
+        await Task.Yield();
+
         var bootstrapServers = _configuration["Kafka:BootstrapServers"];
         if (string.IsNullOrWhiteSpace(bootstrapServers))
         {
