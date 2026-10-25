@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Elastic.Clients.Elasticsearch;
+using Reporting.Application.Interfaces;
 using Reporting.Domain.Interfaces;
 using Reporting.Infrastructure.HostedServices;
+using Reporting.Infrastructure.Messaging;
 using Reporting.Infrastructure.Persistence;
 using StackExchange.Redis;
 
@@ -16,6 +18,7 @@ public static class DependencyInjection
         services.AddSingleton(CreateRedisDatabase);
         services.AddSingleton<IReportingRepository, ElasticsearchReportingRepository>();
         services.AddSingleton<IReportingAuditRepository, ReportingAuditRepository>();
+        services.AddSingleton<IReportingReplayPublisher, KafkaReportingReplayPublisher>();
         services.AddHostedService<ReportingKafkaConsumerHostedService>();
         services.AddHostedService<ReportingDeadLetterConsumerHostedService>();
         return services;
