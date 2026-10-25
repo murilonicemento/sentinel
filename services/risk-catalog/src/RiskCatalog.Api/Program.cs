@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
+using RiskCatalog.Api.Contracts;
 using RiskCatalog.Api.Filters;
 using RiskCatalog.Api.Middlewares;
 using RiskCatalog.Api.Security;
@@ -38,6 +39,7 @@ builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapper
 builder.Services
     .AddOpenApi(options =>
     {
+        options.MarkDeprecatedOperations();
         options.AddDocumentTransformer((document, context, cancellationToken) =>
         {
             document.Components ??= new OpenApiComponents();
@@ -86,6 +88,8 @@ builder.Services
     {
         options.InvalidModelStateResponseFactory = context =>
         {
+            if (ApiProblems.IsVersionedApi(context.HttpContext)) return ModelValidationProblems.For(context);
+
             var errors = context.ModelState
                 .Values
                 .SelectMany(v => v.Errors)
@@ -107,6 +111,15 @@ builder.Services
             return new BadRequestObjectResult(responseObj);
         };
     });
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        var status = context.ProblemDetails.Status ?? StatusCodes.Status500InternalServerError;
+        ApiProblems.Enrich(context.ProblemDetails, context.HttpContext, ApiProblems.DefaultCodeFor(status));
+    };
+});
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddRiskCatalogAuthentication(builder.Configuration);
 
 var app = builder.Build();
@@ -125,6 +138,8 @@ if (app.Environment.IsDevelopment())
     }).AllowAnonymous();
 }
 
+app.UseExceptionHandler();
+app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePages());
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RiskCatalog.Api.Contracts;
 using RiskCatalog.Api.Security;
 using RiskCatalog.Application.DTO;
 using RiskCatalog.Application.Services;
@@ -9,6 +10,7 @@ namespace RiskCatalog.Api.Controllers;
 
 [Route("api/risk-model")]
 [ApiController]
+[DeprecatedRoute("/api/v1/risk-catalog")]
 [Authorize]
 public class RiskModelController : ControllerBase
 {

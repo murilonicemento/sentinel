@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RiskCatalog.Application.DTO;
+using RiskCatalog.Application.Errors;
 using RiskCatalog.Application.Events;
 using RiskCatalog.Application.Interfaces;
 using RiskCatalog.Application.Services.Interfaces;
@@ -238,7 +239,8 @@ public class RiskModelService : IRiskModelService
                 "Failed to create risk matrix. Event type does not exist. EventTypeCode: {eventTypeCode}",
                 riskMatrixDto.EventTypeCode);
 
-            throw new ArgumentException("Event type does not exist.");
+            throw new RiskCatalogException(RiskCatalogErrorKind.Unprocessable, RiskCatalogErrorCodes.EventTypeNotFound,
+                "Event type does not exist.");
         }
 
         var riskMatrixExist = await _riskMatrixRepository.GetRiskMatrixForEventTypeAsync(
@@ -255,7 +257,7 @@ public class RiskModelService : IRiskModelService
                 riskMatrixDto.SeverityLevel,
                 riskMatrixDto.Version);
 
-            throw new ArgumentException(
+            throw new RiskCatalogException(RiskCatalogErrorKind.Conflict, RiskCatalogErrorCodes.RiskMatrixAlreadyExists,
                 "Risk matrix already exists for the given event type, severity level, and version.");
         }
 
@@ -313,7 +315,8 @@ public class RiskModelService : IRiskModelService
                 "Failed to create IDF curve. Event type does not exist. EventTypeCode: {eventTypeCode}",
                 idfCurvesDto.EventTypeCode);
 
-            throw new ArgumentException("Event type does not exist.");
+            throw new RiskCatalogException(RiskCatalogErrorKind.Unprocessable, RiskCatalogErrorCodes.EventTypeNotFound,
+                "Event type does not exist.");
         }
 
         var idfCurveExist = await _IDFCurveRepository.GetIDFCurveForDurationAndPeriod(
@@ -330,7 +333,7 @@ public class RiskModelService : IRiskModelService
                 idfCurvesDto.DurationMinutes,
                 idfCurvesDto.ReturnPeriodYears);
 
-            throw new ArgumentException(
+            throw new RiskCatalogException(RiskCatalogErrorKind.Conflict, RiskCatalogErrorCodes.IdfCurveAlreadyExists,
                 "IDF Curve already exists for the given event type, duration minutes and return period years.");
         }
 
@@ -421,7 +424,7 @@ public class RiskModelService : IRiskModelService
                 "Failed to create regional risk parameters. Regional risk parameters already exist. AdjustmentFactor: {adjustmentFactor}",
                 regionalRiskParametersDto.AdjustmentFactor);
 
-            throw new ArgumentException(
+            throw new RiskCatalogException(RiskCatalogErrorKind.Conflict, RiskCatalogErrorCodes.RegionalParametersAlreadyExist,
                 "Regional risk parameters already exist for the given region.");
         }
 
@@ -487,7 +490,8 @@ public class RiskModelService : IRiskModelService
             _logger.LogWarning(
                 "Failed to publish catalog version. No data found for version: {version}",
                 catalogPublishDto.Version);
-            throw new ArgumentException($"No data found for version {catalogPublishDto.Version}");
+            throw new RiskCatalogException(RiskCatalogErrorKind.Unprocessable, RiskCatalogErrorCodes.CatalogVersionNotFound,
+                $"No data found for version {catalogPublishDto.Version}");
         }
 
         var publishedEvent = new RiskCatalogPublishedEvent
