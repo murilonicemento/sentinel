@@ -1,11 +1,22 @@
 using System.Security.Claims;
+using TenantsBilling.Api.Contracts;
+using TenantsBilling.Api.Endpoints;
 using TenantsBilling.Api.Security;
 using TenantsBilling.Application.Services;
 using TenantsBilling.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.MarkDeprecatedOperations());
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        var status = context.ProblemDetails.Status ?? StatusCodes.Status500InternalServerError;
+        ApiProblems.Enrich(context.ProblemDetails, context.HttpContext, ApiProblems.DefaultCodeFor(status));
+    };
+});
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddTenantsBillingAuthentication(builder.Configuration);
 
 var postgresConnectionString = builder.Configuration.GetConnectionString("TenantsBillingDatabase");
@@ -23,6 +34,8 @@ builder.Services.AddScoped<PlanManagementService>();
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
+app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePages());
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -45,7 +58,8 @@ app.MapPost("/api/v1/tenants", async (CreateTenantCommand command, TenantManagem
         tenant.Region,
         tenant.TimeZone
     });
-}).RequireAuthorization(TenantsBillingPolicies.Write);
+}).RequireAuthorization(TenantsBillingPolicies.Write)
+  .MarkDeprecated(TenantsBillingV1Endpoints.BasePath + "/tenants");
 
 app.MapGet("/api/v1/tenants/{tenantId:guid}", async (
     Guid tenantId,
@@ -57,7 +71,8 @@ app.MapGet("/api/v1/tenants/{tenantId:guid}", async (
 
     var tenant = await service.GetTenantAsync(tenantId);
     return tenant is null ? Results.NotFound() : Results.Ok(tenant);
-}).RequireAuthorization(TenantsBillingPolicies.Read);
+}).RequireAuthorization(TenantsBillingPolicies.Read)
+  .MarkDeprecated(TenantsBillingV1Endpoints.BasePath + "/tenants/{tenantId}");
 
 app.MapPost("/api/v1/tenants/{tenantId:guid}/usage", async (
     Guid tenantId,
@@ -76,13 +91,17 @@ app.MapPost("/api/v1/tenants/{tenantId:guid}/usage", async (
         request.ChannelUsage);
 
     return Results.Ok(new { tenantId, status });
-}).RequireAuthorization(TenantsBillingPolicies.Write);
+}).RequireAuthorization(TenantsBillingPolicies.Write)
+  .MarkDeprecated(TenantsBillingV1Endpoints.BasePath + "/tenants/{tenantId}/usage");
 
 app.MapPost("/api/v1/plans", async (CreatePlanCommand command, PlanManagementService service) =>
 {
     var plan = await service.CreatePlanAsync(command);
     return Results.Created($"/api/v1/plans/{plan.Id}", new { plan.Id, plan.Name, plan.MaxEventsPerMonth, plan.MaxAlertsPerMonth });
-}).RequireAuthorization(TenantsBillingPolicies.Write);
+}).RequireAuthorization(TenantsBillingPolicies.Write)
+  .MarkDeprecated(TenantsBillingV1Endpoints.BasePath + "/plans");
+
+app.MapTenantsBillingV1Endpoints();
 
 app.Run();
 

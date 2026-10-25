@@ -1,3 +1,4 @@
+using TenantsBilling.Application.Errors;
 using TenantsBilling.Domain.Aggregates;
 using TenantsBilling.Domain.Enums;
 using TenantsBilling.Domain.Events;
@@ -30,11 +31,13 @@ public sealed class TenantManagementService
 
         var existingTenant = await _tenantRepository.GetByNameAsync(command.Name, cancellationToken);
         if (existingTenant is not null)
-            throw new InvalidOperationException($"Tenant '{command.Name}' already exists.");
+            throw new TenantsBillingException(TenantsBillingErrorKind.Conflict, TenantsBillingErrorCodes.TenantAlreadyExists,
+                $"Tenant '{command.Name}' already exists.");
 
         var plan = await _planRepository.GetByIdAsync(command.PlanId, cancellationToken);
         if (plan is null)
-            throw new InvalidOperationException("Plan not found.");
+            throw new TenantsBillingException(TenantsBillingErrorKind.Unprocessable, TenantsBillingErrorCodes.PlanNotFound,
+                "Plan not found.");
 
         var tenant = Tenant.Create(command.Name, command.PlanId, command.Region, command.TimeZone);
         await _tenantRepository.AddAsync(tenant, cancellationToken);
@@ -46,7 +49,8 @@ public sealed class TenantManagementService
     public async Task<TenantQuotaStatus> RegisterUsageAsync(Guid tenantId, int eventsConsumed, int alertsTriggered, int apiRequests, int channelUsage, CancellationToken cancellationToken = default)
     {
         var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new InvalidOperationException("Tenant not found.");
+            ?? throw new TenantsBillingException(TenantsBillingErrorKind.NotFound, TenantsBillingErrorCodes.TenantNotFound,
+                "Tenant not found.");
 
         var status = tenant.RecordUsage(eventsConsumed, alertsTriggered, apiRequests, channelUsage);
         await _tenantRepository.UpdateAsync(tenant, cancellationToken);
@@ -69,7 +73,8 @@ public sealed class TenantManagementService
     public async Task<Tenant> SuspendTenantAsync(Guid tenantId, CancellationToken cancellationToken = default)
     {
         var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new InvalidOperationException("Tenant not found.");
+            ?? throw new TenantsBillingException(TenantsBillingErrorKind.NotFound, TenantsBillingErrorCodes.TenantNotFound,
+                "Tenant not found.");
 
         tenant.Suspend();
         await _tenantRepository.UpdateAsync(tenant, cancellationToken);
