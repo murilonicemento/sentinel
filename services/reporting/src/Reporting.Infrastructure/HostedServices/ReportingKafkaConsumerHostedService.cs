@@ -70,9 +70,10 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                ConsumeResult<Ignore, string>? consumeResult = null;
                 try
                 {
-                    var consumeResult = consumer.Consume(stoppingToken);
+                    consumeResult = consumer.Consume(stoppingToken);
                     if (consumeResult?.Message?.Value is null)
                     {
                         continue;
@@ -135,6 +136,13 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                 catch (Exception exception)
                 {
                     _logger.LogError(exception, "Error consuming reporting event from Kafka");
+                    // Not committing is not enough: the next commit would move past this message. Read it again
+                    // after a pause instead.
+                    if (consumeResult is not null)
+                    {
+                        consumer.Seek(consumeResult.TopicPartitionOffset);
+                        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                    }
                 }
             }
         }
@@ -345,42 +353,35 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
 
     private async Task PublishDeadLetterAsync(string payload, string deadLetterTopic, string sourceTopic, string reason, int partition, long offset, int attempts, CancellationToken cancellationToken)
     {
-        try
+        var producerConfig = new ProducerConfig
         {
-            var producerConfig = new ProducerConfig
-            {
-                BootstrapServers = _configuration["Kafka:BootstrapServers"],
-                EnableIdempotence = true,
-                Acks = Acks.All,
-                MessageSendMaxRetries = 3,
-                RetryBackoffMs = 1000
-            };
+            BootstrapServers = _configuration["Kafka:BootstrapServers"],
+            EnableIdempotence = true,
+            Acks = Acks.All,
+            MessageSendMaxRetries = 3,
+            RetryBackoffMs = 1000
+        };
 
-            using var producer = new ProducerBuilder<Null, string>(producerConfig).Build();
-            var messageBody = BuildDeadLetterMessage(payload, sourceTopic, reason, attempts, partition, offset);
-            var headers = new Headers();
-            headers.Add("source-topic", System.Text.Encoding.UTF8.GetBytes(sourceTopic));
-            headers.Add("dead-letter-reason", System.Text.Encoding.UTF8.GetBytes(reason));
-            headers.Add("dead-lettered-at", System.Text.Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o")));
+        using var producer = new ProducerBuilder<Null, string>(producerConfig).Build();
+        var messageBody = BuildDeadLetterMessage(payload, sourceTopic, reason, attempts, partition, offset);
+        var headers = new Headers();
+        headers.Add("source-topic", System.Text.Encoding.UTF8.GetBytes(sourceTopic));
+        headers.Add("dead-letter-reason", System.Text.Encoding.UTF8.GetBytes(reason));
+        headers.Add("dead-lettered-at", System.Text.Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o")));
 
-            var message = new Message<Null, string>
-            {
-                Value = messageBody,
-                Headers = headers
-            };
-
-            var deliveryResult = await producer.ProduceAsync(deadLetterTopic, message, cancellationToken);
-            _logger.LogWarning(
-                "Published dead letter for source topic {SourceTopic} to {DeadLetterTopic} at partition {Partition} offset {Offset}",
-                sourceTopic,
-                deadLetterTopic,
-                deliveryResult.Partition.Value,
-                deliveryResult.Offset.Value);
-        }
-        catch (Exception exception)
+        var message = new Message<Null, string>
         {
-            _logger.LogError(exception, "Failed to publish dead letter payload to topic {DeadLetterTopic}", deadLetterTopic);
-        }
+            Value = messageBody,
+            Headers = headers
+        };
+
+        var deliveryResult = await producer.ProduceAsync(deadLetterTopic, message, cancellationToken);
+        _logger.LogWarning(
+            "Published dead letter for source topic {SourceTopic} to {DeadLetterTopic} at partition {Partition} offset {Offset}",
+            sourceTopic,
+            deadLetterTopic,
+            deliveryResult.Partition.Value,
+            deliveryResult.Offset.Value);
     }
 
     private static JsonSerializerOptions CreateJsonOptions() => new()

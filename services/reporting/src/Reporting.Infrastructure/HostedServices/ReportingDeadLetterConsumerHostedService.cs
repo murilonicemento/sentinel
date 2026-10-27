@@ -55,9 +55,10 @@ public sealed class ReportingDeadLetterConsumerHostedService : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                ConsumeResult<Ignore, string>? consumeResult = null;
                 try
                 {
-                    var consumeResult = consumer.Consume(stoppingToken);
+                    consumeResult = consumer.Consume(stoppingToken);
                     if (consumeResult?.Message?.Value is null)
                     {
                         continue;
@@ -98,6 +99,13 @@ public sealed class ReportingDeadLetterConsumerHostedService : BackgroundService
                 catch (Exception exception)
                 {
                     _logger.LogError(exception, "Error processing dead-letter message");
+                    // Not committing is not enough: the next commit would move past this message. Read it again
+                    // after a pause instead.
+                    if (consumeResult is not null)
+                    {
+                        consumer.Seek(consumeResult.TopicPartitionOffset);
+                        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                    }
                 }
             }
         }
@@ -163,35 +171,28 @@ public sealed class ReportingDeadLetterConsumerHostedService : BackgroundService
 
     private async Task PublishReplayAsync(string replayTopic, string replayPayload, string sourceTopic, CancellationToken cancellationToken)
     {
-        try
+        var producerConfig = new ProducerConfig
         {
-            var producerConfig = new ProducerConfig
-            {
-                BootstrapServers = _configuration["Kafka:BootstrapServers"],
-                EnableIdempotence = true,
-                Acks = Acks.All,
-                MessageSendMaxRetries = 3,
-                RetryBackoffMs = 1000
-            };
+            BootstrapServers = _configuration["Kafka:BootstrapServers"],
+            EnableIdempotence = true,
+            Acks = Acks.All,
+            MessageSendMaxRetries = 3,
+            RetryBackoffMs = 1000
+        };
 
-            using var producer = new ProducerBuilder<Null, string>(producerConfig).Build();
-            var result = await producer.ProduceAsync(replayTopic, new Message<Null, string>
-            {
-                Value = replayPayload,
-                Headers = new Headers
-                {
-                    { "source-topic", Encoding.UTF8.GetBytes(sourceTopic) },
-                    { "replay-requested-at", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o")) },
-                    { "replay-requested-by", Encoding.UTF8.GetBytes("dlq-consumer") }
-                }
-            }, cancellationToken);
-
-            _logger.LogInformation("Published replay payload to topic {ReplayTopic} at partition {Partition} offset {Offset}", replayTopic, result.Partition.Value, result.Offset.Value);
-        }
-        catch (Exception exception)
+        using var producer = new ProducerBuilder<Null, string>(producerConfig).Build();
+        var result = await producer.ProduceAsync(replayTopic, new Message<Null, string>
         {
-            _logger.LogError(exception, "Failed to publish replay payload to topic {ReplayTopic}", replayTopic);
-        }
+            Value = replayPayload,
+            Headers = new Headers
+            {
+                { "source-topic", Encoding.UTF8.GetBytes(sourceTopic) },
+                { "replay-requested-at", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o")) },
+                { "replay-requested-by", Encoding.UTF8.GetBytes("dlq-consumer") }
+            }
+        }, cancellationToken);
+
+        _logger.LogInformation("Published replay payload to topic {ReplayTopic} at partition {Partition} offset {Offset}", replayTopic, result.Partition.Value, result.Offset.Value);
     }
 
     private static string GetString(JsonElement root, string propertyName)
