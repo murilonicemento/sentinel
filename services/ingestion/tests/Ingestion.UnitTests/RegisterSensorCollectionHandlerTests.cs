@@ -54,7 +54,7 @@ public class RegisterSensorCollectionHandlerTests
             "Hourly", tenantId);
 
         _mockDataSourceRepository.Setup(x => x.GetByIdAndTenantId(datasourceId, tenantId)).Returns(dataSource);
-        _mockSensorCollectionService.Setup(x => x.ProcessSensorCollection<SensorEventDetected>(
+        _mockSensorCollectionService.Setup(x => x.ProcessSensorCollection(
                 datasourceId, tenantId, command.CollectedAt, command.Payload, SameSamples(command), expectedDomain,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(datasourceId);
@@ -64,7 +64,7 @@ public class RegisterSensorCollectionHandlerTests
 
         // Assert
         Assert.Equal(datasourceId, result);
-        _mockSensorCollectionService.Verify(x => x.ProcessSensorCollection<SensorEventDetected>(
+        _mockSensorCollectionService.Verify(x => x.ProcessSensorCollection(
             datasourceId, tenantId, command.CollectedAt, command.Payload, SameSamples(command), expectedDomain,
             It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -82,7 +82,7 @@ public class RegisterSensorCollectionHandlerTests
         var exception = await Assert.ThrowsAsync<IngestionReferenceNotFoundException>(
             () => _handler.Handle(command, CancellationToken.None));
         Assert.Equal(IngestionErrorCodes.DataSourceNotFound, exception.Code);
-        _mockSensorCollectionService.Verify(x => x.ProcessSensorCollection<SensorEventDetected>(
+        _mockSensorCollectionService.Verify(x => x.ProcessSensorCollection(
             It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<string>(),
             It.IsAny<List<SampleSensorDTO>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }

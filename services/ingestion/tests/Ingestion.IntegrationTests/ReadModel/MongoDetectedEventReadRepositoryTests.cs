@@ -72,6 +72,18 @@ public class MongoDetectedEventReadRepositoryTests : IClassFixture<MongoReadMode
     }
 
     [Fact]
+    public async Task AddAsync_WithAnAlreadyProjectedEventId_KeepsOneDocument()
+    {
+        var detected = Event(Guid.NewGuid(), "Climatic", "Rainfall", 10, 0);
+
+        await _repository.AddAsync(detected, CancellationToken.None);
+        await _repository.AddAsync(detected, CancellationToken.None);
+
+        Assert.Equal(1, await _database.GetCollection<BsonDocument>("climaticEvents")
+            .CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty));
+    }
+
+    [Fact]
     public async Task GetPageAsync_MergesBothDomainsNewestFirstAndIsolatesTenants()
     {
         var tenantA = Guid.NewGuid();

@@ -26,7 +26,7 @@ public class RegisterSensorCollectionHandler : IRequestHandler<RegisterSensorCol
                          ?? throw new IngestionReferenceNotFoundException(IngestionErrorCodes.DataSourceNotFound,
                              $"DataSource or tenant not found. DataSource Id: {request.DatasourceId}, TenantId: {request.TenantId}");
 
-        return await _sensorCollectionService.ProcessSensorCollection<SensorEventDetected>(
+        return await _sensorCollectionService.ProcessSensorCollection(
             request.DatasourceId, request.TenantId, request.CollectedAt,
             request.Payload, request.SampleSensors.ToList(), dataSource.ResolveSensorDomain().ToString(),
             cancellationToken);

@@ -15,7 +15,7 @@ public class RegisterClimaticEventHandler : IRequestHandler<RegisterClimaticEven
     }
 
     public async Task<Guid> Handle(RegisterClimaticEventCommand request, CancellationToken cancellationToken)
-        => await _sensorCollectionService.ProcessSensorCollection<SensorEventDetected>(
+        => await _sensorCollectionService.ProcessSensorCollection(
             request.DatasourceId, request.TenantId, request.CollectedAt,
             request.Payload, request.SampleSensors, "Climatic", cancellationToken);
 }

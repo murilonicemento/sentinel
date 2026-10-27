@@ -159,8 +159,15 @@ public class MongoDetectedEventReadRepository : IDetectedEventReadRepository
             CollectedAt = detectedEvent.CollectedAt
         };
 
-        await DetectedEventCollection(CollectionFor(detectedEvent.Domain))
-            .InsertOneAsync(document, cancellationToken: cancellationToken);
+        try
+        {
+            await DetectedEventCollection(CollectionFor(detectedEvent.Domain))
+                .InsertOneAsync(document, cancellationToken: cancellationToken);
+        }
+        catch (MongoWriteException exception) when (exception.WriteError.Category == ServerErrorCategory.DuplicateKey)
+        {
+            // Event ids are deterministic per collection sample: a retried collection projects the same id again.
+        }
     }
 
     private static FilterDefinitionBuilder<DetectedEventDocument> Filter => Builders<DetectedEventDocument>.Filter;

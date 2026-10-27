@@ -1,10 +1,12 @@
 using System.Text.Json;
 using Ingestion.Application.DTO;
+using Ingestion.Application.Events;
 using Ingestion.Application.Errors;
 using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.Providers;
 using Ingestion.Application.Interfaces.Repositories;
 using Ingestion.Application.Interfaces.Services;
+using Ingestion.Domain.AggregateRoots;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Enums;
 using Ingestion.Domain.Interfaces.Repositories;
@@ -16,6 +18,9 @@ namespace Ingestion.Application.Services;
 
 public class SensorCollectionService : ISensorCollectionService
 {
+    /// <summary>How long a claim on a collection survives a crashed process before another attempt may take it.</summary>
+    private static readonly TimeSpan ProcessingLease = TimeSpan.FromMinutes(2);
+
     private readonly IDataSourceRepository _dataSourceRepository;
     private readonly IDataCollectionRepository _dataCollectionRepository;
     private readonly IEventDeduplicator _eventDeduplicator;
@@ -45,9 +50,9 @@ public class SensorCollectionService : ISensorCollectionService
         _logger = logger;
     }
 
-    public async Task<Guid> ProcessSensorCollection<TEvent>(Guid dataSourceId, Guid tenantId, DateTime collectedAt,
+    public async Task<Guid> ProcessSensorCollection(Guid dataSourceId, Guid tenantId, DateTime collectedAt,
         string payload,
-        List<SampleSensorDTO> samples, string domain, CancellationToken cancellationToken) where TEvent : class
+        List<SampleSensorDTO> samples, string domain, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(payload))
             throw new ArgumentException("Payload can't be blank.");
@@ -84,11 +89,34 @@ public class SensorCollectionService : ISensorCollectionService
 
         var dedupKey = $"ing:{tenantId}:{dataSourceId}:{collectedAt:yyyyMMddHHmmss}";
         
-        if (await _eventDeduplicator.IsDuplicateAsync(dedupKey))
+        if (!await _eventDeduplicator.TryBeginAsync(dedupKey, ProcessingLease))
         {
             _logger.LogInformation("Event duplicated. Key: {dedupKey}", dedupKey);
             return dataSourceId;
         }
+
+        try
+        {
+            await RegisterCollectionAsync(dataSource, tenantId, collectedAt, payload, samples, domain, dedupKey,
+                cancellationToken);
+        }
+        catch
+        {
+            // Releases the claim so the collection can be retried; event ids are deterministic, so a retry does not
+            // duplicate what was already projected or published.
+            await _eventDeduplicator.AbandonAsync(dedupKey);
+            throw;
+        }
+
+        await _eventDeduplicator.MarkAsProcessedAsync(dedupKey, TimeSpan.FromMinutes(5));
+        return dataSourceId;
+    }
+
+    private async Task RegisterCollectionAsync(DataSource dataSource, Guid tenantId, DateTime collectedAt,
+        string payload, List<SampleSensorDTO> samples, string domain, string dedupKey,
+        CancellationToken cancellationToken)
+    {
+        var dataSourceId = dataSource.Id;
 
         var collectionGuid = Guid.NewGuid();
         var objectName = $"raw/{collectionGuid}.json";
@@ -98,8 +126,9 @@ public class SensorCollectionService : ISensorCollectionService
             JsonSerializer.Serialize(putResponse), tenantId);
         await _dataCollectionRepository.RegisterAsync(dataCollection);
 
-        foreach (var sample in samples)
+        for (var sampleIndex = 0; sampleIndex < samples.Count; sampleIndex++)
         {
+            var sample = samples[sampleIndex];
             var isValidCoords =
                 await _geospatialValidationService.ValidateCoordinatesAsync(sample.Latitude, sample.Longitude,
                     cancellationToken);
@@ -121,22 +150,15 @@ public class SensorCollectionService : ISensorCollectionService
             }
 
             var intensity = MeasurementType.From(dataSource.MeasurementType).CalculateIntensity(sample.SensorValue);
-            var evt = Activator.CreateInstance(typeof(TEvent),
-                collectionGuid,
-                eventType,
-                intensity,
-                sample.Latitude,
-                sample.Longitude,
-                collectedAt) as TEvent;
-
-            if (evt == null) continue;
+            var evt = new SensorEventDetected(collectionGuid, eventType, intensity, sample.Latitude, sample.Longitude,
+                collectedAt, DeterministicEventId.For(dedupKey, sampleIndex));
 
             _logger.LogInformation(
                 "Inserting climatic event to mongodb. Json event: {evt}",
                 evt
             );
             await _detectedEventReadRepository.AddAsync(
-                new DetectedEventDTO(Guid.NewGuid(), collectionGuid, tenantId, domain, eventType, intensity,
+                new DetectedEventDTO(evt.EventId, collectionGuid, tenantId, domain, eventType, intensity,
                     sample.Latitude, sample.Longitude, collectedAt),
                 cancellationToken);
 
@@ -144,8 +166,5 @@ public class SensorCollectionService : ISensorCollectionService
                 $"{domain.ToLower()}-event-detected", JsonSerializer.Serialize(evt));
             await _outboxRepository.RegisterAsync(outbox);
         }
-
-        await _eventDeduplicator.MarkAsProcessedAsync(dedupKey, TimeSpan.FromMinutes(5));
-        return dataSourceId;
     }
 }

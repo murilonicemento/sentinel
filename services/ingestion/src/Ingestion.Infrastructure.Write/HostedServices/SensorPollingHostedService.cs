@@ -45,7 +45,7 @@ public class SensorPollingHostedService : BackgroundService
 
                     foreach (var result in collections)
                     {
-                        await sensorCollectionService.ProcessSensorCollection<object>(
+                        await sensorCollectionService.ProcessSensorCollection(
                             result.DataSourceId,
                             result.TenantId,
                             result.CollectedAt.GetValueOrDefault(DateTime.UtcNow),
