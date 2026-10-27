@@ -170,15 +170,18 @@ services:
       - Jwt__SigningKey=${JWT_SIGNING_KEY}
       - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
       - ServiceToken__SigningKey=${ALERT_ORCHESTRATOR_SERVICE_TOKEN_SIGNING_KEY}
-      - ConnectionStrings__PostgreSql=Host=postgres;Port=5432;Database=alert_orchestrator;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      - ConnectionStrings__Redis=redis:6379
-      - ConnectionStrings__Kafka=kafka:9092
+      - Database__UsePostgreSql=true
+      - Database__PostgreSqlConnectionString=Host=postgres;Port=5432;Database=alert_orchestrator;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - Cache__UseRedis=true
+      - Cache__RedisConnectionString=redis:6379
+      - Services__TenantsBillingBaseUrl=http://tenants-billing:8080
       - Kafka__BootstrapServers=kafka:9092
       - Kafka__ConsumerGroupId=alert-orchestrator-group
-      - Kafka__RiskUpdatedTopic=risk-updated
-      - Kafka__RegionIntersectedTopic=region-intersected
-      - Kafka__EventTopic=alert-orchestrator-events
-      - Kafka__CommandTopic=alert-commands
+      - Kafka__Topics__RiskUpdated=risk-updated
+      - Kafka__Topics__RegionIntersected=region-intersected
+      - Kafka__Topics__Event=alert-orchestrator-events
+      - Kafka__Topics__Command=alert-commands
+      - Kafka__Topics__DeadLetter=alert-orchestrator-dead-letter
     ports:
       - "7005:8080"
     depends_on:
@@ -229,6 +232,78 @@ services:
     restart: unless-stopped
     networks:
       - sentinel-network
+  channels:
+    image: channels
+    build:
+      context: ../services/channels
+      dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
+    container_name: channels
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
+      - ServiceToken__SigningKey=${CHANNELS_SERVICE_TOKEN_SIGNING_KEY}
+      - ConnectionStrings__ChannelsServiceDatabase=Host=postgres;Port=5432;Database=channels;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - Redis__Configuration=redis:6379
+      - Services__TenantsBillingBaseUrl=http://tenants-billing:8080
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__ConsumerGroupId=channels-service-group
+      - Kafka__Topic=notification-events
+      - Kafka__DeadLetterTopic=notification-events-dlq
+      - Kafka__ConsumerDeadLetterTopic=channels-dead-letter
+      # Provider credentials are optional locally; without them deliveries fail and go to notification-events-dlq.
+      - ChannelsService__Providers__Email__Options__ApiKey=${SENDGRID_API_KEY:-}
+      - ChannelsService__Providers__Sms__Options__AccountSid=${TWILIO_ACCOUNT_SID:-}
+      - ChannelsService__Providers__Sms__Options__AuthToken=${TWILIO_AUTH_TOKEN:-}
+      - ChannelsService__Providers__WhatsApp__Options__AccountSid=${TWILIO_ACCOUNT_SID:-}
+      - ChannelsService__Providers__WhatsApp__Options__AuthToken=${TWILIO_AUTH_TOKEN:-}
+      - ChannelsService__Providers__Push__Options__ApiKey=${PUSH_API_KEY:-}
+      - ChannelsService__Providers__Siren__Options__ApiKey=${SIREN_API_KEY:-}
+    ports:
+      - "7008:8080"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - tenants-billing
+    restart: unless-stopped
+    networks:
+      - sentinel-network
+
+  reporting:
+    image: reporting
+    build:
+      context: ../services/reporting
+      dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
+    container_name: reporting
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - Elasticsearch__Uri=http://elasticsearch:9200
+      - Elasticsearch__IndexName=reporting-events
+      - Redis__Configuration=redis:6379
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__Topic=reporting-events
+      - Kafka__DeadLetterTopic=reporting-events-dead-letter
+      - Kafka__ReplayTopic=reporting-events-replay
+    ports:
+      - "7009:8080"
+    depends_on:
+      - elasticsearch
+      - redis
+      - kafka
+    restart: unless-stopped
+    networks:
+      - sentinel-network
+
   audit-compliance:
     image: audit-compliance
     build:
@@ -390,6 +465,22 @@ services:
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic audit-events-replay --partitions 1 --replication-factor 1
 
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic audit-events-dlq --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic alert-orchestrator-dead-letter --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-evaluation-dead-letter --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic notification-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic notification-events-dlq --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic channels-dead-letter --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic reporting-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic reporting-events-dead-letter --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic reporting-events-replay --partitions 1 --replication-factor 1
 
       echo 'Tópicos criados:'
       kafka-topics --bootstrap-server kafka:9092 --list

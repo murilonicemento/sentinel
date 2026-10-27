@@ -517,6 +517,28 @@
           "Port": 8080
         }
       ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/v1/channels/{everything}",
+      "DownstreamPathTemplate": "/api/v1/channels/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "channels",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/v1/reporting/{everything}",
+      "DownstreamPathTemplate": "/api/v1/reporting/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "reporting",
+          "Port": 8080
+        }
+      ]
     }
   ]
 }
