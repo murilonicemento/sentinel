@@ -108,8 +108,9 @@ public static class InfrastructureServiceCollectionExtension
             HttpPolicyExtensions
                 .HandleTransientHttpError()
                 .OrResult(r => (int)r.StatusCode == 429)
+                // 2 retries = 3 attempts including the first (platform limit).
                 .WaitAndRetryAsync(
-                    retryCount: 3,
+                retryCount: 2,
                     sleepDurationProvider: retryAttempt =>
                     {
                         var backoff = TimeSpan.FromMilliseconds(200 * Math.Pow(2, retryAttempt - 1));

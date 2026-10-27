@@ -12,11 +12,11 @@ public class RiskMatrixConfiguration : IEntityTypeConfiguration<RiskMatrix>
         builder.HasKey(rm => rm.Id);
         builder.Property(et => et.Id)
             .IsRequired()
-            .HasColumnType("uniqueidentifier")
+            .HasColumnType("uuid")
             .HasColumnName("id");
         builder.Property(rm => rm.EventTypeId)
             .IsRequired()
-            .HasColumnType("uniqueidentifier")
+            .HasColumnType("uuid")
             .HasColumnName("event_type_id");
         builder.Property(rm => rm.SeverityLevel)
             .IsRequired()

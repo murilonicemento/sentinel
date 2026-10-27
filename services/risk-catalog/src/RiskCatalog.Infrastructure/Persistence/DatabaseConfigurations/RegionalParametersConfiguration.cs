@@ -12,15 +12,15 @@ public class RegionalParametersConfiguration : IEntityTypeConfiguration<Regional
         builder.HasKey(rp => rp.Id);
         builder.Property(et => et.Id)
             .IsRequired()
-            .HasColumnType("uniqueidentifier")
+            .HasColumnType("uuid")
             .HasColumnName("id");
         builder.Property(rp => rp.AdjustmentFactor)
             .IsRequired()
-            .HasColumnType("double")
+            .HasColumnType("double precision")
             .HasColumnName("adjustment_factor");
         builder.Property(rp => rp.Description)
             .IsRequired()
-            .HasColumnType("nvarchar(255)")
+            .HasColumnType("varchar(255)")
             .HasColumnName("description");
     }
 }

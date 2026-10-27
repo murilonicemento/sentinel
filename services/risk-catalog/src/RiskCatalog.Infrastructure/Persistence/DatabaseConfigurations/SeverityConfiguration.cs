@@ -12,7 +12,7 @@ public class SeverityConfiguration : IEntityTypeConfiguration<Severity>
         builder.HasKey(s => s.Id);
         builder.Property(et => et.Id)
             .IsRequired()
-            .HasColumnType("uniqueidentifier")
+            .HasColumnType("uuid")
             .HasColumnName("id");
         builder.Property(s => s.Level)
             .IsRequired()
@@ -20,7 +20,7 @@ public class SeverityConfiguration : IEntityTypeConfiguration<Severity>
             .HasColumnName("level");
         builder.Property(s => s.Description)
             .IsRequired()
-            .HasColumnType("nvarchar(255)")
+            .HasColumnType("varchar(255)")
             .HasColumnName("description");
     }
 }

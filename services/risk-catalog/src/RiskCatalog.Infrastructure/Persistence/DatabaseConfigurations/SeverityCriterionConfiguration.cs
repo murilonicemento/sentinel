@@ -12,31 +12,31 @@ public class SeverityCriterionConfiguration : IEntityTypeConfiguration<SeverityC
         builder.HasKey(sc => sc.Id);
         builder.Property(et => et.Id)
             .IsRequired()
-            .HasColumnType("uniqueidentifier")
+            .HasColumnType("uuid")
             .HasColumnName("id");
         builder.Property(sc => sc.EventTypeId)
             .IsRequired()
-            .HasColumnType("uniqueidentifier")
+            .HasColumnType("uuid")
             .HasColumnName("event_type_id");
         builder.Property(sc => sc.SeverityId)
             .IsRequired()
-            .HasColumnType("uniqueidentifier")
+            .HasColumnType("uuid")
             .HasColumnName("severity_id");
         builder.Property(sc => sc.MinValue)
             .IsRequired()
-            .HasColumnType("double")
+            .HasColumnType("double precision")
             .HasColumnName("min_value");
         builder.Property(sc => sc.MaxValue)
             .IsRequired()
-            .HasColumnType("double")
+            .HasColumnType("double precision")
             .HasColumnName("max_value");
         builder.Property(sc => sc.Unit)
             .IsRequired()
-            .HasColumnType("nvarchar(50)")
+            .HasColumnType("varchar(50)")
             .HasColumnName("unit");
         builder.Property(sc => sc.Version)
             .IsRequired()
-            .HasColumnType("int")
+            .HasColumnType("integer")
             .HasColumnName("version");
 
         builder.HasOne(sc => sc.EventType).WithMany(et => et.SeverityCriteria).HasForeignKey(sc => sc.EventTypeId);
