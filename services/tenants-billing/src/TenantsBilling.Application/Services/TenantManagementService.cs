@@ -46,7 +46,16 @@ public sealed class TenantManagementService
         return tenant;
     }
 
-    public async Task<TenantQuotaStatus> RegisterUsageAsync(Guid tenantId, int eventsConsumed, int alertsTriggered, int apiRequests, int channelUsage, CancellationToken cancellationToken = default)
+    public Task<TenantQuotaStatus> RegisterUsageAsync(Guid tenantId, int eventsConsumed, int alertsTriggered, int apiRequests, int channelUsage, CancellationToken cancellationToken = default)
+        => RegisterUsageAsync(tenantId, eventsConsumed, alertsTriggered, apiRequests, channelUsage, sourceEventId: null,
+            cancellationToken);
+
+    /// <param name="sourceEventId">
+    /// Identifies the usage event (its EventId, or topic/partition/offset) and is copied to the quota events, so their
+    /// consumers can discard duplicates caused by redelivery.
+    /// </param>
+    public async Task<TenantQuotaStatus> RegisterUsageAsync(Guid tenantId, int eventsConsumed, int alertsTriggered,
+        int apiRequests, int channelUsage, string? sourceEventId, CancellationToken cancellationToken = default)
     {
         var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
             ?? throw new TenantsBillingException(TenantsBillingErrorKind.NotFound, TenantsBillingErrorCodes.TenantNotFound,
@@ -57,11 +66,11 @@ public sealed class TenantManagementService
 
         if (status == TenantQuotaStatus.SoftLimit)
         {
-            await _eventPublisher.PublishAsync("TenantQuotaSoftLimitReached", new { tenant.Id, eventsConsumed, alertsTriggered, apiRequests, channelUsage }, cancellationToken);
+            await _eventPublisher.PublishAsync("TenantQuotaSoftLimitReached", new { tenant.Id, eventsConsumed, alertsTriggered, apiRequests, channelUsage, SourceEventId = sourceEventId }, cancellationToken);
         }
         else if (status == TenantQuotaStatus.HardLimit)
         {
-            await _eventPublisher.PublishAsync("TenantQuotaHardLimitReached", new { tenant.Id, eventsConsumed, alertsTriggered, apiRequests, channelUsage }, cancellationToken);
+            await _eventPublisher.PublishAsync("TenantQuotaHardLimitReached", new { tenant.Id, eventsConsumed, alertsTriggered, apiRequests, channelUsage, SourceEventId = sourceEventId }, cancellationToken);
         }
 
         return status;

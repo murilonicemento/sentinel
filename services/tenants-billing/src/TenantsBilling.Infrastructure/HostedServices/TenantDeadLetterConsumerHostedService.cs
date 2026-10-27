@@ -4,13 +4,22 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using TenantsBilling.Infrastructure.Messaging.Reliability;
 
 namespace TenantsBilling.Infrastructure.HostedServices;
 
+/// <summary>
+/// Reads <c>tenant-usage-events-dlq</c> and schedules replays on <c>tenant-usage-events-replay</c> for entries that are
+/// replayable. The offset is committed only after the replay is published (or the entry is classified as terminal),
+/// so a broker failure never drops a dead letter.
+/// </summary>
 public sealed class TenantDeadLetterConsumerHostedService : BackgroundService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<TenantDeadLetterConsumerHostedService> _logger;
+    private readonly ConsumerReliabilityOptions _options = new();
+    private IProducer<Null, string>? _replayProducer;
+    private string _replayTopic = "tenant-usage-events-replay";
 
     public TenantDeadLetterConsumerHostedService(
         IConfiguration configuration,
@@ -20,93 +29,83 @@ public sealed class TenantDeadLetterConsumerHostedService : BackgroundService
         _logger = logger;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Consume() blocks; without yielding first, the loop would run synchronously inside StartAsync and block host startup.
-        await Task.Yield();
-
         var bootstrapServers = _configuration["Kafka:BootstrapServers"];
         if (string.IsNullOrWhiteSpace(bootstrapServers))
         {
-            _logger.LogWarning("Kafka bootstrap servers are not configured. Tenant dead-letter consumer will not start.");
-            return;
+            _logger.LogWarning("Kafka bootstrap servers are not configured. Tenant DLQ consumer will not start.");
+            return Task.CompletedTask;
         }
 
         var deadLetterTopic = _configuration["Kafka:DeadLetterTopic"] ?? "tenant-usage-events-dlq";
-        var replayTopic = _configuration["Kafka:ReplayTopic"] ?? "tenant-usage-events-replay";
+        _replayTopic = _configuration["Kafka:ReplayTopic"] ?? "tenant-usage-events-replay";
         var groupId = _configuration["Kafka:DeadLetterConsumerGroupId"] ?? "tenants-billing-dlq-group";
 
-        using var consumer = new ConsumerBuilder<Ignore, string>(new ConsumerConfig
+        _replayProducer = new ProducerBuilder<Null, string>(new ProducerConfig
         {
             BootstrapServers = bootstrapServers,
-            GroupId = groupId,
-            AutoOffsetReset = AutoOffsetReset.Earliest,
-            EnableAutoCommit = false,
-            AllowAutoCreateTopics = true
-        })
-        .SetErrorHandler((_, error) => _logger.LogError("Kafka DLQ consumer error: {Reason}", error.Reason))
-        .Build();
+            EnableIdempotence = true,
+            Acks = Acks.All,
+            MessageTimeoutMs = 30_000
+        }).Build();
+        var consumer = new ConsumerBuilder<Ignore, string>(ReliableConsumerLoop.CreateConfig(bootstrapServers, groupId))
+            .SetErrorHandler((_, error) => _logger.LogError("Kafka consumer error: {Reason}", error.Reason))
+            .Build();
+        var processor = new ReliableMessageProcessor(new NoDeadLetterSink(), groupId, _options, _logger);
 
-        consumer.Subscribe(deadLetterTopic);
-        _logger.LogInformation("Tenant DLQ consumer subscribed to topic {Topic}. Replay topic configured as {ReplayTopic}", deadLetterTopic, replayTopic);
+        return ReliableConsumerLoop.Start(consumer, [deadLetterTopic], processor, HandleAsync, _options, _logger,
+            stoppingToken);
+    }
 
-        try
+    private async Task<MessageHandlingResult> HandleAsync(ConsumeResult<Ignore, string> result,
+        CancellationToken cancellationToken)
+    {
+        var deadLetter = ParseDeadLetterEnvelope(result.Message.Value);
+        if (deadLetter is null)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            _logger.LogWarning("Skipping malformed dead-letter payload at {Topic}[{Partition}]@{Offset}",
+                result.Topic, result.Partition.Value, result.Offset.Value);
+            return MessageHandlingResult.Processed;
+        }
+
+        if (!ShouldReplay(deadLetter))
+        {
+            _logger.LogWarning(
+                "Dead-letter payload from {SourceTopic} was classified as terminal. Reason: {Reason}, attempts: {Attempts}",
+                deadLetter.SourceTopic, deadLetter.Reason, deadLetter.Attempts);
+            return MessageHandlingResult.Processed;
+        }
+
+        var replayPayload = JsonSerializer.Serialize(new
+        {
+            sourceTopic = deadLetter.SourceTopic,
+            originalPayload = deadLetter.OriginalPayload,
+            replayRequestedAt = DateTime.UtcNow,
+            replayRequestedBy = deadLetter.ReplayRequestedBy ?? "dlq-consumer"
+        });
+
+        var delivery = await _replayProducer!.ProduceAsync(_replayTopic, new Message<Null, string>
+        {
+            Value = replayPayload,
+            Headers = new Headers
             {
-                try
-                {
-                    var consumeResult = consumer.Consume(stoppingToken);
-                    if (consumeResult?.Message?.Value is null)
-                    {
-                        continue;
-                    }
-
-                    var deadLetter = ParseDeadLetterEnvelope(consumeResult.Message.Value);
-                    if (deadLetter is null)
-                    {
-                        _logger.LogWarning("Skipping malformed dead-letter payload from topic {Topic}", deadLetterTopic);
-                        consumer.Commit(consumeResult);
-                        continue;
-                    }
-
-                    if (!ShouldReplay(deadLetter))
-                    {
-                        _logger.LogWarning(
-                            "Dead-letter payload from {SourceTopic} was classified as terminal. Reason: {Reason}, attempts: {Attempts}",
-                            deadLetter.SourceTopic,
-                            deadLetter.Reason,
-                            deadLetter.Attempts);
-                        consumer.Commit(consumeResult);
-                        continue;
-                    }
-
-                    var replayPayload = JsonSerializer.Serialize(new
-                    {
-                        sourceTopic = deadLetter.SourceTopic,
-                        originalPayload = deadLetter.OriginalPayload,
-                        replayRequestedAt = DateTime.UtcNow,
-                        replayRequestedBy = deadLetter.ReplayRequestedBy ?? "dlq-consumer"
-                    });
-
-                    await PublishReplayAsync(replayTopic, replayPayload, deadLetter.SourceTopic, stoppingToken);
-                    _logger.LogInformation("Scheduled replay for dead-letter payload from {SourceTopic} to {ReplayTopic}", deadLetter.SourceTopic, replayTopic);
-                    consumer.Commit(consumeResult);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception exception)
-                {
-                    _logger.LogError(exception, "Error processing tenant dead-letter message");
-                }
+                { "source-topic", Encoding.UTF8.GetBytes(deadLetter.SourceTopic) },
+                { "replay-requested-at", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o")) },
+                { "replay-requested-by", Encoding.UTF8.GetBytes("dlq-consumer") }
             }
-        }
-        finally
-        {
-            consumer.Close();
-        }
+        }, cancellationToken);
+
+        _logger.LogInformation("Scheduled replay for dead-letter payload from {SourceTopic} to {ReplayTopic} at offset {Offset}",
+            deadLetter.SourceTopic, _replayTopic, delivery.Offset.Value);
+        return MessageHandlingResult.Processed;
+    }
+
+    public override void Dispose()
+    {
+        _replayProducer?.Flush(TimeSpan.FromSeconds(5));
+        _replayProducer?.Dispose();
+        base.Dispose();
     }
 
     public static TenantDeadLetterEnvelope? ParseDeadLetterEnvelope(string payload)
@@ -164,39 +163,6 @@ public sealed class TenantDeadLetterConsumerHostedService : BackgroundService
             deadLetter.Reason.Contains("retry", StringComparison.OrdinalIgnoreCase));
     }
 
-    private async Task PublishReplayAsync(string replayTopic, string replayPayload, string sourceTopic, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var producerConfig = new ProducerConfig
-            {
-                BootstrapServers = _configuration["Kafka:BootstrapServers"],
-                EnableIdempotence = true,
-                Acks = Acks.All,
-                MessageSendMaxRetries = 3,
-                RetryBackoffMs = 1000
-            };
-
-            using var producer = new ProducerBuilder<Null, string>(producerConfig).Build();
-            var result = await producer.ProduceAsync(replayTopic, new Message<Null, string>
-            {
-                Value = replayPayload,
-                Headers = new Headers
-                {
-                    { "source-topic", Encoding.UTF8.GetBytes(sourceTopic) },
-                    { "replay-requested-at", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o")) },
-                    { "replay-requested-by", Encoding.UTF8.GetBytes("dlq-consumer") }
-                }
-            }, cancellationToken);
-
-            _logger.LogInformation("Published replay payload to topic {ReplayTopic} at partition {Partition} offset {Offset}", replayTopic, result.Partition.Value, result.Offset.Value);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogError(exception, "Failed to publish replay payload to topic {ReplayTopic}", replayTopic);
-        }
-    }
-
     private static string GetString(JsonElement root, string propertyName)
     {
         return root.TryGetProperty(propertyName, out var property)
@@ -234,3 +200,13 @@ public sealed record TenantDeadLetterEnvelope(
     string OriginalPayload,
     bool ReplayRequested,
     string? ReplayRequestedBy);
+
+/// <summary>
+/// Entries of the dead-letter topic are never dead-lettered again: a non-transient failure while replaying keeps the
+/// offset uncommitted (consumption pauses) until an operator intervenes.
+/// </summary>
+internal sealed class NoDeadLetterSink : IDeadLetterSink
+{
+    public Task PublishAsync(DeadLetterEnvelope envelope, Headers? originalHeaders, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException("The dead-letter consumer has no dead-letter topic of its own.");
+}
