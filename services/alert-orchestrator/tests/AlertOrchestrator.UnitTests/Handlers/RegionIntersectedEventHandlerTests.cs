@@ -46,8 +46,8 @@ public class RegionIntersectedEventHandlerTests
             DateTime.UtcNow);
 
         _idempotencyService
-            .Setup(x => x.IsProcessedAsync(notification.EventId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .Setup(x => x.TryBeginAsync(notification.EventId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdempotencyClaimResult.Acquired);
 
         _configurationPort
             .Setup(x => x.GetConfigurationAsync(notification.RiskType, null, It.IsAny<CancellationToken>()))
@@ -86,6 +86,6 @@ public class RegionIntersectedEventHandlerTests
         _windowRepository.Verify(x => x.UpdateAsync(It.IsAny<AlertWindow>(), It.IsAny<CancellationToken>()), Times.Once);
         _commandPublisher.Verify(x => x.PublishAsync(It.IsAny<TriggerAlertCommand>(), It.IsAny<CancellationToken>()), Times.Once);
         _eventPublisher.Verify(x => x.PublishAsync(It.Is<object>(o => o is AlertTriggeredEvent), It.IsAny<CancellationToken>()), Times.Once);
-        _idempotencyService.Verify(x => x.MarkAsProcessedAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
+        _idempotencyService.Verify(x => x.CompleteAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
     }
 }

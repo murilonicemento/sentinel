@@ -82,6 +82,7 @@ var infrastructureOptions = new AlertOrchestratorInfrastructureOptions
     RegionIntersectedTopic = kafkaTopicsConfig.GetValue("RegionIntersected", "region-intersected"),
     EventTopic = kafkaTopicsConfig.GetValue("Event", "alert-orchestrator-event"),
     CommandTopic = kafkaTopicsConfig.GetValue("Command", "alert-orchestrator-command"),
+    DeadLetterTopic = kafkaTopicsConfig.GetValue("DeadLetter", "alert-orchestrator-dead-letter"),
     UsePostgreSql = databaseConfig.GetValue("UsePostgreSql", false),
     PostgreSqlConnectionString = databaseConfig.GetValue("PostgreSqlConnectionString", string.Empty),
     UseRedis = cacheConfig.GetValue("UseRedis", false),

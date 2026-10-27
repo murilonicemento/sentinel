@@ -35,6 +35,25 @@ public sealed class InMemoryAlertWindowRepository : IAlertWindowRepository
         }
     }
 
+    public Task<AlertWindowPage> SearchAsync(string? region, AlertStatus? status,
+        IReadOnlyCollection<string>? tenantIds, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var tenants = tenantIds?.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        lock (_lock)
+        {
+            var matching = _windows.Values
+                .Where(w => string.IsNullOrWhiteSpace(region) || w.Region == region)
+                .Where(w => status is null || w.Status == status)
+                .Where(w => tenants is null || (w.TenantId is not null && tenants.Contains(w.TenantId)))
+                .OrderByDescending(w => w.OpenedAt)
+                .ThenBy(w => w.Id)
+                .ToList();
+
+            return Task.FromResult(new AlertWindowPage(
+                matching.Skip((page - 1) * pageSize).Take(pageSize).ToList(), matching.Count));
+        }
+    }
+
     public Task<IReadOnlyList<AlertWindow>> GetByRegionAsync(string region,
         CancellationToken cancellationToken = default)
     {

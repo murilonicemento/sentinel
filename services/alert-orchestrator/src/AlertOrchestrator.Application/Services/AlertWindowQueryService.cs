@@ -54,24 +54,16 @@ public sealed class AlertWindowQueryService : IAlertWindowQueryService
             alertStatus = parsed;
         }
 
-        var windows = string.IsNullOrWhiteSpace(region)
-            ? await _repository.GetByStatusAsync(alertStatus!.Value, cancellationToken)
-            : await _repository.GetByRegionAsync(region, cancellationToken);
-
-        var matching = windows
-            .Where(w => scope.Allows(w.TenantId))
-            .Where(w => alertStatus is null || w.Status == alertStatus)
-            .OrderByDescending(w => w.OpenedAt)
-            .ThenBy(w => w.Id)
-            .ToList();
+        var result = await _repository.SearchAsync(region, alertStatus,
+            scope.AllTenants ? null : scope.TenantIds.ToList(), page, pageSize, cancellationToken);
 
         return new PagedResultDTO<AlertWindowDTO>
         {
-            Items = matching.Skip((page - 1) * pageSize).Take(pageSize).Select(MapToDto).ToList(),
+            Items = result.Items.Select(MapToDto).ToList(),
             Page = page,
             PageSize = pageSize,
-            TotalItems = matching.Count,
-            TotalPages = (int)Math.Ceiling(matching.Count / (double)pageSize)
+            TotalItems = result.TotalItems,
+            TotalPages = (int)Math.Ceiling(result.TotalItems / (double)pageSize)
         };
     }
 

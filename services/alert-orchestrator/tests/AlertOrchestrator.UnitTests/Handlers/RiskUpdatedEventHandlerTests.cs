@@ -58,8 +58,8 @@ public class RiskUpdatedEventHandlerTests
             new Dictionary<string, string>());
 
         _idempotencyService
-            .Setup(x => x.IsProcessedAsync(notification.EventId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .Setup(x => x.TryBeginAsync(notification.EventId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdempotencyClaimResult.Acquired);
 
         _configurationPort
             .Setup(x => x.GetConfigurationAsync(notification.RiskType, notification.TenantId, It.IsAny<CancellationToken>()))
@@ -90,7 +90,7 @@ public class RiskUpdatedEventHandlerTests
         _windowRepository.Verify(x => x.UpdateAsync(It.IsAny<AlertWindow>(), It.IsAny<CancellationToken>()), Times.Never);
         _eventPublisher.Verify(x => x.PublishAsync(It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Never);
         _commandPublisher.Verify(x => x.PublishAsync(It.IsAny<TriggerAlertCommand>(), It.IsAny<CancellationToken>()), Times.Never);
-        _idempotencyService.Verify(x => x.MarkAsProcessedAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
+        _idempotencyService.Verify(x => x.CompleteAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -106,8 +106,8 @@ public class RiskUpdatedEventHandlerTests
             new Dictionary<string, string>());
 
         _idempotencyService
-            .Setup(x => x.IsProcessedAsync(notification.EventId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .Setup(x => x.TryBeginAsync(notification.EventId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdempotencyClaimResult.Acquired);
 
         _configurationPort
             .Setup(x => x.GetConfigurationAsync(notification.RiskType, notification.TenantId, It.IsAny<CancellationToken>()))
@@ -146,6 +146,54 @@ public class RiskUpdatedEventHandlerTests
         _windowRepository.Verify(x => x.UpdateAsync(It.IsAny<AlertWindow>(), It.IsAny<CancellationToken>()), Times.Once);
         _eventPublisher.Verify(x => x.PublishAsync(It.Is<object>(o => o is AlertTriggeredEvent), It.IsAny<CancellationToken>()), Times.Once);
         _commandPublisher.Verify(x => x.PublishAsync(It.IsAny<TriggerAlertCommand>(), It.IsAny<CancellationToken>()), Times.Once);
-        _idempotencyService.Verify(x => x.MarkAsProcessedAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
+        _idempotencyService.Verify(x => x.CompleteAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private static RiskUpdatedEvent Event() =>
+        new(Guid.NewGuid(), "region-1", "flood", 90, "tenant-1", DateTime.UtcNow, new Dictionary<string, string>());
+
+    [Fact]
+    public async Task Handle_WhenEventAlreadyProcessed_SkipsWithoutTouchingWindows()
+    {
+        var notification = Event();
+        _idempotencyService
+            .Setup(x => x.TryBeginAsync(notification.EventId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdempotencyClaimResult.AlreadyProcessed);
+
+        await CreateHandler().Handle(notification, CancellationToken.None);
+
+        _windowRepository.VerifyNoOtherCalls();
+        _idempotencyService.Verify(x => x.CompleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenAnotherConsumerHoldsTheClaim_ThrowsSoTheMessageIsRetried()
+    {
+        var notification = Event();
+        _idempotencyService
+            .Setup(x => x.TryBeginAsync(notification.EventId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdempotencyClaimResult.InProgress);
+
+        await Assert.ThrowsAsync<MessageInProgressException>(
+            () => CreateHandler().Handle(notification, CancellationToken.None));
+
+        _windowRepository.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Handle_WhenProcessingFails_AbandonsTheClaimAndRethrows()
+    {
+        var notification = Event();
+        _idempotencyService
+            .Setup(x => x.TryBeginAsync(notification.EventId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdempotencyClaimResult.Acquired);
+        _configurationPort
+            .Setup(x => x.GetConfigurationAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TimeoutException("configuration store timeout"));
+
+        await Assert.ThrowsAsync<TimeoutException>(() => CreateHandler().Handle(notification, CancellationToken.None));
+
+        _idempotencyService.Verify(x => x.AbandonAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
+        _idempotencyService.Verify(x => x.CompleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

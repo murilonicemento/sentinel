@@ -14,6 +14,7 @@ public sealed class AlertOrchestratorInfrastructureOptions
     public string RegionIntersectedTopic { get; set; } = "region-intersected";
     public string EventTopic { get; set; } = "alert-orchestrator-events";
     public string CommandTopic { get; set; } = "alert-commands";
+    public string DeadLetterTopic { get; set; } = "alert-orchestrator-dead-letter";
 
     public TimeSpan IdempotencyExpiration { get; set; } = TimeSpan.FromHours(24);
     public TimeSpan? ExpirationCheckInterval { get; set; }

@@ -43,11 +43,15 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
 
     public async Task Handle(RegionIntersectedEvent notification, CancellationToken cancellationToken)
     {
-        if (await _idempotencyService.IsProcessedAsync(notification.EventId, cancellationToken))
+        var claim = await _idempotencyService.TryBeginAsync(notification.EventId, cancellationToken);
+        if (claim == IdempotencyClaimResult.AlreadyProcessed)
         {
             _logger.LogInformation("Event {EventId} already processed, skipping", notification.EventId);
             return;
         }
+
+        if (claim == IdempotencyClaimResult.InProgress)
+            throw new MessageInProgressException(notification.EventId);
 
         try
         {
@@ -149,13 +153,12 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
                     window.Id, window.Signals.Count, quorumMet);
             }
 
-            await _idempotencyService.MarkAsProcessedAsync(notification.EventId, cancellationToken);
+            await _idempotencyService.CompleteAsync(notification.EventId, cancellationToken);
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogError(ex,
-                "Error processing RegionIntersectedEvent {EventId} for Region: {Region}, IntersectingRegion: {IntersectingRegion}, RiskType: {RiskType}",
-                notification.EventId, notification.Region, notification.IntersectingRegion, notification.RiskType);
+            // Lets a retry or another instance process the event; the consumer logs the failure.
+            await _idempotencyService.AbandonAsync(notification.EventId, CancellationToken.None);
             throw;
         }
     }
