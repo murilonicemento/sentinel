@@ -27,13 +27,19 @@ public class ElasticsearchGeospatialEventRepository : IGeospatialEventRepository
         var doc = MapToDocument(evt);
         var response = await _client.IndexAsync(
             doc,
-            i => i.Index(IndexName).Id(evt.CollectionId),
+            i => i.Index(IndexName).Id(evt.SourceEventId ?? evt.CollectionId),
             cancellationToken);
 
         if (!response.IsValid)
         {
-            _logger.LogError(response.OriginalException, "Failed to index geospatial event {EventId}", evt.CollectionId);
-            throw new InvalidOperationException($"Elasticsearch index failed: {response.OriginalException?.Message}");
+            var status = response.ApiCall?.HttpStatusCode;
+            // No status means the cluster could not be reached; 5xx and 429 may succeed on retry.
+            if (status is null or >= 500 or 429)
+                throw new ElasticsearchUnavailableException(status, response.OriginalException);
+
+            _logger.LogError(response.OriginalException, "Elasticsearch rejected geospatial event {EventId} with {Status}",
+                evt.CollectionId, status);
+            throw new InvalidOperationException($"Elasticsearch rejected the document with status {status}.");
         }
     }
 
@@ -158,3 +164,7 @@ public class ElasticsearchGeospatialEventRepository : IGeospatialEventRepository
         }).ToList();
     }
 }
+
+/// <summary>Elasticsearch could not be reached or answered with a retryable status.</summary>
+public sealed class ElasticsearchUnavailableException(int? status, Exception? innerException)
+    : Exception($"Elasticsearch is unavailable (status {status?.ToString() ?? "none"}).", innerException);

@@ -4,11 +4,15 @@ using Geospatial.Domain.Services;
 using Geospatial.Infrastructure.Elasticsearch;
 using Geospatial.Infrastructure.GeometryEngine;
 using Geospatial.Infrastructure.Messaging.Consumers;
+using Geospatial.Infrastructure.Messaging.Reliability;
+using Geospatial.Infrastructure.Messaging;
 using Geospatial.Infrastructure.Options;
 using Geospatial.Infrastructure.Persistence.DbContext;
 using Geospatial.Infrastructure.Persistence.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Nest;
 
 namespace Geospatial.Infrastructure;
@@ -79,13 +83,22 @@ public static class ServiceCollectionExtension
                 AutoOffsetReset = AutoOffsetReset.Earliest,
                 EnableAutoCommit = false,
                 EnableAutoOffsetStore = false,
-                EnablePartitionEof = true
+                EnablePartitionEof = false
             };
 
             return new ConsumerBuilder<Null, string>(config).Build();
         });
 
         services.AddSingleton<Geospatial.Application.Interfaces.Messaging.IRegionIntersectedPublisher, Messaging.Publishers.RegionIntersectedPublisher>();
+
+        var reliability = new ConsumerReliabilityOptions();
+        services.AddSingleton(reliability);
+        services.AddSingleton<IDeadLetterSink>(sp => new GeospatialDeadLetterSink(
+            sp.GetRequiredService<IProducer<Null, string>>(),
+            sp.GetRequiredService<IOptions<KafkaConsumerOptions>>().Value.DeadLetterTopic));
+        services.AddSingleton(sp => new ReliableMessageProcessor(sp.GetRequiredService<IDeadLetterSink>(),
+            "geospatial-service-consumer", reliability,
+            sp.GetRequiredService<ILogger<ReliableMessageProcessor>>()));
 
         return services;
     }
