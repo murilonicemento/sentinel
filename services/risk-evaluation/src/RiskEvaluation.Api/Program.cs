@@ -66,9 +66,6 @@ builder.Services
     .AddApplicationServiceCollection()
     .AddInfrastructureServiceCollection(builder.Configuration);
 
-// Hosted Service for Consumer
-builder.Services.AddHostedService<MessageConsumerHostedService>();
-
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

@@ -33,19 +33,19 @@ public class SensorEventDetectedHandler : INotificationHandler<SensorEventDetect
 
         switch (eventType.ToLowerInvariant())
         {
-            case "temperatureAnomaly":
+            case "temperatureanomaly":
                 events.TemperatureAnomaly = intensity;
                 break;
-            case "humidityAnomaly":
+            case "humidityanomaly":
                 events.HumidityAnomaly = intensity;
                 break;
-            case "windGust":
+            case "windgust":
                 events.WindGust = intensity;
                 break;
             case "rainfall":
                 events.Rainfall = intensity;
                 break;
-            case "pressureChange":
+            case "pressurechange":
                 events.PressureChange = intensity;
                 break;
         }
