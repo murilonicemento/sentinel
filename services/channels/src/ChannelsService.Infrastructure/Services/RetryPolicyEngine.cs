@@ -1,70 +1,92 @@
+using System.Collections.Concurrent;
 using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
-using ChannelsService.Domain.Entities;
+using ChannelsService.Infrastructure.Messaging.Reliability;
 using Microsoft.Extensions.Logging;
 using Polly;
+using Polly.CircuitBreaker;
 using Polly.Timeout;
 
 namespace ChannelsService.Infrastructure.Services;
 
+/// <summary>
+/// Retry → circuit breaker → per-attempt timeout. Only transient failures are retried, because sending is not
+/// idempotent at the provider (a retried SMS may be delivered twice). Circuit breakers are kept per provider for the
+/// lifetime of the process, so the engine must be registered as a singleton.
+/// </summary>
 public sealed class RetryPolicyEngine : IRetryPolicyEngine
 {
-    private readonly ILogger<RetryPolicyEngine> _logger;
+    /// <summary>Platform limit: at most 3 attempts per operation, including the first.</summary>
+    public const int MaxAttemptsLimit = 3;
 
-    public RetryPolicyEngine(ILogger<RetryPolicyEngine> logger)
+    private readonly ConcurrentDictionary<string, AsyncCircuitBreakerPolicy<DeliveryResultDTO>> _breakers = new();
+    private readonly ILogger<RetryPolicyEngine> _logger;
+    private readonly Func<int, TimeSpan> _retryDelay;
+
+    public RetryPolicyEngine(ILogger<RetryPolicyEngine> logger) : this(logger, null)
+    {
+    }
+
+    public RetryPolicyEngine(ILogger<RetryPolicyEngine> logger, Func<int, TimeSpan>? retryDelay)
     {
         _logger = logger;
+        _retryDelay = retryDelay ?? (retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)) +
+                                                     TimeSpan.FromMilliseconds(Random.Shared.Next(0, 250)));
     }
 
-    public async Task<DeliveryResultDTO> ExecuteAsync(Func<CancellationToken, Task<DeliveryResultDTO>> sendFunc, int maxAttempts, ProviderResilienceDTO resilienceDto, CancellationToken cancellationToken)
+    public async Task<DeliveryResultDTO> ExecuteAsync(string providerName,
+        Func<CancellationToken, Task<DeliveryResultDTO>> sendFunc, int maxAttempts,
+        ProviderResilienceDTO resilienceDto, CancellationToken cancellationToken)
     {
-        var jitter = new Random();
+        var attempts = Math.Clamp(maxAttempts, 1, MaxAttemptsLimit);
 
-        var retryPolicy = Policy<DeliveryResultDTO>
-            .Handle<Exception>()
-            .OrResult(result => !result.Success)
-            .WaitAndRetryAsync(
-                maxAttempts,
-                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)) + TimeSpan.FromMilliseconds(jitter.Next(0, 250)),
-                onRetry: (outcome, timeSpan, retryCount, context) =>
-                {
-                    if (outcome.Exception != null)
-                    {
-                        _logger.LogWarning(outcome.Exception, "Retry {RetryCount} failed with exception.", retryCount);
-                    }
-                    else
-                    {
-                        _logger.LogWarning("Retry {RetryCount} received unsuccessful result: {Error}", retryCount, outcome.Result?.Error);
-                    }
-                });
+        var retry = Policy<DeliveryResultDTO>
+            .Handle<Exception>(TransientFailureClassifier.IsTransient)
+            .OrResult(result => !result.Success && result.IsTransient)
+            .WaitAndRetryAsync(attempts - 1, _retryDelay, (outcome, delay, retryCount, _) =>
+            {
+                if (outcome.Exception is not null)
+                    _logger.LogWarning(outcome.Exception, "{Provider} attempt {Attempt} failed; retrying in {DelayMs} ms",
+                        providerName, retryCount, (int)delay.TotalMilliseconds);
+                else
+                    _logger.LogWarning("{Provider} attempt {Attempt} returned {Error}; retrying in {DelayMs} ms",
+                        providerName, retryCount, outcome.Result?.Error, (int)delay.TotalMilliseconds);
+            });
 
-        AsyncPolicy<DeliveryResultDTO> policy = retryPolicy;
-
-        if (resilienceDto.CircuitBreakerFailureThreshold > 0)
-        {
-            var circuitBreakerPolicy = Policy<DeliveryResultDTO>
-                .Handle<Exception>()
-                .OrResult(result => !result.Success)
-                .CircuitBreakerAsync(
-                    resilienceDto.CircuitBreakerFailureThreshold,
-                    TimeSpan.FromSeconds(resilienceDto.CircuitBreakerDurationSeconds),
-                    onBreak: (outcome, breakDelay, context) =>
-                    {
-                        _logger.LogWarning(outcome.Exception, "Circuit breaker opened for {BreakDelay} after failure.", breakDelay);
-                    },
-                    onReset: context => _logger.LogInformation("Circuit breaker reset."),
-                    onHalfOpen: () => _logger.LogInformation("Circuit breaker is half-open."));
-
-            policy = circuitBreakerPolicy.WrapAsync(policy);
-        }
-
+        IAsyncPolicy<DeliveryResultDTO> perAttempt = Policy.NoOpAsync<DeliveryResultDTO>();
         if (resilienceDto.TimeoutSeconds > 0)
-        {
-            var timeoutPolicy = Policy.TimeoutAsync<DeliveryResultDTO>(TimeSpan.FromSeconds(resilienceDto.TimeoutSeconds), TimeoutStrategy.Optimistic);
-            policy = timeoutPolicy.WrapAsync(policy);
-        }
+            perAttempt = Policy.TimeoutAsync<DeliveryResultDTO>(TimeSpan.FromSeconds(resilienceDto.TimeoutSeconds),
+                TimeoutStrategy.Optimistic);
+        if (resilienceDto.CircuitBreakerFailureThreshold > 0)
+            perAttempt = Breaker(providerName, resilienceDto).WrapAsync(perAttempt);
 
-        var executionResult = await policy.ExecuteAsync(async ct => await sendFunc(ct), cancellationToken);
-        return executionResult;
+        try
+        {
+            return await retry.WrapAsync(perAttempt).ExecuteAsync(sendFunc, cancellationToken);
+        }
+        catch (BrokenCircuitException)
+        {
+            _logger.LogWarning("Circuit for {Provider} is open; skipping the provider", providerName);
+            return Failure(providerName, "The provider is temporarily unavailable (circuit open).");
+        }
+        catch (TimeoutRejectedException)
+        {
+            return Failure(providerName, "The provider did not answer in time.");
+        }
     }
+
+    private AsyncCircuitBreakerPolicy<DeliveryResultDTO> Breaker(string providerName, ProviderResilienceDTO options) =>
+        _breakers.GetOrAdd(providerName, _ => Policy<DeliveryResultDTO>
+            .Handle<Exception>(TransientFailureClassifier.IsTransient)
+            .OrResult(result => !result.Success && result.IsTransient)
+            .CircuitBreakerAsync(
+                options.CircuitBreakerFailureThreshold,
+                TimeSpan.FromSeconds(options.CircuitBreakerDurationSeconds),
+                (outcome, breakDelay) => _logger.LogWarning(outcome.Exception,
+                    "Circuit for {Provider} opened for {BreakDelay}", providerName, breakDelay),
+                () => _logger.LogInformation("Circuit for {Provider} reset", providerName),
+                () => _logger.LogInformation("Circuit for {Provider} is half-open", providerName)));
+
+    private static DeliveryResultDTO Failure(string providerName, string error) =>
+        new() { Success = false, IsTransient = true, Error = error, ProviderName = providerName };
 }

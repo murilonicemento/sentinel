@@ -60,6 +60,14 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
 
         var attemptedChannels = 0;
         var settings = _settingsProvider.GetSettings(notification.TenantId);
+
+        // A redelivered notification (consumer retry or reprocessed DLQ entry) must not resend on channels that
+        // already succeeded: providers are not idempotent and an SMS would be delivered twice.
+        var deliveredChannels = (await _deliveryRepository.GetByEventAsync(notification.EventId))
+            .Where(a => string.Equals(a.TenantId, notification.TenantId, StringComparison.OrdinalIgnoreCase))
+            .Where(a => a.StatusEnum is DeliveryStatusEnum.Sent or DeliveryStatusEnum.Retried)
+            .GroupBy(a => a.Channel)
+            .ToDictionary(g => g.Key, g => g.First().Provider);
         var orderedChannels = _fallbackExecutor.GetFallbackOrder(notification, settings);
 
         _logger.LogInformation(
@@ -89,6 +97,14 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                 return new DeliveryResultDTO { Success = false, Error = "Delivery cancelled." };
             }
 
+            if (deliveredChannels.TryGetValue(channel, out var deliveredBy))
+            {
+                _logger.LogInformation("Event {EventId} was already delivered on channel {Channel}; skipping",
+                    notification.EventId, channel);
+                successfulProviders.Add(deliveredBy);
+                continue;
+            }
+
             var provider = _providers.FirstOrDefault(p => p.ChannelTypeEnum == channel);
             if (provider == null)
             {
@@ -97,13 +113,14 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                 continue;
             }
 
-            var maxRetries = settings.MaxRetries.GetValueOrDefault(channel, 3);
+            // MaxRetries is the total number of attempts per channel; the engine caps it at the platform limit.
+            var maxAttempts = settings.MaxRetries.GetValueOrDefault(channel, 3);
             var attemptNumber = 0;
             var resilienceOptions = (provider as IResilientChannelProvider)?.ResilienceOptions ?? new ProviderResilienceDTO();
             attemptedChannels++;
             var attemptStopwatch = Stopwatch.StartNew();
 
-            var attemptResult = await _retryPolicyEngine.ExecuteAsync(async ct =>
+            var attemptResult = await _retryPolicyEngine.ExecuteAsync(provider.ProviderName, async ct =>
             {
                 attemptNumber++;
                 var deliveryResult = await provider.SendAsync(notification, ct);
@@ -127,7 +144,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                 });
 
                 return deliveryResult;
-            }, maxRetries, resilienceOptions, cancellationToken);
+            }, maxAttempts, resilienceOptions, cancellationToken);
 
             attemptStopwatch.Stop();
             _metrics.RecordChannelAttempt(channel, provider.ProviderName, attemptResult.Success, attemptNumber > 1, attemptNumber);
@@ -148,7 +165,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                     "Channel {Channel} failed for event {EventId} after {Attempts} attempts: {Error}",
                     channel,
                     notification.EventId,
-                    maxRetries,
+                    attemptNumber,
                     attemptResult.Error);
                 failedChannels.Add(channel.ToString());
             }

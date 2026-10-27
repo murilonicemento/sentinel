@@ -3,6 +3,7 @@ using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
 using ChannelsService.Domain.Events;
 using ChannelsService.Infrastructure.Options;
+using ChannelsService.Infrastructure.Messaging.Reliability;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SendGrid;
@@ -51,6 +52,7 @@ public sealed class SendGridEmailChannelProvider : ChannelProviderBase
         return new DeliveryResultDTO
         {
             Success = false,
+            IsTransient = TransientFailureClassifier.IsTransientStatus(response.StatusCode),
             Error = $"SendGrid returned {(int)response.StatusCode}: {responseBody}",
             ProviderName = ProviderName
         };

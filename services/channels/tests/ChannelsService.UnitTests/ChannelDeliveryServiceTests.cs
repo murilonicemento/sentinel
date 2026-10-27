@@ -232,6 +232,45 @@ public sealed class ChannelDeliveryServiceTests
         Assert.Empty(repository.Attempts);
     }
 
+    [Fact]
+    public async Task DeliverAsync_WhenRedelivered_DoesNotResendOnChannelsAlreadyDelivered()
+    {
+        var notification = new NotificationEvent
+        {
+            EventId = "evt-redelivered",
+            TenantId = "tenant-1",
+            Message = new NotificationMessage { Title = "t", Body = "b" },
+            Channels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }
+        };
+        var settings = new TenantChannelDTO
+        {
+            TenantId = "tenant-1",
+            EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email },
+            PriorityOrder = new Dictionary<ChannelTypeEnum, int> { [ChannelTypeEnum.Sms] = 1, [ChannelTypeEnum.Email] = 2 },
+            MaxRetries = new Dictionary<ChannelTypeEnum, int>()
+        };
+        var sms = new TestChannelProvider(ChannelTypeEnum.Sms, true, "sms-provider");
+        var email = new TestChannelProvider(ChannelTypeEnum.Email, false, "email-provider");
+        var repository = new InMemoryDeliveryRepository();
+        ChannelDeliveryService Service() => new(
+            new IChannelProvider[] { sms, email },
+            repository,
+            new StubTenantChannelSettingsProvider(settings),
+            new NoOpRetryPolicyEngine(),
+            new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }),
+            new NoOpChannelMetrics(),
+            NullLogger<ChannelDeliveryService>.Instance,
+            new StubTenantBillingGateway(isActive: true));
+
+        await Service().DeliverAsync(notification, CancellationToken.None);
+        var second = await Service().DeliverAsync(notification, CancellationToken.None);
+
+        Assert.True(second.Success);
+        Assert.Equal(1, sms.Sends);
+        // The channel that failed is attempted again.
+        Assert.Equal(2, email.Sends);
+    }
+
     private sealed class TestChannelProvider : IChannelProvider
     {
         private readonly ChannelTypeEnum _channelTypeEnum;
@@ -247,9 +286,11 @@ public sealed class ChannelDeliveryServiceTests
 
         public ChannelTypeEnum ChannelTypeEnum => _channelTypeEnum;
         public string ProviderName => _providerName;
+        public int Sends { get; private set; }
 
         public Task<DeliveryResultDTO> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
         {
+            Sends++;
             return Task.FromResult(new DeliveryResultDTO
             {
                 Success = _shouldSucceed,
@@ -310,8 +351,9 @@ public sealed class ChannelDeliveryServiceTests
 
     private sealed class NoOpRetryPolicyEngine : IRetryPolicyEngine
     {
-        public Task<DeliveryResultDTO> ExecuteAsync(Func<CancellationToken, Task<DeliveryResultDTO>> sendFunc,
-            int maxAttempts, ProviderResilienceDTO resilienceDto, CancellationToken cancellationToken)
+        public Task<DeliveryResultDTO> ExecuteAsync(string providerName,
+            Func<CancellationToken, Task<DeliveryResultDTO>> sendFunc, int maxAttempts,
+            ProviderResilienceDTO resilienceDto, CancellationToken cancellationToken)
         {
             return sendFunc(cancellationToken);
         }

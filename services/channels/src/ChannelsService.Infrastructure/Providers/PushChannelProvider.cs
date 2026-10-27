@@ -6,6 +6,7 @@ using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
 using ChannelsService.Domain.Events;
 using ChannelsService.Infrastructure.Options;
+using ChannelsService.Infrastructure.Messaging.Reliability;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -84,6 +85,7 @@ public sealed class PushChannelProvider : ChannelProviderBase
             return new DeliveryResultDTO
             {
                 Success = false,
+                IsTransient = TransientFailureClassifier.IsTransientStatus(response.StatusCode),
                 ProviderName = ProviderName,
                 Error = $"Push provider returned {(int)response.StatusCode}: {responseBody}"
             };
@@ -94,6 +96,7 @@ public sealed class PushChannelProvider : ChannelProviderBase
             return new DeliveryResultDTO
             {
                 Success = false,
+                IsTransient = TransientFailureClassifier.IsTransient(exception),
                 ProviderName = ProviderName,
                 Error = exception.Message
             };

@@ -103,7 +103,7 @@ public static class ServiceCollectionExtensions
             .AddServiceTokens(configuration)
             .AddScoped<ITenantBillingGateway>(sp => sp.GetRequiredService<TenantBillingGateway>())
             .AddScoped<IChannelDeliveryService, ChannelDeliveryService>()
-            .AddScoped<IRetryPolicyEngine, RetryPolicyEngine>()
+            .AddSingleton<IRetryPolicyEngine, RetryPolicyEngine>()
             .AddScoped<IFallbackExecutor, FallbackExecutor>()
             .AddSingleton<IChannelMetrics, ChannelMetrics>()
             .AddHostedService<NotificationConsumerHostedService>();

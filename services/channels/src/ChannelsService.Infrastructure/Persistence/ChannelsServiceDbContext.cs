@@ -23,7 +23,8 @@ public sealed class ChannelsServiceDbContext : DbContext
             entity.Property(e => e.TenantId).IsRequired().HasMaxLength(64);
             entity.Property(e => e.Channel).IsRequired();
             entity.Property(e => e.Provider).IsRequired().HasMaxLength(128);
-            entity.Property(e => e.StatusEnum).IsRequired();
+            // The column kept its original name when the property gained the Enum suffix.
+            entity.Property(e => e.StatusEnum).HasColumnName("Status").IsRequired();
             entity.Property(e => e.AttemptCount).IsRequired();
             entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
             entity.Property(e => e.Timestamp).IsRequired();
