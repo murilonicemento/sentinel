@@ -8,10 +8,11 @@ using MongoDB.Bson.Serialization.Serializers;
 using RiskEvaluation.Api.Contracts;
 using RiskEvaluation.Api.Filters;
 using RiskEvaluation.Api.Middlewares;
+using RiskEvaluation.Api.Observability;
 using RiskEvaluation.Api.Security;
+using RiskEvaluation.Infrastructure.HealthChecks;
 using RiskEvaluation.Infrastructure.HostedServices;
 using Scalar.AspNetCore;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,7 +57,8 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
     };
 });
 // Logging
-builder.Host.UseSerilog((context, config) => { config.ReadFrom.Configuration(context.Configuration); });
+builder.AddSentinelObservability("risk-evaluation");
+builder.Services.AddHealthChecks().AddRiskEvaluationReadinessChecks(ObservabilityExtensions.ReadinessTag);
 
 // MongoDB Serialization
 BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
@@ -67,6 +69,8 @@ builder.Services
     .AddInfrastructureServiceCollection(builder.Configuration);
 
 var app = builder.Build();
+
+app.UseSentinelRequestLogging();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -88,6 +92,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.MapControllers();
+app.MapSentinelOperationalEndpoints();
 
 app.Run();
 

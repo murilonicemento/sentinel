@@ -39,9 +39,11 @@ public static class ServiceCollectionExtension
         });
 
         // Redis
+        var redisConnectionString = configuration.GetConnectionString("Redis")
+            ?? throw new InvalidOperationException("Configuration 'ConnectionStrings:Redis' is required.");
         services.AddSingleton<IConnectionMultiplexer>(sp =>
         {
-            var redisOptions = ConfigurationOptions.Parse(configuration.GetConnectionString("Redis") ?? "localhost:6379");
+            var redisOptions = ConfigurationOptions.Parse(redisConnectionString);
             // Keeps the service up while Redis is unavailable; the cache reconnects in the background.
             redisOptions.AbortOnConnectFail = false;
             return ConnectionMultiplexer.Connect(redisOptions);
@@ -49,10 +51,12 @@ public static class ServiceCollectionExtension
 
         // risk-catalog: snapshot copied after each publication (RE-15). No retry policy here: the consumer retries the
         // whole publication, and stacking retries would multiply the calls to risk-catalog.
+        if (!Uri.TryCreate(configuration["Services:RiskCatalog:BaseUrl"], UriKind.Absolute, out var riskCatalogBaseUrl))
+            throw new InvalidOperationException("Configuration 'Services:RiskCatalog:BaseUrl' must be an absolute URL.");
         services.AddServiceTokens(configuration);
         services.AddHttpClient<IRiskCatalogClient, RiskCatalogHttpClient>(client =>
             {
-                client.BaseAddress = new Uri(configuration["Services:RiskCatalog:BaseUrl"] ?? "http://localhost:5002/");
+                client.BaseAddress = riskCatalogBaseUrl;
                 client.Timeout = TimeSpan.FromSeconds(10);
             })
             .AddHttpMessageHandler<ServiceTokenHandler>();
@@ -82,7 +86,8 @@ public static class ServiceCollectionExtension
         });
 
         // Message Consumer
-        var bootstrapServers = configuration["Kafka:BootstrapServers"] ?? "localhost:9092";
+        var bootstrapServers = configuration["Kafka:BootstrapServers"]
+            ?? throw new InvalidOperationException("Configuration 'Kafka:BootstrapServers' is required.");
         var groupId = configuration["Kafka:GroupId"] ?? "risk-evaluation-group";
         var deadLetterTopic = configuration["Kafka:DeadLetterTopic"] ?? "risk-evaluation-dead-letter";
         var reliabilityOptions = new ConsumerReliabilityOptions();
