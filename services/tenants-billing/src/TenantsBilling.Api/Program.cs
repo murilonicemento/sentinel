@@ -1,12 +1,15 @@
 using System.Security.Claims;
 using TenantsBilling.Api.Contracts;
+using Scalar.AspNetCore;
 using TenantsBilling.Api.Endpoints;
+using TenantsBilling.Api.Observability;
 using TenantsBilling.Api.Security;
 using TenantsBilling.Application.Services;
 using TenantsBilling.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddSentinelObservability("tenants-billing");
 builder.Services.AddOpenApi(options => options.MarkDeprecatedOperations());
 builder.Services.AddProblemDetails(options =>
 {
@@ -20,7 +23,8 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddTenantsBillingAuthentication(builder.Configuration);
 
 var postgresConnectionString = builder.Configuration.GetConnectionString("TenantsBillingDatabase");
-var kafkaBootstrapServers = builder.Configuration["Kafka:BootstrapServers"] ?? "localhost:9092";
+var kafkaBootstrapServers = builder.Configuration["Kafka:BootstrapServers"]
+    ?? throw new InvalidOperationException("Configuration 'Kafka:BootstrapServers' is required.");
 var kafkaTopic = builder.Configuration["Kafka:Topic"] ?? "tenants-billing-events";
 
 builder.Services.AddTenantsBillingInfrastructure(
@@ -32,19 +36,26 @@ builder.Services.AddTenantsBillingInfrastructure(
 builder.Services.AddScoped<TenantManagementService>();
 builder.Services.AddScoped<PlanManagementService>();
 
+if (!string.IsNullOrWhiteSpace(postgresConnectionString))
+    builder.Services.AddHealthChecks().AddNpgSql(postgresConnectionString, name: "postgresql",
+        tags: [ObservabilityExtensions.ReadinessTag], timeout: TimeSpan.FromSeconds(3));
+
 var app = builder.Build();
 
+app.UseSentinelRequestLogging();
 app.UseExceptionHandler();
 app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePages());
+app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi().AllowAnonymous();
+    app.MapScalarApiReference(options => options.WithTitle("Sentinel - Tenants & Billing API")).AllowAnonymous();
 }
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "tenants-billing" })).AllowAnonymous();
+app.MapSentinelOperationalEndpoints();
 
 app.MapPost("/api/v1/tenants", async (CreateTenantCommand command, TenantManagementService service) =>
 {

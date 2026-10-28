@@ -24,6 +24,8 @@ public sealed class KafkaTenantEventPublisher : ITenantEventPublisher
         };
 
         var json = System.Text.Json.JsonSerializer.Serialize(message);
-        await _producer.ProduceAsync(_topic, new Message<Null, string> { Value = json }, cancellationToken);
+        var kafkaMessage = new Message<Null, string> { Value = json, Headers = new Headers() };
+        using var activity = KafkaTracing.StartPublish(_topic, kafkaMessage.Headers);
+        await _producer.ProduceAsync(_topic, kafkaMessage, cancellationToken);
     }
 }
