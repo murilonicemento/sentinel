@@ -17,7 +17,7 @@ A plataforma não tem provedor de identidade nem emissor de tokens. Cinco servi�
 | alert-orchestrator | tenants-billing |
 | channels | tenants-billing |
 | risk-catalog | geospatial |
-| risk-evaluation | risk-catalog, geospatial |
+| risk-evaluation | risk-catalog, geospatial (removido em 2026-10-27, ver abaixo) |
 
 ## Decisões
 
@@ -81,3 +81,7 @@ O repositório ainda não tem bibliotecas compartilhadas (`CLAUDE.md`), então c
 - Procedimento e periodicidade de rotação das chaves de usuário e de serviço.
 - Biblioteca compartilhada para a configuração de autenticação.
 - Autenticação e limitação de taxa no `api-gateway`.
+
+## Atualização (2026-10-27)
+
+risk-evaluation deixou de chamar outros serviços (RE-14): a única chamada usada ia para um endpoint inexistente do geospatial e os métodos do cliente de risk-catalog nunca eram chamados. O token de serviço do risk-evaluation (`ServiceToken:*`, `RISK_EVALUATION_SERVICE_TOKEN_SIGNING_KEY`) e as entradas `Jwt:TrustedServices` que confiavam nele em risk-catalog e geospatial foram removidos, para não manter uma credencial confiável sem uso. Se a avaliação voltar a chamar outro serviço, siga a seção 2 novamente.

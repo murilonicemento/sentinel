@@ -42,7 +42,7 @@ Quem consome eventos com efeito colateral reivindica a mensagem com `SET NX` e u
 | risk-evaluation | `risk-evaluation:consumed:v1:{eventId ou tópico:partição:offset}` | catálogo publicado é upsert por versão, sem reivindicação |
 | ingestion | `ing:{tenant}:{dataSource}:{yyyyMMddHHmmss}` (inalterada) | marcador concluído mantém o valor `"1"`, lido por versões antigas com `EXISTS` |
 
-channels usa os registros de `delivery_attempts`: canais já entregues para o mesmo `EventId` e tenant não são reenviados. tenants-billing não acumula uso (ver TB-10), então repassa o identificador da origem (`SourceEventId`) nos eventos de cota para que os consumidores descartem duplicatas.
+channels usa os registros de `delivery_attempts`: canais já entregues para o mesmo `EventId` e tenant não são reenviados. tenants-billing grava o `SourceEventId` em `recorded_usage_events` na mesma transação do incremento do período (TB-10), então cada evento de uso é contado uma vez; o id também segue nos eventos de cota.
 
 ### 4. `EventId` aditivo e determinístico nos eventos de sensor
 
@@ -57,5 +57,5 @@ channels usa os registros de `delivery_attempts`: canais já entregues para o me
 
 ## Decisões ainda pendentes
 
-- Contrato de `risk-catalog-published` (RE-13): o produtor publica `Version` numérico e `Notes`; o consumidor espera `Version` texto, `Parameters` e `Formula`. Hoje todas as publicações vão para `risk-evaluation-dead-letter`.
+- ~~Contrato de `risk-catalog-published` (RE-13)~~ resolvido em 2026-10-27: o consumidor passou a ler o contrato do produtor (`Version` numérico, `Notes`, `PublishedAt`, `PublishedBy`).
 - Procedimento de replay para os novos DLQs (somente tenants-billing e reporting têm replay automatizado).
