@@ -2,29 +2,30 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# Todos os serviços expõem /metrics (OpenTelemetry + exportador Prometheus, ADR-0004) na porta interna 8080.
+# O label "service" segue o nome do container e o service.name dos traces.
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: 'channels_service'
+  - job_name: 'sentinel-services'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['channels-service:8080']
-
-  - job_name: 'api_gateway'
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['api-gateway:8080']
-
-  - job_name: 'ingestion'
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['ingestion:8080']
-
-  - job_name: 'audit_compliance'
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['audit-compliance:8080']
+      - targets:
+          - 'api-gateway:8080'
+          - 'ingestion:8080'
+          - 'risk-catalog:8080'
+          - 'geospatial:8080'
+          - 'risk-evaluation:8080'
+          - 'alert-orchestrator:8080'
+          - 'tenants-billing:8080'
+          - 'channels:8080'
+          - 'reporting:8080'
+          - 'audit-compliance:8080'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^:]+):\d+'
+        target_label: service
 
 rule_files: []

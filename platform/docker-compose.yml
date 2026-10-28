@@ -9,6 +9,8 @@ services:
     container_name: api-gateway
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7000:8080"
     restart: unless-stopped
@@ -38,6 +40,8 @@ services:
       - MinIO__AccessKey=${MINIO_ROOT_USER:-minioadmin}
       - MinIO__SecretKey=${MINIO_ROOT_PASSWORD:-minioadmin}
       - Geospatial__BaseUrl=http://geospatial:8080
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7001:8080"
     depends_on:
@@ -76,6 +80,8 @@ services:
       - Redis__MaxMemory=256mb
       - Redis__EvictionPolicy=allkeys-lru
       - GEOSPATIAL_SERVICE_URL=http://geospatial:8080
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7002:8080"
     depends_on:
@@ -110,8 +116,9 @@ services:
       - Jwt__TrustedServices__1__AllowedRoles__0=Geospatial.Read
       - Elasticsearch__Url=http://elasticsearch:9200
       - Elasticsearch__DefaultIndex=geospatial-events
-      - Loki__Url=http://loki:3100
       - ConnectionStrings__Kafka=kafka:9092
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7003:8080"
     depends_on:
@@ -143,7 +150,7 @@ services:
       - Kafka__Topic=risk-events
       - Kafka__GroupId=risk-evaluation-group
       - Loki__Url=http://loki:3100
-      - LOKI_URL=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7004:8080"
     depends_on:
@@ -182,6 +189,8 @@ services:
       - Kafka__Topics__Event=alert-orchestrator-events
       - Kafka__Topics__Command=alert-commands
       - Kafka__Topics__DeadLetter=alert-orchestrator-dead-letter
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7005:8080"
     depends_on:
@@ -224,6 +233,8 @@ services:
       - Kafka__ReplayTopic=tenant-usage-events-replay
       - Kafka__ConsumerGroupId=tenants-billing-consumer-group
       - Kafka__DeadLetterConsumerGroupId=tenants-billing-dlq-group
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7006:8080"
     depends_on:
@@ -255,6 +266,8 @@ services:
       - Kafka__Topic=notification-events
       - Kafka__DeadLetterTopic=notification-events-dlq
       - Kafka__ConsumerDeadLetterTopic=channels-dead-letter
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
       # Provider credentials are optional locally; without them deliveries fail and go to notification-events-dlq.
       - ChannelsService__Providers__Email__Options__ApiKey=${SENDGRID_API_KEY:-}
       - ChannelsService__Providers__Sms__Options__AccountSid=${TWILIO_ACCOUNT_SID:-}
@@ -294,6 +307,8 @@ services:
       - Kafka__Topic=reporting-events
       - Kafka__DeadLetterTopic=reporting-events-dead-letter
       - Kafka__ReplayTopic=reporting-events-replay
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7009:8080"
     depends_on:
@@ -325,7 +340,8 @@ services:
       - Jwt__Issuer=${JWT_ISSUER:-sentinel}
       - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
       - Jwt__SigningKey=${AUDIT_COMPLIANCE_JWT_SIGNING_KEY:-${JWT_SIGNING_KEY}}
-      - Serilog__WriteTo__1__Args__uri=http://loki:3100
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7007:8080"
     depends_on:
@@ -552,6 +568,32 @@ services:
     networks:
       - sentinel-network
     restart: unless-stopped
+  tempo-init:
+    # Tempo roda com o uid 10001; o volume nomeado nasce com dono root.
+    image: grafana/tempo:2.6.1
+    user: root
+    entrypoint: ["chown", "10001:10001", "/var/tempo"]
+    volumes:
+      - tempo-data:/var/tempo
+    networks:
+      - sentinel-network
+  tempo:
+    container_name: tempo
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    depends_on:
+      tempo-init:
+        condition: service_completed_successfully
+    networks:
+      - sentinel-network
+    restart: unless-stopped
   grafana:
     container_name: grafana
     image: grafana/grafana:10.2.3
@@ -567,6 +609,7 @@ services:
     depends_on:
       - loki
       - prometheus
+      - tempo
     networks:
       - sentinel-network
     restart: unless-stopped
@@ -579,6 +622,7 @@ volumes:
   minio-data:
   elasticsearch-data:
   loki-data:
+  tempo-data:
   grafana-data:
 networks:
   sentinel-network:
