@@ -40,4 +40,14 @@ public class RegionalParameterRepository : IRegionalParameterRepository
 
         return result > 0;
     }
+
+    public async Task<(IReadOnlyList<RegionalParameter> Items, long TotalItems)> GetPageAsync(int page, int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.RegionalParameters.AsNoTracking();
+        var total = await query.LongCountAsync(cancellationToken);
+        var items = await query.OrderBy(r => r.Id).Skip((page - 1) * pageSize).Take(pageSize)
+            .ToListAsync(cancellationToken);
+        return (items, total);
+    }
 }

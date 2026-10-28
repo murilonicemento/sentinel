@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Moq;
 using RiskCatalog.Api;
 using RiskCatalog.Application.Services.Interfaces;
+using RiskCatalog.Domain.IRepositories;
 
 namespace RiskCatalog.IntegrationTests.Support;
 
@@ -16,6 +17,9 @@ public sealed class RiskCatalogV1ApiFactory : WebApplicationFactory<Program>
 {
     public Mock<IEventTypeService> EventTypes { get; } = new();
     public Mock<IRiskModelService> RiskModels { get; } = new();
+    public Mock<IRegionalParameterRepository> RegionalParameters { get; } = new();
+    public Mock<IRiskMatrixRepository> RiskMatrices { get; } = new();
+    public Mock<IEventTypeRepository> EventTypeRepository { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -33,6 +37,12 @@ public sealed class RiskCatalogV1ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton(EventTypes.Object);
             services.RemoveAll<IRiskModelService>();
             services.AddSingleton(RiskModels.Object);
+            services.RemoveAll<IRegionalParameterRepository>();
+            services.AddSingleton(RegionalParameters.Object);
+            services.RemoveAll<IRiskMatrixRepository>();
+            services.AddSingleton(RiskMatrices.Object);
+            services.RemoveAll<IEventTypeRepository>();
+            services.AddSingleton(EventTypeRepository.Object);
         });
     }
 

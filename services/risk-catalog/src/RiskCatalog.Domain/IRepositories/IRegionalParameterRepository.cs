@@ -15,4 +15,8 @@ public interface IRegionalParameterRepository
     public Task<bool> AddRegionalParameterAsync(
         RegionalParameter regionalParameter,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Regional parameters ordered by id.</summary>
+    public Task<(IReadOnlyList<RegionalParameter> Items, long TotalItems)> GetPageAsync(int page, int pageSize,
+        CancellationToken cancellationToken = default);
 }

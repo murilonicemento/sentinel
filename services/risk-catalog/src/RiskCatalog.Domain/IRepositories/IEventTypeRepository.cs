@@ -11,4 +11,8 @@ public interface IEventTypeRepository
     public Task<bool> CreateEventType(EventType eventType, CancellationToken cancellationToken = default);
     public Task<bool> UpdateEventTypeStatus(Guid id, bool isActive, CancellationToken cancellationToken = default);
     public Task<bool> AddSeverityCriterionToEventType(SeverityCriterion severityCriterion, CancellationToken cancellationToken = default);
+
+    /// <summary>Severity criteria of every event type, ordered by event type code, version and minimum value.</summary>
+    public Task<(IReadOnlyList<SeverityCriterion> Items, long TotalItems)> GetSeverityCriteriaPageAsync(int? version,
+        int page, int pageSize, CancellationToken cancellationToken = default);
 }
