@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Reporting.Application.Interfaces;
 using Reporting.Domain.Entities;
 using Reporting.Domain.Interfaces;
+using Reporting.Infrastructure.Messaging;
 
 namespace Reporting.Infrastructure.HostedServices;
 
@@ -79,6 +80,8 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                         continue;
                     }
 
+                    using var activity = KafkaTracing.StartProcess(consumeResult.Topic, consumeResult.Message.Headers,
+                        consumeResult.Partition.Value, consumeResult.Offset.Value);
                     var envelopes = ParseEnvelopes(consumeResult.Message.Value);
                     if (envelopes.Count == 0)
                     {

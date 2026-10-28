@@ -1,20 +1,15 @@
 using Microsoft.AspNetCore.Mvc;
-using OpenTelemetry.Metrics;
 using Reporting.Api.Contracts;
+using Reporting.Api.Observability;
 using Reporting.Api.Security;
 using Reporting.Application;
 using Reporting.Infrastructure;
-using Serilog;
+using Reporting.Infrastructure.HealthChecks;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseSerilog((context, configuration) =>
-{
-    configuration.ReadFrom.Configuration(context.Configuration)
-        .Enrich.FromLogContext()
-        .Enrich.WithEnvironmentName()
-        .WriteTo.Console();
-});
+builder.AddSentinelObservability("reporting", activitySources: ["ReportingService"], meters: ["ReportingService"]);
 
 builder.Services.AddControllers();
 builder.Services.Configure<ApiBehaviorOptions>(options =>
@@ -34,21 +29,18 @@ builder.Services.AddProblemDetails(options =>
 });
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddReportingAuthentication(builder.Configuration);
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks().AddReportingReadinessChecks(ObservabilityExtensions.ReadinessTag);
 builder.Services.AddApplicationServices();
-builder.Services.AddInfrastructureServices();
-
-builder.Services.AddOpenTelemetry()
-    .WithMetrics(metrics => metrics
-        .AddMeter("ReportingService")
-        .AddPrometheusExporter())
-    .WithTracing(tracing => tracing.AddSource("ReportingService"));
+builder.Services.AddInfrastructureServices(builder.Configuration);
 
 var app = builder.Build();
+
+app.UseSentinelRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi().AllowAnonymous();
+    app.MapScalarApiReference(options => options.WithTitle("Sentinel - Reporting API")).AllowAnonymous();
 }
 
 app.UseExceptionHandler();
@@ -56,9 +48,8 @@ app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePage
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapPrometheusScrapingEndpoint().AllowAnonymous();
 app.MapControllers();
-app.MapHealthChecks("/health").AllowAnonymous();
+app.MapSentinelOperationalEndpoints();
 
 app.Run();
 

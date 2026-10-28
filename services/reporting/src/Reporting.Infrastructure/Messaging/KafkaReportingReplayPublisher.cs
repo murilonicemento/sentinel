@@ -25,7 +25,7 @@ public sealed class KafkaReportingReplayPublisher : IReportingReplayPublisher
         var replayTopic = _configuration["Kafka:ReplayTopic"] ?? "reporting-events-replay";
         var producerConfig = new ProducerConfig
         {
-            BootstrapServers = _configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
+            BootstrapServers = _configuration["Kafka:BootstrapServers"],
             EnableIdempotence = true,
             Acks = Acks.All,
             MessageSendMaxRetries = 3,

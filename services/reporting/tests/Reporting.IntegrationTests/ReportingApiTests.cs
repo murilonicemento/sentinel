@@ -114,8 +114,19 @@ public class ReportingApiTests : IClassFixture<ReportingApiFactory>
     {
         using var client = _factory.CreateClientWithToken(null);
 
-        var response = await client.GetAsync("/health");
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health/live")).StatusCode);
+    }
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    [Theory]
+    [InlineData("/health/ready")]
+    [InlineData("/health")]
+    public async Task DependencyHealth_IsAnonymousAndReportsTheStores(string path)
+    {
+        using var client = _factory.CreateClientWithToken(null);
+
+        var response = await client.GetAsync(path);
+
+        // Elasticsearch and Redis are not running in this test, so the dependency checks report 503, never 401.
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 }
