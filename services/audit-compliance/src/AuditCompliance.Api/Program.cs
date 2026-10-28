@@ -3,30 +3,23 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using AuditCompliance.Api.Errors;
 using AuditCompliance.Api.Filters;
+using AuditCompliance.Api.Observability;
 using AuditCompliance.Api.Security;
 using AuditCompliance.Application;
 using AuditCompliance.Infrastructure;
 using AuditCompliance.Infrastructure.Observability;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseSerilog((context, config) =>
-{
-    config.ReadFrom.Configuration(context.Configuration)
-        .Enrich.FromLogContext()
-        .Enrich.WithEnvironmentName();
-});
+builder.AddSentinelObservability("audit-compliance", activitySources: [AuditTelemetry.ActivitySourceName],
+    meters: [AuditMetrics.MeterName, "Microsoft.AspNetCore.Server.Kestrel"]);
 
 builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); })
     .AddJsonOptions(options =>
@@ -180,13 +173,9 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddAuditComplianceApplication();
 builder.Services.AddAuditComplianceInfrastructure(builder.Configuration);
 
-builder.Services.AddOpenTelemetry()
-    .WithMetrics(metrics => metrics
-        .AddMeter(AuditMetrics.MeterName, "Microsoft.AspNetCore.Hosting", "Microsoft.AspNetCore.Server.Kestrel")
-        .AddPrometheusExporter())
-    .WithTracing(tracing => tracing.AddSource(AuditTelemetry.ActivitySourceName));
-
 var app = builder.Build();
+
+app.UseSentinelRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {
@@ -210,14 +199,8 @@ app.UseRateLimiter();
 
 app.MapControllers();
 
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
-app.MapHealthChecks("/health/ready",
-    new HealthCheckOptions { Predicate = check => check.Tags.Contains(AuditCompliance.Infrastructure.ServiceCollectionExtensions.ReadinessTag) })
-    .AllowAnonymous();
-app.MapHealthChecks("/health").AllowAnonymous();
-
-// Destinado à coleta interna pelo Prometheus; não deve ser roteado pelo api-gateway.
-app.MapPrometheusScrapingEndpoint().AllowAnonymous();
+// /metrics é destinado à coleta interna pelo Prometheus; não deve ser roteado pelo api-gateway.
+app.MapSentinelOperationalEndpoints();
 
 app.Run();
 

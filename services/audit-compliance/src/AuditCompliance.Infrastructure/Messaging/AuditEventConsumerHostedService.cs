@@ -87,7 +87,15 @@ public sealed class AuditEventConsumerHostedService : BackgroundService
 
                 if (result?.Message is null) continue;
 
-                if (await TryHandleAsync(result, stoppingToken))
+                bool durable;
+                using (var activity = KafkaTracing.StartProcess(result.Topic, result.Message.Headers,
+                           result.Partition.Value, result.Offset.Value))
+                {
+                    durable = await TryHandleAsync(result, stoppingToken);
+                    if (!durable) activity?.SetStatus(ActivityStatusCode.Error, "Not handled durably");
+                }
+
+                if (durable)
                 {
                     consumer.Commit(result);
                     continue;
