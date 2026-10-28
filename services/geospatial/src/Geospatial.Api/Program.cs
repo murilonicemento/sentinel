@@ -1,41 +1,26 @@
 using Geospatial.Api.Contracts;
 using Geospatial.Api.Middlewares;
+using Geospatial.Api.Observability;
 using Geospatial.Api.Security;
 using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.UseCases;
 using Geospatial.Infrastructure;
+using Geospatial.Infrastructure.HealthChecks;
 using Geospatial.Infrastructure.Options;
 using Microsoft.AspNetCore.Mvc;
 using Scalar.AspNetCore;
 using Serilog;
-using Serilog.Sinks.Grafana.Loki;
 
 var builder = WebApplication.CreateBuilder(args);
 
 Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 Log.Logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration)
-    .Enrich.FromLogContext()
-    .Enrich.WithEnvironmentName()
-    .Enrich.WithMachineName()
     .WriteTo.Console()
     .CreateBootstrapLogger();
 
-builder.Host.UseSerilog((context, services, config) =>
-{
-    config.ReadFrom.Configuration(context.Configuration)
-        .Enrich.FromLogContext()
-        .Enrich.WithEnvironmentName()
-        .Enrich.WithMachineName()
-        .WriteTo.Console();
-
-    var lokiUrl = context.Configuration["Loki:Url"];
-    if (!string.IsNullOrEmpty(lokiUrl))
-    {
-        config.WriteTo.GrafanaLoki(lokiUrl);
-    }
-});
+builder.AddSentinelObservability("geospatial");
+builder.Services.AddHealthChecks().AddGeospatialHealthChecks();
 
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
@@ -79,7 +64,7 @@ builder.Services
 
 var app = builder.Build();
 
-app.UseSerilogRequestLogging();
+app.UseSentinelRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {
@@ -100,6 +85,7 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapSentinelOperationalEndpoints();
 
 try
 {

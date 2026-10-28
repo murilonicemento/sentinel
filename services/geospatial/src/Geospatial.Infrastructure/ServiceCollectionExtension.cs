@@ -36,7 +36,10 @@ public static class ServiceCollectionExtension
         var options = configuration.GetSection(ElasticsearchOptions.SectionName).Get<ElasticsearchOptions>()
                       ?? new ElasticsearchOptions();
 
-        var settings = new ConnectionSettings(new Uri(options.Url))
+        if (!Uri.TryCreate(options.Url, UriKind.Absolute, out var url))
+            throw new InvalidOperationException("Configuration 'Elasticsearch:Url' must be an absolute URL.");
+
+        var settings = new ConnectionSettings(url)
             .DefaultIndex(options.DefaultIndex)
             .DefaultMappingFor<GeospatialEventDocument>(m => m.IndexName("geospatial-events"));
 

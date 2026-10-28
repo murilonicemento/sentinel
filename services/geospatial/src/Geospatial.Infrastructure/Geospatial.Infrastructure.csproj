@@ -22,6 +22,7 @@
     <PackageReference Include="NetTopologySuite" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="System.Text.Json" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Geospatial.Application\Geospatial.Application.csproj" />

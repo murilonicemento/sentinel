@@ -39,7 +39,8 @@ public sealed class RegionIntersectedPublisher : IRegionIntersectedPublisher
 
         _logger.LogInformation("Publishing RegionIntersected event to topic {Topic} for event {EventId}", _options.RegionIntersectedTopic, evt.CollectionId);
 
-        var message = new Message<Null, string> { Value = payload };
+        var message = new Message<Null, string> { Value = payload, Headers = new Headers() };
+        using var activity = KafkaTracing.StartPublish(_options.RegionIntersectedTopic, message.Headers);
         var deliveryResult = await _producer.ProduceAsync(_options.RegionIntersectedTopic, message, cancellationToken);
 
         _logger.LogInformation("Published RegionIntersected event to topic {Topic} at partition {Partition} offset {Offset}",
