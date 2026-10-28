@@ -8,5 +8,5 @@ public sealed record ChannelsServiceInfrastructureOptions
     /// <summary>
     /// Base URL for the Tenants Billing service.
     /// </summary>
-    public string? TenantsBillingBaseUrl { get; init; } = "http://localhost:5055";
+    public string? TenantsBillingBaseUrl { get; init; }
 }

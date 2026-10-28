@@ -2,16 +2,13 @@ using System.Diagnostics.Metrics;
 using System.Net;
 using System.Text.Json.Serialization;
 using ChannelsService.Api.Contracts;
+using ChannelsService.Api.Observability;
 using ChannelsService.Api.Security;
 using ChannelsService.Application;
 using ChannelsService.Infrastructure;
 using ChannelsService.Infrastructure.Messaging;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
-using HealthChecks.UI.Client;
-using OpenTelemetry.Metrics;
 using Scalar.AspNetCore;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,13 +59,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
     };
 });
 
-builder.Host.UseSerilog((context, configuration) =>
-{
-    configuration.ReadFrom.Configuration(context.Configuration)
-        .Enrich.FromLogContext()
-        .Enrich.WithEnvironmentName()
-        .WriteTo.Console();
-});
+builder.AddSentinelObservability("channels", activitySources: ["ChannelsService"], meters: ["ChannelsService"]);
 
 builder.Services.AddApplicationServiceCollection();
 builder.Services.AddChannelsServiceInfrastructure(builder.Configuration);
@@ -78,23 +69,24 @@ var dbConnection = builder.Configuration.GetConnectionString("ChannelsServiceDat
 
 if (!string.IsNullOrWhiteSpace(dbConnection))
 {
-    healthChecks.AddNpgSql(dbConnection, name: "postgresql", tags: new[] { "db" });
+    healthChecks.AddNpgSql(dbConnection, name: "postgresql", tags: [ObservabilityExtensions.ReadinessTag],
+        timeout: TimeSpan.FromSeconds(3));
 }
 
 var redisConnection = builder.Configuration["Redis:Configuration"];
 
 if (!string.IsNullOrWhiteSpace(redisConnection))
 {
-    healthChecks.AddRedis(redisConnection, name: "redis", tags: new[] { "cache" });
+    healthChecks.AddRedis(redisConnection, name: "redis", tags: [ObservabilityExtensions.ReadinessTag],
+        timeout: TimeSpan.FromSeconds(3));
 }
 
-healthChecks.AddCheck<KafkaHealthCheck>("kafka", tags: new[] { "kafka", "messaging" });
-
-builder.Services.AddOpenTelemetry()
-    .WithMetrics(metrics => metrics.AddMeter("ChannelsService").AddPrometheusExporter())
-    .WithTracing(tracing => tracing.AddSource("ChannelsService"));
+// Kafka feeds the consumer, not the HTTP API, so it is reported on /health but does not gate readiness.
+healthChecks.AddCheck<KafkaHealthCheck>("kafka", tags: ["kafka", "messaging"]);
 
 var app = builder.Build();
+
+app.UseSentinelRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {
@@ -113,12 +105,8 @@ app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePage
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapPrometheusScrapingEndpoint().AllowAnonymous();
 app.MapControllers();
-app.MapHealthChecks("/health", new HealthCheckOptions
-{
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-}).AllowAnonymous();
+app.MapSentinelOperationalEndpoints();
 
 app.Run();
 

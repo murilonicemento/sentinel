@@ -39,7 +39,8 @@ public sealed class KafkaNotificationPublisher : INotificationPublisher, IAsyncD
             Converters = { new JsonStringEnumConverter() }
         });
 
-        var message = new Message<Null, string> { Value = payload };
+        var message = new Message<Null, string> { Value = payload, Headers = new Headers() };
+        using var activity = KafkaTracing.StartPublish(_topic, message.Headers);
         await _producer.ProduceAsync(_topic, message, cancellationToken);
         _logger.LogInformation("Republished notification {EventId} to topic {Topic}.", notification.EventId, _topic);
     }

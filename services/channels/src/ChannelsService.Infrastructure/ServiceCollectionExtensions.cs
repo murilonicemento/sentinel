@@ -90,12 +90,16 @@ public static class ServiceCollectionExtensions
             .AddSingleton<INotificationPublisher, KafkaNotificationPublisher>()
             .AddSingleton<IDeadLetterPublisher, KafkaDeadLetterPublisher>();
 
-    private static IServiceCollection AddServices(this IServiceCollection services, IConfiguration configuration) =>
-        services
+    private static IServiceCollection AddServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        if (!Uri.TryCreate(configuration["Services:TenantsBillingBaseUrl"], UriKind.Absolute,
+                out var tenantsBillingBaseUrl))
+            throw new InvalidOperationException("Configuration 'Services:TenantsBillingBaseUrl' must be an absolute URL.");
+
+        return services
             .AddHttpClient<TenantBillingGateway>((sp, client) =>
             {
-                var baseUrl = configuration.GetValue<string>("Services:TenantsBillingBaseUrl") ?? "http://localhost:5055";
-                client.BaseAddress = new Uri(baseUrl);
+                client.BaseAddress = tenantsBillingBaseUrl;
                 client.Timeout = TimeSpan.FromSeconds(10);
             })
             .AddHttpMessageHandler<ServiceTokenHandler>()
@@ -107,4 +111,5 @@ public static class ServiceCollectionExtensions
             .AddScoped<IFallbackExecutor, FallbackExecutor>()
             .AddSingleton<IChannelMetrics, ChannelMetrics>()
             .AddHostedService<NotificationConsumerHostedService>();
+    }
 }
