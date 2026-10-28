@@ -192,6 +192,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TenantsBilling.IntegrationT
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChannelsService.IntegrationTests", "services\channels\tests\ChannelsService.IntegrationTests\ChannelsService.IntegrationTests.csproj", "{6FD44E54-9D72-4535-899A-8DA41923D6A8}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{B05A983E-B89E-4021-B275-07FB581777F1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ApiGateway.IntegrationTests", "services\api-gateway\tests\ApiGateway.IntegrationTests\ApiGateway.IntegrationTests.csproj", "{AF83C660-658F-4461-B3C6-B2B28982B041}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -874,6 +878,18 @@ Global
 		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Release|x64.Build.0 = Release|Any CPU
 		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Release|x86.ActiveCfg = Release|Any CPU
 		{6FD44E54-9D72-4535-899A-8DA41923D6A8}.Release|x86.Build.0 = Release|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Debug|x64.Build.0 = Debug|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Debug|x86.Build.0 = Debug|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Release|x64.ActiveCfg = Release|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Release|x64.Build.0 = Release|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Release|x86.ActiveCfg = Release|Any CPU
+		{AF83C660-658F-4461-B3C6-B2B28982B041}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -961,5 +977,7 @@ Global
 		{785BE943-3D85-4E94-9159-7AE69EB09C0F} = {267056BF-B489-454E-ADF8-9D0BC555D534}
 		{E5EC6D21-C443-4750-BE28-7E9FC1ABEBD7} = {267056BF-B489-454E-ADF8-9D0BC555D534}
 		{6FD44E54-9D72-4535-899A-8DA41923D6A8} = {CE19CFA8-6974-4C19-B520-EED60E2F75A4}
+		{B05A983E-B89E-4021-B275-07FB581777F1} = {9627E87E-F5B7-00AC-2F43-5E65E23A8312}
+		{AF83C660-658F-4461-B3C6-B2B28982B041} = {B05A983E-B89E-4021-B275-07FB581777F1}
 	EndGlobalSection
 EndGlobal
