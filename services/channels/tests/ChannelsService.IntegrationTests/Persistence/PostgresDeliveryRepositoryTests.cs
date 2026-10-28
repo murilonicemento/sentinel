@@ -24,6 +24,8 @@ public sealed class ChannelsPostgresFixture : IAsyncLifetime
         var script = await File.ReadAllTextAsync(Path.Combine(directory!.FullName, "platform", "init-db", "postgres",
             "2-schema.sql"));
         var section = script[(script.IndexOf("\\c channels;", StringComparison.Ordinal) + "\\c channels;".Length)..];
+        var next = section.IndexOf("\\c ", StringComparison.Ordinal);
+        if (next >= 0) section = section[..next];
 
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
