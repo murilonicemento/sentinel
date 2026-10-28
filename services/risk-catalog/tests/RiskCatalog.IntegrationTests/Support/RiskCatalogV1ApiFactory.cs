@@ -28,7 +28,6 @@ public sealed class RiskCatalogV1ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:Audience", TestTokens.Audience);
         builder.UseSetting("Jwt:SigningKey", TestTokens.SigningKey);
         builder.UseSetting("ServiceToken:SigningKey", "integration-tests-risk-catalog-service-token-key-0123456789");
-        builder.UseSetting("ElasticSearch:URI", "http://localhost:9200");
 
         builder.ConfigureTestServices(services =>
         {

@@ -1,39 +1,21 @@
 using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using RiskCatalog.Api.Contracts;
 using RiskCatalog.Api.Filters;
 using RiskCatalog.Api.Middlewares;
+using RiskCatalog.Api.Observability;
 using RiskCatalog.Api.Security;
 using RiskCatalog.Application;
 using RiskCatalog.Infrastructure;
 using Scalar.AspNetCore;
-using Serilog;
-using Serilog.Sinks.Elasticsearch;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
-
-Log.Logger = new LoggerConfiguration()
-    .Enrich.FromLogContext()
-    .Enrich.WithEnvironmentName()
-    .Enrich.WithThreadId()
-    .WriteTo.Console()
-    .WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(builder.Configuration["ElasticSearch:URI"]!))
-    {
-        AutoRegisterTemplate = true,
-        IndexFormat = $"risk-catalog-logs-{environment.ToLower()}-{DateTime.UtcNow:yyyy-MM}",
-        NumberOfShards = 1,
-        NumberOfReplicas = 1,
-        MinimumLogEventLevel = Serilog.Events.LogEventLevel.Information,
-        FailureCallback = e =>
-            Console.WriteLine("An error occurred while sending logs to Elasticsearch: " + e.MessageTemplate)
-    })
-    .CreateLogger();
-
-builder.Host.UseSerilog();
+builder.AddSentinelObservability("risk-catalog");
+AddHealthChecks(builder);
 
 builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
 builder.Services
@@ -124,6 +106,8 @@ builder.Services.AddRiskCatalogAuthentication(builder.Configuration);
 
 var app = builder.Build();
 
+app.UseSentinelRequestLogging();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi().AllowAnonymous();
@@ -145,8 +129,24 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.MapControllers();
+app.MapSentinelOperationalEndpoints();
 
 app.Run();
+
+// Postgres holds the catalog and gates readiness; Redis is only a read cache, reported on /health as degraded.
+static void AddHealthChecks(WebApplicationBuilder builder)
+{
+    var timeout = TimeSpan.FromSeconds(3);
+    var checks = builder.Services.AddHealthChecks();
+
+    var database = builder.Configuration.GetConnectionString("RiskCatalogDatabase");
+    if (!string.IsNullOrWhiteSpace(database))
+        checks.AddNpgSql(database, name: "postgresql", tags: [ObservabilityExtensions.ReadinessTag], timeout: timeout);
+
+    var redis = builder.Configuration.GetConnectionString("Redis");
+    if (!string.IsNullOrWhiteSpace(redis))
+        checks.AddRedis(redis, name: "redis", failureStatus: HealthStatus.Degraded, timeout: timeout);
+}
 
 namespace RiskCatalog.Api
 {

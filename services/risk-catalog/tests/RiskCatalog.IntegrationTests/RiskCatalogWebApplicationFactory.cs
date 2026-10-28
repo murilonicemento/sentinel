@@ -40,8 +40,7 @@ public class RiskCatalogWebApplicationFactory : WebApplicationFactory<Program>, 
                 {"Jwt:Issuer", "TestIssuer"},
                 {"Jwt:Audience", "TestAudience"},
                 {"Jwt:SigningKey", "ThisIsASecretKeyForJWTTokenGeneration123456789"},
-                {"ServiceToken:SigningKey", "ThisIsTheRiskCatalogServiceTokenKeyForTests123456789"},
-                {"ElasticSearch:URI", "http://localhost:9200"}
+                {"ServiceToken:SigningKey", "ThisIsTheRiskCatalogServiceTokenKeyForTests123456789"}
             };
             
             config.AddInMemoryCollection(testData);
