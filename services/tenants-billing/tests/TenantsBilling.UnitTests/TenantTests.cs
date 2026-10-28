@@ -27,26 +27,6 @@ public class TenantTests
 
         Assert.Contains("name", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
-
-    [Fact]
-    public void RecordUsage_WhenUsageExceedsSoftLimit_ReturnsSoftLimit()
-    {
-        var tenant = Tenant.Create("Northwind", Guid.NewGuid());
-
-        var result = tenant.RecordUsage(81, 10, 80, 50);
-
-        Assert.Equal(TenantQuotaStatus.SoftLimit, result);
-    }
-
-    [Fact]
-    public void RecordUsage_WhenUsageExceedsHardLimit_ReturnsHardLimit()
-    {
-        var tenant = Tenant.Create("Northwind", Guid.NewGuid());
-
-        var result = tenant.RecordUsage(100, 50, 100, 50);
-
-        Assert.Equal(TenantQuotaStatus.HardLimit, result);
-    }
 }
 
 public class TenantBillingDeadLetterTests
@@ -89,7 +69,7 @@ public class TenantManagementServiceTests
         var tenantRepository = new InMemoryTenantRepository();
         var planRepository = new InMemoryPlanRepository();
         var eventPublisher = new FakeTenantEventPublisher();
-        var service = new TenantManagementService(tenantRepository, planRepository, eventPublisher);
+        var service = new TenantManagementService(tenantRepository, planRepository, eventPublisher, new TenantsBilling.Infrastructure.InMemory.InMemoryTenantUsageRepository());
         var plan = new Plan(Guid.NewGuid(), "Pro", 1000, 200, 80, 25);
         await planRepository.AddAsync(plan);
 
@@ -107,7 +87,7 @@ public class TenantManagementServiceTests
         var tenantRepository = new InMemoryTenantRepository();
         var planRepository = new InMemoryPlanRepository();
         var eventPublisher = new FakeTenantEventPublisher();
-        var service = new TenantManagementService(tenantRepository, planRepository, eventPublisher);
+        var service = new TenantManagementService(tenantRepository, planRepository, eventPublisher, new TenantsBilling.Infrastructure.InMemory.InMemoryTenantUsageRepository());
         var plan = new Plan(Guid.NewGuid(), "Pro", 1000, 200, 80, 25);
         await planRepository.AddAsync(plan);
 
@@ -123,7 +103,7 @@ public class TenantManagementServiceTests
     {
         var tenantRepository = new InMemoryTenantRepository();
         var planRepository = new InMemoryPlanRepository();
-        var service = new TenantManagementService(tenantRepository, planRepository, new FakeTenantEventPublisher());
+        var service = new TenantManagementService(tenantRepository, planRepository, new FakeTenantEventPublisher(), new TenantsBilling.Infrastructure.InMemory.InMemoryTenantUsageRepository());
         var plan = new Plan(Guid.NewGuid(), "Pro", 1000, 200, 80, 25);
         await planRepository.AddAsync(plan);
         var tenant = await service.CreateTenantAsync(new CreateTenantCommand("Fabrikam", plan.Id));

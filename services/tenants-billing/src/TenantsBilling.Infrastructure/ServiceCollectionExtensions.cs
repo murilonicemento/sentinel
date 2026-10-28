@@ -27,11 +27,13 @@ public static class ServiceCollectionExtensions
 
             services.AddScoped<ITenantRepository, PostgresTenantRepository>();
             services.AddScoped<IPlanRepository, PostgresPlanRepository>();
+            services.AddScoped<ITenantUsageRepository, PostgresTenantUsageRepository>();
         }
         else
         {
             services.AddSingleton<ITenantRepository, InMemoryTenantRepository>();
             services.AddSingleton<IPlanRepository, InMemoryPlanRepository>();
+            services.AddSingleton<ITenantUsageRepository, InMemoryTenantUsageRepository>();
         }
 
         services.AddSingleton<IProducer<Null, string>>(_ =>

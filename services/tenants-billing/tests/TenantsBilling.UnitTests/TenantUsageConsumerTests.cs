@@ -26,6 +26,7 @@ public sealed class TenantUsageConsumerTests
     };
 
     private readonly InMemoryTenantRepository _tenants = new();
+    private readonly InMemoryPlanRepository _plans = new();
     private readonly Mock<ITenantEventPublisher> _publisher = new();
     private readonly RecordingSink _sink = new();
 
@@ -54,7 +55,8 @@ public sealed class TenantUsageConsumerTests
 
         using var services = new ServiceCollection()
             .AddSingleton<ITenantRepository>(_tenants)
-            .AddSingleton(Mock.Of<IPlanRepository>())
+            .AddSingleton<IPlanRepository>(_plans)
+            .AddSingleton<ITenantUsageRepository>(new InMemoryTenantUsageRepository())
             .AddSingleton(_publisher.Object)
             .AddScoped<TenantManagementService>()
             .BuildServiceProvider();
@@ -70,7 +72,10 @@ public sealed class TenantUsageConsumerTests
 
     private async Task<Tenant> TenantAsync()
     {
-        var tenant = Tenant.Create("tenant", Guid.NewGuid());
+        // 100 events per month, so a usage of N events is N% of the plan.
+        var plan = new Plan(Guid.NewGuid(), "Basic", 100, 100, 100, 100);
+        await _plans.AddAsync(plan);
+        var tenant = Tenant.Create("tenant", plan.Id, timeZone: "America/Sao_Paulo");
         await _tenants.AddAsync(tenant);
         return tenant;
     }

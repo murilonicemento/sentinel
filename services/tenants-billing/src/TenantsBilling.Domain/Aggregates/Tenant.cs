@@ -81,20 +81,6 @@ public sealed class Tenant
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public TenantQuotaStatus RecordUsage(int eventsConsumed, int alertsTriggered, int apiRequests, int channelUsage)
-    {
-        if (Status == TenantStatus.Suspended || Status == TenantStatus.Canceled)
-            return TenantQuotaStatus.HardLimit;
-
-        var softLimitReached = eventsConsumed >= 80 || alertsTriggered >= 80 || apiRequests >= 80 || channelUsage >= 80;
-        var hardLimitReached = eventsConsumed >= 100 || alertsTriggered >= 100 || apiRequests >= 100 || channelUsage >= 100;
-
-        if (hardLimitReached)
-            return TenantQuotaStatus.HardLimit;
-
-        if (softLimitReached)
-            return TenantQuotaStatus.SoftLimit;
-
-        return TenantQuotaStatus.WithinLimit;
-    }
+    /// <summary>Suspended and canceled tenants are over quota regardless of their consumption.</summary>
+    public bool IsBlocked => Status is TenantStatus.Suspended or TenantStatus.Canceled;
 }
