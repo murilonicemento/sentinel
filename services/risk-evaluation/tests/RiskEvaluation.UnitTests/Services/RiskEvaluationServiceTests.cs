@@ -10,6 +10,7 @@ using RiskEvaluation.Domain.Repositories;
 using RiskEvaluation.Domain.Services;
 using RiskEvaluation.Application.Interfaces;
 using RiskEvaluation.Application.Interfaces.Messaging;
+using RiskEvaluation.Application.Interfaces.Services;
 using RiskEvaluation.Domain.ValueObjects;
 
 namespace RiskEvaluation.UnitTests.Services;
@@ -21,6 +22,7 @@ public class RiskEvaluationServiceTests
     private readonly Mock<IRiskEvaluationRepository> _repositoryMock;
     private readonly Mock<IEventPublisher> _eventPublisherMock;
     private readonly Mock<IRecentScoresCache> _cacheMock;
+    private readonly Mock<ICatalogSnapshotRepository> _catalogSnapshotsMock = new();
     private readonly Mock<ILogger<RiskEvaluationService>> _loggerMock;
     private readonly RiskEvaluationService _service;
 
@@ -39,6 +41,7 @@ public class RiskEvaluationServiceTests
             _eventPublisherMock.Object,
             new RiskCalculationService(),
             _cacheMock.Object,
+            _catalogSnapshotsMock.Object,
             _loggerMock.Object);
     }
 
@@ -269,5 +272,85 @@ public class RiskEvaluationServiceTests
         Assert.Equal(cachedScore, result.Score);
         Assert.Equal(cachedLevel, result.Level);
         _repositoryMock.Verify(x => x.AddAsync(It.IsAny<RiskEvaluationEntity>()), Times.Once);
+    }
+
+    // A circle of 50 km around (-22.9, -43.2) with factor 1.2, a polygon around (-23.5, -46.6) with factor 0.5,
+    // and Flood intensities 5..10 classified as High severity, which the matrix maps to Critical risk.
+    private static RiskCatalogSnapshot Catalog() => new(
+        7,
+        DateTime.UtcNow,
+        [
+            new RegionalAdjustment(Guid.NewGuid(), 1.2, -22.9, -43.2, 50, []),
+            new RegionalAdjustment(Guid.NewGuid(), 0.5, null, null, null,
+                [new GeoCoordinate(-23, -47), new GeoCoordinate(-23, -46), new GeoCoordinate(-24, -46), new GeoCoordinate(-24, -47)])
+        ],
+        [new SeverityRule("Flood", "High", 5, 10)],
+        [new RiskMatrixRule("Flood", "High", RiskLevel.Critical)]);
+
+    [Fact]
+    public async Task EvaluateRiskAsync_InsideACatalogRegion_AppliesItsAdjustmentFactor()
+    {
+        _catalogSnapshotsMock.Setup(x => x.GetLatestAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
+        SetupNoCacheAndNoGeospatialContext(-22, -43);
+
+        var result = await _service.EvaluateRiskAsync(-22, -43, MaxMetrics(),
+            new RiskEvents { Flood = DetectedAtMaxIntensity() }, new EvaluationSource(-22.95, -43.25));
+
+        Assert.Equal(0.84, result.Score, ScorePrecision);
+        Assert.Equal(RiskLevel.Critical, result.Level);
+    }
+
+    [Fact]
+    public async Task EvaluateRiskAsync_OutsideEveryRegion_KeepsTheBaseScore()
+    {
+        _catalogSnapshotsMock.Setup(x => x.GetLatestAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
+        SetupNoCacheAndNoGeospatialContext(-22, -43);
+
+        var result = await _service.EvaluateRiskAsync(-22, -43, MaxMetrics(),
+            new RiskEvents { Flood = DetectedAtMaxIntensity() }, new EvaluationSource(-10, -40));
+
+        Assert.Equal(0.70, result.Score, ScorePrecision);
+    }
+
+    [Fact]
+    public async Task EvaluateRiskAsync_WhenTheMatrixClassifiesTheEventHigher_RaisesTheLevel()
+    {
+        _catalogSnapshotsMock.Setup(x => x.GetLatestAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
+        SetupNoCacheAndNoGeospatialContext(-10, -40);
+
+        var result = await _service.EvaluateRiskAsync(-10, -40, new RiskMetrics(),
+            new RiskEvents { Flood = new EventDetails { Detected = true, Intensity = 6 } },
+            new EvaluationSource(-10, -40, "flood", 6));
+
+        Assert.True(result.Score < 0.3);
+        Assert.Equal(RiskLevel.Critical, result.Level);
+    }
+
+    [Fact]
+    public async Task EvaluateRiskAsync_MatrixNeverLowersTheLevel()
+    {
+        var catalog = new RiskCatalogSnapshot(7, DateTime.UtcNow, [], [new SeverityRule("Flood", "Low", 0, 10)],
+            [new RiskMatrixRule("Flood", "Low", RiskLevel.Low)]);
+        _catalogSnapshotsMock.Setup(x => x.GetLatestAsync(It.IsAny<CancellationToken>())).ReturnsAsync(catalog);
+        SetupNoCacheAndNoGeospatialContext(-22, -43);
+
+        var result = await _service.EvaluateRiskAsync(-22, -43, MaxMetrics(),
+            new RiskEvents { Flood = DetectedAtMaxIntensity() }, new EvaluationSource(-22, -43, "Flood", 10));
+
+        Assert.Equal(RiskLevel.High, result.Level);
+    }
+
+    [Fact]
+    public async Task EvaluateRiskAsync_WithCachedScore_StillAppliesTheMatrixFloorOfTheEvent()
+    {
+        _catalogSnapshotsMock.Setup(x => x.GetLatestAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
+        _cacheMock.Setup(x => x.GetAsync(-10, -40, It.IsAny<CancellationToken>())).ReturnsAsync(
+            new RiskScoreCacheEntry { Score = 0.1, Level = "Low", CalculatedAt = DateTime.UtcNow });
+
+        var result = await _service.EvaluateRiskAsync(-10, -40, new RiskMetrics(), new RiskEvents(),
+            new EvaluationSource(-10, -40, "Flood", 8));
+
+        Assert.Equal(0.1, result.Score);
+        Assert.Equal(RiskLevel.Critical, result.Level);
     }
 }

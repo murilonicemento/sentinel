@@ -88,4 +88,21 @@ public class RiskEvaluationStorageTests : IClassFixture<StorageFixture>
         Assert.Equal(1, claims.Count(c => c == ConsumedMessageClaim.Acquired));
         Assert.Equal(ConsumedMessageClaim.AlreadyProcessed, await guard.TryBeginAsync(key));
     }
+
+    [Fact]
+    public async Task CatalogSnapshots_RoundTripAndTheLatestVersionWins()
+    {
+        var repository = new CatalogSnapshotRepository(_fixture.Database);
+        await repository.SaveAsync(new RiskCatalogSnapshot(41, DateTime.UtcNow,
+            [new RegionalAdjustment(Guid.NewGuid(), 1.5, null, null, null,
+                [new GeoCoordinate(-23, -47), new GeoCoordinate(-23, -46), new GeoCoordinate(-24, -46)])],
+            [new SeverityRule("Flood", "High", 5, 10)], [new RiskMatrixRule("Flood", "High", Domain.Enums.RiskLevel.Critical)]));
+        await repository.SaveAsync(new RiskCatalogSnapshot(40, DateTime.UtcNow, [], [], []));
+
+        var latest = await repository.GetLatestAsync();
+
+        Assert.Equal(41, latest!.Version);
+        Assert.Equal(1.5, latest.RegionalFactorAt(-23.2, -46.2));
+        Assert.Equal(Domain.Enums.RiskLevel.Critical, latest.MatrixLevelFor("Flood", 6));
+    }
 }

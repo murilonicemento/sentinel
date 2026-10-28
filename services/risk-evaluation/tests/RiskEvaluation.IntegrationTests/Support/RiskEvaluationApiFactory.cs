@@ -21,12 +21,16 @@ public sealed class RiskEvaluationApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:Issuer", TestTokens.Issuer);
         builder.UseSetting("Jwt:Audience", TestTokens.Audience);
         builder.UseSetting("Jwt:SigningKey", TestTokens.SigningKey);
+        builder.UseSetting("ServiceToken:Issuer", "sentinel-service:risk-evaluation");
+        builder.UseSetting("ServiceToken:Audience", TestTokens.Audience);
+        builder.UseSetting("ServiceToken:SigningKey", "integration-tests-risk-evaluation-service-key-0123456789");
+        builder.UseSetting("ServiceToken:Roles:0", "RiskCatalog.Read");
 
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IHostedService>();
 
-            // Mongo, Redis, Kafka and the geospatial service are replaced so the HTTP contract can run in memory.
+            // Mongo, Redis and Kafka are replaced so the HTTP contract can run in memory.
             services.RemoveAll<IRiskEvaluationRepository>();
             services.AddSingleton<IRiskEvaluationRepository>(Evaluations);
             services.RemoveAll<IRiskFactorRepository>();
@@ -34,6 +38,8 @@ public sealed class RiskEvaluationApiFactory : WebApplicationFactory<Program>
                 r.GetAllAsync(It.IsAny<CancellationToken>()) == Task.FromResult<IReadOnlyList<RiskFactor>>(new List<RiskFactor>())));
             services.RemoveAll<IRiskModelRepository>();
             services.AddSingleton(Mock.Of<IRiskModelRepository>());
+            services.RemoveAll<ICatalogSnapshotRepository>();
+            services.AddSingleton(Mock.Of<ICatalogSnapshotRepository>());
             services.RemoveAll<IRecentScoresCache>();
             services.AddSingleton(Mock.Of<IRecentScoresCache>());
             services.RemoveAll<IEventPublisher>();

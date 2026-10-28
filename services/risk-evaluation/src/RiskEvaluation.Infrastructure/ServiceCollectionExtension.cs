@@ -12,6 +12,9 @@ using RiskEvaluation.Infrastructure.Persistence;
 using MediatR;
 using RiskEvaluation.Application.Interfaces.Messaging;
 using StackExchange.Redis;
+using RiskEvaluation.Infrastructure.Security;
+using RiskEvaluation.Infrastructure.HttpClients;
+using RiskEvaluation.Application.Interfaces.HttpClients;
 using RiskEvaluation.Infrastructure.Messaging.Reliability;
 using RiskEvaluation.Infrastructure.HostedServices;
 using Confluent.Kafka;
@@ -44,10 +47,22 @@ public static class ServiceCollectionExtension
             return ConnectionMultiplexer.Connect(redisOptions);
         });
 
+        // risk-catalog: snapshot copied after each publication (RE-15). No retry policy here: the consumer retries the
+        // whole publication, and stacking retries would multiply the calls to risk-catalog.
+        services.AddServiceTokens(configuration);
+        services.AddHttpClient<IRiskCatalogClient, RiskCatalogHttpClient>(client =>
+            {
+                client.BaseAddress = new Uri(configuration["Services:RiskCatalog:BaseUrl"] ?? "http://localhost:5002/");
+                client.Timeout = TimeSpan.FromSeconds(10);
+            })
+            .AddHttpMessageHandler<ServiceTokenHandler>();
+        services.AddHostedService<CatalogSnapshotBootstrapper>();
+
         // Repositories
         services.AddScoped<IRiskEvaluationRepository, RiskEvaluationRepository>();
         services.AddScoped<IRiskModelRepository, RiskModelRepository>();
         services.AddScoped<ICatalogVersionRepository, CatalogVersionRepository>();
+        services.AddScoped<ICatalogSnapshotRepository, CatalogSnapshotRepository>();
         services.AddScoped<IRiskFactorRepository, RiskFactorRepository>();
 
         // Cache

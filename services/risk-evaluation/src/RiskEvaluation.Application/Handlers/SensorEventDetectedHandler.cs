@@ -24,7 +24,9 @@ public class SensorEventDetectedHandler : INotificationHandler<SensorEventDetect
             latitude,
             longitude,
             metrics,
-            events);
+            events,
+            new EvaluationSource(notification.Latitude, notification.Longitude, notification.EventType,
+                notification.Intensity));
     }
 
     private static RiskMetrics MapEventTypeToRiskMetrics(string eventType, double intensity)

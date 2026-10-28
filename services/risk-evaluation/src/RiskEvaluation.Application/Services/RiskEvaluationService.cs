@@ -16,6 +16,7 @@ public class RiskEvaluationService : IRiskEvaluationService
     private readonly IEventPublisher _eventPublisher;
     private readonly RiskCalculationService _calculationService;
     private readonly IRecentScoresCache _cache;
+    private readonly ICatalogSnapshotRepository _catalogSnapshots;
     private readonly ILogger<RiskEvaluationService> _logger;
 
     public RiskEvaluationService(
@@ -23,12 +24,14 @@ public class RiskEvaluationService : IRiskEvaluationService
         IEventPublisher eventPublisher,
         RiskCalculationService calculationService,
         IRecentScoresCache cache,
+        ICatalogSnapshotRepository catalogSnapshots,
         ILogger<RiskEvaluationService> logger)
     {
         _repository = repository;
         _eventPublisher = eventPublisher;
         _calculationService = calculationService;
         _cache = cache;
+        _catalogSnapshots = catalogSnapshots;
         _logger = logger;
     }
 
@@ -36,13 +39,18 @@ public class RiskEvaluationService : IRiskEvaluationService
         int latitude,
         int longitude,
         RiskMetrics metrics,
-        RiskEvents events)
+        RiskEvents events,
+        EvaluationSource? source = null)
     {
+        // The latest published catalog: regional factors and the matrix floor. Without one, the score is the base one.
+        var catalog = await _catalogSnapshots.GetLatestAsync();
+        var matrixLevel = catalog?.MatrixLevelFor(source?.EventType, source?.Intensity);
+
         var cached = await _cache.GetAsync(latitude, longitude);
         
         if (cached != null && IsRecent(cached.CalculatedAt))
         {
-            var cachedLevel = Enum.Parse<RiskLevel>(cached.Level);
+            var cachedLevel = Floor(Enum.Parse<RiskLevel>(cached.Level), matrixLevel);
             var cachedEvaluation = new RiskEvaluationEntity(latitude, longitude, cached.Score, cachedLevel);
             await _repository.AddAsync(cachedEvaluation);
             return cachedEvaluation;
@@ -52,13 +60,18 @@ public class RiskEvaluationService : IRiskEvaluationService
         // No service provides the geographic context yet (RE-14): the calculation runs without it.
         GeospatialContext? geoContext = null;
 
-        var score = _calculationService.CalculateRiskScore(metrics, events, metricWeights, eventWeights, geoContext);
-        var level = RiskCalculationService.ClassifyRiskLevel(score);
+        var baseScore = _calculationService.CalculateRiskScore(metrics, events, metricWeights, eventWeights, geoContext);
+        var regionalFactor = catalog?.RegionalFactorAt(source?.Latitude ?? latitude, source?.Longitude ?? longitude)
+                             ?? 1.0;
+        var score = Math.Clamp(baseScore * regionalFactor, 0.0, 1.0);
+        var scoreLevel = RiskCalculationService.ClassifyRiskLevel(score);
+        var level = Floor(scoreLevel, matrixLevel);
 
         await _cache.SetAsync(latitude, longitude, new RiskScoreCacheEntry
         {
             Score = score,
-            Level = level.ToString(),
+            // The cache keeps the score's own level; the matrix floor depends on each event and is applied on read.
+            Level = scoreLevel.ToString(),
             CalculatedAt = DateTime.UtcNow,
             Metrics = metrics,
             Events = events
@@ -91,6 +104,10 @@ public class RiskEvaluationService : IRiskEvaluationService
 
         return evaluation;
     }
+
+    // The catalog matrix can raise the level for an event type and intensity, never lower it.
+    private static RiskLevel Floor(RiskLevel level, RiskLevel? matrixLevel) =>
+        matrixLevel is { } floor && floor > level ? floor : level;
 
     private static bool IsRecent(DateTime calculatedAt) => DateTime.UtcNow - calculatedAt < TimeSpan.FromMinutes(5);
 }
