@@ -30,9 +30,11 @@ public sealed class KafkaEventPublisher : IEventPublisher
         var kafkaMessage = new Message<string, string>
         {
             Key = Guid.NewGuid().ToString(),
-            Value = message
+            Value = message,
+            Headers = new Headers()
         };
 
+        using var activity = KafkaTracing.StartPublish(_topic, kafkaMessage.Headers);
         try
         {
             var result = await _producer.ProduceAsync(_topic, kafkaMessage, cancellationToken);

@@ -8,7 +8,7 @@ public sealed class AlertOrchestratorInfrastructureOptions
     public bool UseRedis { get; set; } = false;
     public string RedisConnectionString { get; set; } = string.Empty;
 
-    public string KafkaBootstrapServers { get; set; } = "localhost:9092";
+    public string KafkaBootstrapServers { get; set; } = string.Empty;
     public string ConsumerGroupId { get; set; } = "alert-orchestrator-group";
     public string RiskUpdatedTopic { get; set; } = "risk-updated";
     public string RegionIntersectedTopic { get; set; } = "region-intersected";
@@ -20,5 +20,5 @@ public sealed class AlertOrchestratorInfrastructureOptions
     public TimeSpan? ExpirationCheckInterval { get; set; }
     public TimeSpan? EscalationCheckInterval { get; set; }
 
-    public string? TenantsBillingBaseUrl { get; set; } = "http://localhost:5055";
+    public string? TenantsBillingBaseUrl { get; set; }
 }

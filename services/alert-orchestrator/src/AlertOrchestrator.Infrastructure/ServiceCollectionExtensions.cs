@@ -78,10 +78,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAlertWindowQueryService, AlertWindowQueryService>();
 
         // Tenant Billing Gateway
+        if (!Uri.TryCreate(options.TenantsBillingBaseUrl, UriKind.Absolute, out var tenantsBillingBaseUrl))
+            throw new InvalidOperationException("Configuration 'Services:TenantsBillingBaseUrl' must be an absolute URL.");
         services.AddHttpClient<TenantBillingGateway>((sp, client) =>
         {
-            var baseUrl = options.TenantsBillingBaseUrl ?? "http://localhost:5055";
-            client.BaseAddress = new Uri(baseUrl);
+            client.BaseAddress = tenantsBillingBaseUrl;
             client.Timeout = TimeSpan.FromSeconds(10);
         })
         .AddHttpMessageHandler<ServiceTokenHandler>();

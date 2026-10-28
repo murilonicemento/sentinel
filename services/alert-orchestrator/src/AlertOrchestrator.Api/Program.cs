@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json.Serialization;
 using AlertOrchestrator.Api.Contracts;
 using AlertOrchestrator.Api.Middlewares;
+using AlertOrchestrator.Api.Observability;
 using AlertOrchestrator.Api.Security;
 using AlertOrchestrator.Application.Events;
 using AlertOrchestrator.Infrastructure;
@@ -9,7 +10,6 @@ using AlertOrchestrator.Infrastructure.Options;
 using AlertOrchestrator.Infrastructure.Security;
 using Microsoft.AspNetCore.Mvc;
 using Scalar.AspNetCore;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,12 +60,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 });
 builder.Services.AddMediatR(cfg => { cfg.RegisterServicesFromAssembly(typeof(RiskUpdatedEvent).Assembly); });
 
-builder.Host.UseSerilog((context, config) =>
-{
-    config.ReadFrom.Configuration(context.Configuration)
-          .Enrich.FromLogContext()
-          .Enrich.WithEnvironmentName();
-});
+builder.AddSentinelObservability("alert-orchestrator", activitySources: ["AlertOrchestrator"]);
 
 var kafkaConfig = builder.Configuration.GetSection("Kafka");
 var kafkaTopicsConfig = kafkaConfig.GetSection("Topics");
@@ -76,7 +71,8 @@ var servicesConfig = builder.Configuration.GetSection("Services");
 
 var infrastructureOptions = new AlertOrchestratorInfrastructureOptions
 {
-    KafkaBootstrapServers = kafkaConfig.GetValue("BootstrapServers", "localhost:9093"),
+    KafkaBootstrapServers = kafkaConfig["BootstrapServers"]
+        ?? throw new InvalidOperationException("Configuration 'Kafka:BootstrapServers' is required."),
     ConsumerGroupId = kafkaConfig.GetValue("ConsumerGroupId", "alert-orchestrator-group"),
     RiskUpdatedTopic = kafkaTopicsConfig.GetValue("RiskUpdated", "risk-updated"),
     RegionIntersectedTopic = kafkaTopicsConfig.GetValue("RegionIntersected", "region-intersected"),
@@ -89,18 +85,24 @@ var infrastructureOptions = new AlertOrchestratorInfrastructureOptions
     RedisConnectionString = cacheConfig.GetValue("RedisConnectionString", string.Empty),
     IdempotencyExpiration = TimeSpan.FromHours(idempotencyConfig.GetValue("ExpirationHours", 24)),
     ExpirationCheckInterval = TimeSpan.FromMinutes(idempotencyConfig.GetValue("CheckIntervalMinutes", 1)),
-    TenantsBillingBaseUrl = servicesConfig.GetValue("TenantsBillingBaseUrl", "http://localhost:5055")
+    TenantsBillingBaseUrl = servicesConfig["TenantsBillingBaseUrl"]
+        ?? throw new InvalidOperationException("Configuration 'Services:TenantsBillingBaseUrl' is required.")
 };
 
 builder.Services.AddServiceTokens(builder.Configuration);
 builder.Services.AddAlertOrchestratorInfrastructure(infrastructureOptions);
 
-builder.Services.AddHealthChecks();
-
-builder.Services.AddOpenTelemetry()
-    .WithTracing(tracing => { tracing.AddSource("AlertOrchestrator"); });
+var readiness = builder.Services.AddHealthChecks();
+if (infrastructureOptions.UsePostgreSql)
+    readiness.AddNpgSql(infrastructureOptions.PostgreSqlConnectionString, name: "postgresql",
+        tags: [ObservabilityExtensions.ReadinessTag], timeout: TimeSpan.FromSeconds(3));
+if (infrastructureOptions.UseRedis)
+    readiness.AddRedis(infrastructureOptions.RedisConnectionString, name: "redis",
+        tags: [ObservabilityExtensions.ReadinessTag], timeout: TimeSpan.FromSeconds(3));
 
 var app = builder.Build();
+
+app.UseSentinelRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {
@@ -121,7 +123,7 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHealthChecks("/health").AllowAnonymous();
+app.MapSentinelOperationalEndpoints();
 
 app.Run();
 

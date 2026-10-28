@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 
@@ -54,7 +55,15 @@ public static class ReliableConsumerLoop
 
                 if (result?.Message is null) continue;
 
-                if (await processor.HandleAsync(result, ct => handle(result, ct), stoppingToken))
+                bool durable;
+                using (var activity = KafkaTracing.StartProcess(result.Topic, result.Message.Headers,
+                           result.Partition.Value, result.Offset.Value))
+                {
+                    durable = await processor.HandleAsync(result, ct => handle(result, ct), stoppingToken);
+                    if (!durable) activity?.SetStatus(ActivityStatusCode.Error, "Not handled durably");
+                }
+
+                if (durable)
                 {
                     TryCommit(consumer, result, logger);
                     continue;
