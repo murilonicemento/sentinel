@@ -2,20 +2,21 @@ using System.Net;
 using Ingestion.Api.Contracts;
 using Ingestion.Api.Filters;
 using Ingestion.Api.Middlewares;
+using Ingestion.Api.Observability;
 using Ingestion.Api.Security;
 using Ingestion.Application;
 using Ingestion.Infrastructure.Read;
+using Ingestion.Infrastructure.Read.HealthChecks;
 using Ingestion.Infrastructure.Write;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Bson.Serialization.Serializers;
 using Scalar.AspNetCore;
-using Serilog;
-using Serilog.Sinks.Elasticsearch;
 
 namespace Ingestion.Api;
 
@@ -34,26 +35,9 @@ public class Program
         BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
         ConventionRegistry.Register("IgnoreExtra", pack, _ => true);
 
-        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+        builder.AddSentinelObservability("ingestion");
+        AddReadinessChecks(builder);
 
-        Log.Logger = new LoggerConfiguration()
-            .Enrich.FromLogContext()
-            .Enrich.WithEnvironmentName()
-            .Enrich.WithThreadId()
-            .WriteTo.Console()
-            .WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(builder.Configuration["ElasticSearch:URI"]!))
-            {
-                AutoRegisterTemplate = true,
-                IndexFormat = $"ingestion-logs-{environment.ToLower()}-{DateTime.UtcNow:yyyy-MM}",
-                NumberOfShards = 1,
-                NumberOfReplicas = 1,
-                MinimumLogEventLevel = Serilog.Events.LogEventLevel.Information,
-                FailureCallback = e =>
-                    Console.WriteLine("An error occurred while sending logs to Elasticsearch: " + e.MessageTemplate)
-            })
-            .CreateLogger();
-
-        builder.Host.UseSerilog();
         builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
         builder.Services
             .AddOpenApi(options =>
@@ -145,6 +129,8 @@ public class Program
 
         var app = builder.Build();
 
+        app.UseSentinelRequestLogging();
+
         if (app.Environment.IsDevelopment())
         {
             app.MapOpenApi().AllowAnonymous();
@@ -166,6 +152,26 @@ public class Program
         app.UseAuthorization();
         app.UseMiddleware<ExceptionHandlingMiddleware>();
         app.MapControllers();
+        app.MapSentinelOperationalEndpoints();
         app.Run();
+    }
+
+    /// <summary>Postgres (collections and outbox) and MongoDB (queries) gate readiness; Redis only deduplicates
+    /// polled samples, so it is reported on /health without gating readiness.</summary>
+    private static void AddReadinessChecks(WebApplicationBuilder builder)
+    {
+        var timeout = TimeSpan.FromSeconds(3);
+        var checks = builder.Services.AddHealthChecks()
+            .AddCheck<ReadDatabaseHealthCheck>("mongodb", tags: [ObservabilityExtensions.ReadinessTag],
+                timeout: timeout);
+
+        var writeDatabase = builder.Configuration.GetConnectionString("IngestionWriteDatabase");
+        if (!string.IsNullOrWhiteSpace(writeDatabase))
+            checks.AddNpgSql(writeDatabase, name: "postgresql", tags: [ObservabilityExtensions.ReadinessTag],
+                timeout: timeout);
+
+        var redis = builder.Configuration.GetConnectionString("Redis");
+        if (!string.IsNullOrWhiteSpace(redis))
+            checks.AddRedis(redis, name: "redis", failureStatus: HealthStatus.Degraded, timeout: timeout);
     }
 }

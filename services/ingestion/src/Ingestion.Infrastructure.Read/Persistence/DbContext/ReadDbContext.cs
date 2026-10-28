@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace Ingestion.Infrastructure.Read.Persistence.DbContext;
@@ -15,4 +16,7 @@ public class ReadDbContext
 
     public virtual IMongoCollection<T> GetCollection<T>(string name)
         => _database.GetCollection<T>(name);
+
+    public virtual Task PingAsync(CancellationToken cancellationToken) =>
+        _database.RunCommandAsync<BsonDocument>(new BsonDocument("ping", 1), cancellationToken: cancellationToken);
 }
