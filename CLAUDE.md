@@ -90,7 +90,7 @@ The constitution enforces these rules:
 Topics are created by the `kafka-init` container in `platform/docker-compose.yml`. When you add a topic, add it there too.
 
 1. **ingestion** polls external sources (USGS earthquakes, FIRMS fire, NOAA, Stormglass, etc.) and takes in sensor data. It writes through a transactional **outbox** (`OutboxHostedService`) and publishes `sensor-event-detected`, `disaster-event-detected` and `climatic-event-detected`.
-2. **risk-catalog** manages event types, severities, IDF curves, risk matrices and regional parameters, and publishes `risk-catalog-published`.
+2. **risk-catalog** manages event types, severities, IDF curves, risk matrices and regional parameters, and publishes `risk-catalog-published`. After each publication risk-evaluation copies that version (regional factors, severity criteria, matrix) through the paged v1 listings into its local `CatalogSnapshots`, and evaluations read only that copy.
 3. **geospatial** handles geometry operations with NetTopologySuite and Elasticsearch. It also exposes a synchronous HTTP API that ingestion and risk-catalog call. It consumes `sensor-event-detected`, publishes `region-intersected`, and sends failures to `geospatial-dead-letter`.
 4. **risk-evaluation** consumes sensor events and catalog updates, scores risk, caches recent scores in Redis, and publishes `risk-updated` / `risk-evaluated`.
 5. **alert-orchestrator** consumes `risk-updated` and `region-intersected`. It manages the `AlertWindow` aggregate (quorum, cooldown, escalation and expiration workers) and publishes to `alert-orchestrator-events` and `alert-commands`.

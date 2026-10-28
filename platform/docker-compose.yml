@@ -64,6 +64,10 @@ services:
       - Jwt__Issuer=${JWT_ISSUER:-sentinel}
       - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
       - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - Jwt__TrustedServices__0__Name=risk-evaluation
+      - Jwt__TrustedServices__0__Issuer=sentinel-service:risk-evaluation
+      - Jwt__TrustedServices__0__SigningKey=${RISK_EVALUATION_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__0__AllowedRoles__0=RiskCatalog.Read
       - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
       - ServiceToken__SigningKey=${RISK_CATALOG_SERVICE_TOKEN_SIGNING_KEY}
       - ConnectionStrings__RiskCatalogDatabase=${ConnectionStrings__IngestionDatabase:-Host=postgres;Port=5432;Database=risk_catalog;Username=postgres;Password=postgres}
@@ -130,6 +134,9 @@ services:
       - Jwt__Issuer=${JWT_ISSUER:-sentinel}
       - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
       - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
+      - ServiceToken__SigningKey=${RISK_EVALUATION_SERVICE_TOKEN_SIGNING_KEY}
+      - Services__RiskCatalog__BaseUrl=http://risk-catalog:8080
       - ConnectionStrings__MongoDb=mongodb://mongodb:27017
       - ConnectionStrings__Redis=redis:6379
       - Kafka__BootstrapServers=kafka:9092
@@ -143,6 +150,7 @@ services:
       - mongodb
       - redis
       - kafka
+      - risk-catalog
       - loki
     restart: unless-stopped
     networks:
