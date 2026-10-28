@@ -408,3 +408,108 @@ BEGIN
     END IF;
 END $EF$;
 COMMIT;
+
+-- TENANTS BILLING SERVICE DATABASE SCHEMA
+
+\c tenants_billing;
+
+-- Generated from the EF Core migrations (services/tenants-billing/src/TenantsBilling.Infrastructure/Persistence/Migrations):
+--   dotnet ef migrations script --idempotent --project services/tenants-billing/src/TenantsBilling.Infrastructure \
+--     --startup-project services/tenants-billing/src/TenantsBilling.Api
+
+CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+    "MigrationId" character varying(150) NOT NULL,
+    "ProductVersion" character varying(32) NOT NULL,
+    CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
+);
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260816214308_InitialCreate') THEN
+    CREATE TABLE plans (
+        "Id" uuid NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "MaxEventsPerMonth" integer NOT NULL,
+        "MaxAlertsPerMonth" integer NOT NULL,
+        "MaxApiRequestsPerMonth" integer NOT NULL,
+        "MaxChannelsPerMonth" integer NOT NULL,
+        "SoftLimitPercentage" integer NOT NULL,
+        "HardLimitPercentage" integer NOT NULL,
+        "IsActive" boolean NOT NULL,
+        CONSTRAINT "PK_plans" PRIMARY KEY ("Id")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260816214308_InitialCreate') THEN
+    CREATE TABLE tenants (
+        "Id" uuid NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "PlanId" uuid NOT NULL,
+        "Status" integer NOT NULL,
+        "Region" character varying(100) NOT NULL,
+        "TimeZone" character varying(80) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_tenants" PRIMARY KEY ("Id")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260816214308_InitialCreate') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260816214308_InitialCreate', '9.0.20');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261027030640_AddTenantUsage') THEN
+    CREATE TABLE recorded_usage_events (
+        "SourceEventId" character varying(200) NOT NULL,
+        "TenantId" uuid NOT NULL,
+        "Period" character varying(7) NOT NULL,
+        "RecordedAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_recorded_usage_events" PRIMARY KEY ("SourceEventId")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261027030640_AddTenantUsage') THEN
+    CREATE TABLE tenant_usage (
+        "TenantId" uuid NOT NULL,
+        "Period" character varying(7) NOT NULL,
+        "EventsConsumed" bigint NOT NULL,
+        "AlertsTriggered" bigint NOT NULL,
+        "ApiRequests" bigint NOT NULL,
+        "ChannelUsage" bigint NOT NULL,
+        "QuotaStatus" integer NOT NULL,
+        "UpdatedAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_tenant_usage" PRIMARY KEY ("TenantId", "Period")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261027030640_AddTenantUsage') THEN
+    CREATE INDEX "IX_recorded_usage_events_TenantId_Period" ON recorded_usage_events ("TenantId", "Period");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261027030640_AddTenantUsage') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261027030640_AddTenantUsage', '9.0.20');
+    END IF;
+END $EF$;
+COMMIT;
