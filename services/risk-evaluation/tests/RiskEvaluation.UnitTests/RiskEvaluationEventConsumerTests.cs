@@ -121,10 +121,13 @@ public class RiskEvaluationEventConsumerTests
     [Fact]
     public async Task CatalogPublicationInTheRiskCatalogFormat_IsProcessed()
     {
-        // Exactly what RiskCatalog.Application.Events.RiskCatalogPublishedEvent serializes to (RE-13).
-        await ConsumeAsync(Message("risk-catalog-published", 4,
-            "{\"Version\":3,\"Notes\":\"n\",\"PublishedAt\":\"2026-10-26T00:00:00Z\",\"PublishedBy\":\"" +
-            Guid.NewGuid() + "\"}"));
+        // Same serializer options as RiskModelService.PublishCatalogVersionAsync in risk-catalog (camelCase).
+        var payload = JsonSerializer.Serialize(
+            new { Version = 3, Notes = "n", PublishedAt = DateTime.UtcNow, PublishedBy = Guid.NewGuid() },
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        Assert.Contains("\"version\":3", payload);
+
+        await ConsumeAsync(Message("risk-catalog-published", 4, payload));
 
         Assert.Empty(_sink.Envelopes);
         _mediator.Verify(m => m.Publish(It.Is<RiskCatalogPublishedEvent>(e => e.Version == 3 && e.Notes == "n"),

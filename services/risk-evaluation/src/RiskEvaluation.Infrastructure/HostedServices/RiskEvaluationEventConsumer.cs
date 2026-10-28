@@ -22,6 +22,9 @@ public sealed record RiskEvaluationConsumerTopics(
 /// </summary>
 public sealed class RiskEvaluationEventConsumer : BackgroundService
 {
+    // risk-catalog publishes camelCase and ingestion PascalCase; property names are matched case-insensitively.
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
     private readonly IConsumer<string?, string> _consumer;
     private readonly IConsumedMessageGuard _guard;
     private readonly ILogger<RiskEvaluationEventConsumer> _logger;
@@ -113,7 +116,7 @@ public sealed class RiskEvaluationEventConsumer : BackgroundService
         if (string.IsNullOrWhiteSpace(payload)) return false;
         try
         {
-            value = JsonSerializer.Deserialize<T>(payload)!;
+            value = JsonSerializer.Deserialize<T>(payload, JsonOptions)!;
             return value is not null;
         }
         catch (JsonException)
