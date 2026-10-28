@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Moq;
-using RiskEvaluation.Application.Interfaces.HttpClients;
 using RiskEvaluation.Application.Interfaces.Messaging;
 using RiskEvaluation.Domain.Entities;
 using RiskEvaluation.Domain.Interfaces;
@@ -22,10 +21,6 @@ public sealed class RiskEvaluationApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:Issuer", TestTokens.Issuer);
         builder.UseSetting("Jwt:Audience", TestTokens.Audience);
         builder.UseSetting("Jwt:SigningKey", TestTokens.SigningKey);
-        builder.UseSetting("ServiceToken:Issuer", "sentinel-service:risk-evaluation");
-        builder.UseSetting("ServiceToken:Audience", TestTokens.Audience);
-        builder.UseSetting("ServiceToken:SigningKey", "integration-tests-risk-evaluation-service-key-0123456789");
-        builder.UseSetting("ServiceToken:Roles:0", "Geospatial.Read");
 
         builder.ConfigureTestServices(services =>
         {
@@ -43,8 +38,6 @@ public sealed class RiskEvaluationApiFactory : WebApplicationFactory<Program>
             services.AddSingleton(Mock.Of<IRecentScoresCache>());
             services.RemoveAll<IEventPublisher>();
             services.AddSingleton(Mock.Of<IEventPublisher>());
-            services.RemoveAll<IGeospatialClient>();
-            services.AddSingleton(Mock.Of<IGeospatialClient>());
         });
     }
 

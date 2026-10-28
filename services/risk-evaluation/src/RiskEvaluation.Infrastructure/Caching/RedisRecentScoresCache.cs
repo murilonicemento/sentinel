@@ -8,12 +8,16 @@ namespace RiskEvaluation.Infrastructure.Caching;
 
 public class RedisRecentScoresCache : IRecentScoresCache
 {
+    private const string KeyPrefix = "risk:score:";
+
+    private readonly IConnectionMultiplexer _connection;
     private readonly IDatabase _redis;
     private readonly ILogger<RedisRecentScoresCache> _logger;
     private static readonly TimeSpan DefaultExpiration = TimeSpan.FromMinutes(5);
 
     public RedisRecentScoresCache(IConnectionMultiplexer redis, ILogger<RedisRecentScoresCache> logger)
     {
+        _connection = redis;
         _redis = redis.GetDatabase();
         _logger = logger;
     }
@@ -49,5 +53,18 @@ public class RedisRecentScoresCache : IRecentScoresCache
         await _redis.StringSetAsync(key, value, expiry);
     }
 
-    private static string BuildKey(int latitude, int longitude) => $"risk:score:{latitude}:{longitude}";
+    public async Task<long> InvalidateAllAsync(CancellationToken cancellationToken = default)
+    {
+        long removed = 0;
+        // SCAN (not KEYS) walks the keyspace incrementally without blocking Redis.
+        foreach (var server in _connection.GetServers().Where(s => s.IsConnected && !s.IsReplica))
+            await foreach (var key in server.KeysAsync(_redis.Database, $"{KeyPrefix}*", pageSize: 500)
+                               .WithCancellation(cancellationToken))
+                if (await _redis.KeyDeleteAsync(key))
+                    removed++;
+
+        return removed;
+    }
+
+    private static string BuildKey(int latitude, int longitude) => $"{KeyPrefix}{latitude}:{longitude}";
 }

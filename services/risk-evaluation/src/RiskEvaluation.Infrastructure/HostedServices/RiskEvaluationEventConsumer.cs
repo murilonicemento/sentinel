@@ -88,12 +88,11 @@ public sealed class RiskEvaluationEventConsumer : BackgroundService
         }
     }
 
-    // Saving a published catalog version is an upsert by version, so redelivery is harmless.
+    // Recording a catalog version is an upsert by version, so redelivery is harmless.
     private async Task<MessageHandlingResult> HandleCatalogPublishedAsync(ConsumeResult<string?, string> result,
         CancellationToken cancellationToken)
     {
-        if (!TryDeserialize<RiskCatalogPublishedEvent>(result.Message.Value, out var catalog) ||
-            string.IsNullOrWhiteSpace(catalog.Version))
+        if (!TryDeserialize<RiskCatalogPublishedEvent>(result.Message.Value, out var catalog) || catalog.Version <= 0)
             return MessageHandlingResult.Reject(MessageErrorCodes.InvalidPayload,
                 "The payload is not a valid RiskCatalogPublishedEvent.");
 

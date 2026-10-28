@@ -10,34 +10,16 @@ using RiskEvaluation.Infrastructure.Caching;
 using RiskEvaluation.Infrastructure.Messaging;
 using RiskEvaluation.Infrastructure.Persistence;
 using MediatR;
-using RiskEvaluation.Application.Interfaces.HttpClients;
 using RiskEvaluation.Application.Interfaces.Messaging;
-using RiskEvaluation.Infrastructure.HttpClients;
-using RiskEvaluation.Infrastructure.Security;
 using StackExchange.Redis;
 using RiskEvaluation.Infrastructure.Messaging.Reliability;
 using RiskEvaluation.Infrastructure.HostedServices;
 using Confluent.Kafka;
-using Polly;
-using Polly.Extensions.Http;
 
 namespace RiskEvaluation.Infrastructure;
 
 public static class ServiceCollectionExtension
 {
-    /// <summary>Overall budget per call to risk-catalog or geospatial, retries included.</summary>
-    private static readonly TimeSpan DependencyTimeout = TimeSpan.FromSeconds(10);
-
-    // Every call to risk-catalog and geospatial is a read-only query, so retrying is safe.
-    // 2 retries = 3 attempts including the first (platform limit).
-    private static IAsyncPolicy<HttpResponseMessage> QueryRetryPolicy() =>
-        HttpPolicyExtensions
-            .HandleTransientHttpError()
-            .OrResult(response => (int)response.StatusCode == 429)
-            .WaitAndRetryAsync(2, retryAttempt =>
-                TimeSpan.FromMilliseconds(200 * Math.Pow(2, retryAttempt - 1)) +
-                TimeSpan.FromMilliseconds(Random.Shared.Next(0, 250)));
-
     public static IServiceCollection AddInfrastructureServiceCollection(this IServiceCollection services, IConfiguration configuration)
     {
         // MongoDB
@@ -62,29 +44,10 @@ public static class ServiceCollectionExtension
             return ConnectionMultiplexer.Connect(redisOptions);
         });
 
-        services.AddServiceTokens(configuration);
-
-        services.AddHttpClient<IRiskCatalogClient, RiskCatalogHttpClient>(client =>
-        {
-            client.BaseAddress = new Uri(configuration["Services:RiskCatalog:BaseUrl"] ?? "http://localhost:5002/");
-            client.DefaultRequestHeaders.Add("Accept", "application/json");
-            client.Timeout = DependencyTimeout;
-        })
-        .AddHttpMessageHandler<ServiceTokenHandler>()
-        .AddPolicyHandler(QueryRetryPolicy());
-
-        services.AddHttpClient<IGeospatialClient, GeospatialHttpClient>(client =>
-        {
-            client.BaseAddress = new Uri(configuration["Services:Geospatial:BaseUrl"] ?? "http://localhost:5003/");
-            client.DefaultRequestHeaders.Add("Accept", "application/json");
-            client.Timeout = DependencyTimeout;
-        })
-        .AddHttpMessageHandler<ServiceTokenHandler>()
-        .AddPolicyHandler(QueryRetryPolicy());
-
         // Repositories
         services.AddScoped<IRiskEvaluationRepository, RiskEvaluationRepository>();
         services.AddScoped<IRiskModelRepository, RiskModelRepository>();
+        services.AddScoped<ICatalogVersionRepository, CatalogVersionRepository>();
         services.AddScoped<IRiskFactorRepository, RiskFactorRepository>();
 
         // Cache

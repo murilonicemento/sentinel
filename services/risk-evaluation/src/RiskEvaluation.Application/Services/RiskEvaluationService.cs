@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging;
 using RiskEvaluation.Application.Interfaces;
-using RiskEvaluation.Application.Interfaces.HttpClients;
 using RiskEvaluation.Application.Interfaces.Messaging;
 using RiskEvaluation.Application.Interfaces.Services;
 using RiskEvaluation.Domain.Enums;
@@ -17,8 +16,6 @@ public class RiskEvaluationService : IRiskEvaluationService
     private readonly IEventPublisher _eventPublisher;
     private readonly RiskCalculationService _calculationService;
     private readonly IRecentScoresCache _cache;
-    private readonly IRiskCatalogClient _riskCatalogClient;
-    private readonly IGeospatialClient _geospatialClient;
     private readonly ILogger<RiskEvaluationService> _logger;
 
     public RiskEvaluationService(
@@ -26,16 +23,12 @@ public class RiskEvaluationService : IRiskEvaluationService
         IEventPublisher eventPublisher,
         RiskCalculationService calculationService,
         IRecentScoresCache cache,
-        IRiskCatalogClient riskCatalogClient,
-        IGeospatialClient geospatialClient,
         ILogger<RiskEvaluationService> logger)
     {
         _repository = repository;
         _eventPublisher = eventPublisher;
         _calculationService = calculationService;
         _cache = cache;
-        _riskCatalogClient = riskCatalogClient;
-        _geospatialClient = geospatialClient;
         _logger = logger;
     }
 
@@ -56,22 +49,8 @@ public class RiskEvaluationService : IRiskEvaluationService
         }
 
         var (metricWeights, eventWeights) = await _calculationService.LoadWeightsAsync();
-        var geoContextDto = await _geospatialClient.GetSpatialContextAsync(latitude, longitude);
+        // No service provides the geographic context yet (RE-14): the calculation runs without it.
         GeospatialContext? geoContext = null;
-        
-        if (geoContextDto != null)
-        {
-            geoContext = new GeospatialContext
-            {
-                Latitude = geoContextDto.Latitude,
-                Longitude = geoContextDto.Longitude,
-                RegionId = geoContextDto.RegionId,
-                TerrainType = geoContextDto.TerrainType,
-                Elevation = geoContextDto.Elevation,
-                ProximityToCoast = geoContextDto.ProximityToCoast,
-                RiskZones = geoContextDto.RiskZones
-            };
-        }
 
         var score = _calculationService.CalculateRiskScore(metrics, events, metricWeights, eventWeights, geoContext);
         var level = RiskCalculationService.ClassifyRiskLevel(score);

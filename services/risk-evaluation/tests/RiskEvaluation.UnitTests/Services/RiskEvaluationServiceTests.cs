@@ -9,7 +9,6 @@ using RiskEvaluation.Domain.Interfaces;
 using RiskEvaluation.Domain.Repositories;
 using RiskEvaluation.Domain.Services;
 using RiskEvaluation.Application.Interfaces;
-using RiskEvaluation.Application.Interfaces.HttpClients;
 using RiskEvaluation.Application.Interfaces.Messaging;
 using RiskEvaluation.Domain.ValueObjects;
 
@@ -22,8 +21,6 @@ public class RiskEvaluationServiceTests
     private readonly Mock<IRiskEvaluationRepository> _repositoryMock;
     private readonly Mock<IEventPublisher> _eventPublisherMock;
     private readonly Mock<IRecentScoresCache> _cacheMock;
-    private readonly Mock<IRiskCatalogClient> _riskCatalogClientMock;
-    private readonly Mock<IGeospatialClient> _geospatialClientMock;
     private readonly Mock<ILogger<RiskEvaluationService>> _loggerMock;
     private readonly RiskEvaluationService _service;
 
@@ -32,8 +29,6 @@ public class RiskEvaluationServiceTests
         _repositoryMock = new Mock<IRiskEvaluationRepository>();
         _eventPublisherMock = new Mock<IEventPublisher>();
         _cacheMock = new Mock<IRecentScoresCache>();
-        _riskCatalogClientMock = new Mock<IRiskCatalogClient>();
-        _geospatialClientMock = new Mock<IGeospatialClient>();
         _loggerMock = new Mock<ILogger<RiskEvaluationService>>();
 
         // RiskCalculationService is a pure domain service; without a repository it uses the default weights:
@@ -44,8 +39,6 @@ public class RiskEvaluationServiceTests
             _eventPublisherMock.Object,
             new RiskCalculationService(),
             _cacheMock.Object,
-            _riskCatalogClientMock.Object,
-            _geospatialClientMock.Object,
             _loggerMock.Object);
     }
 
@@ -53,8 +46,6 @@ public class RiskEvaluationServiceTests
     {
         _cacheMock.Setup(x => x.GetAsync(latitude, longitude, It.IsAny<CancellationToken>()))
             .ReturnsAsync((RiskScoreCacheEntry?)null);
-        _geospatialClientMock.Setup(x => x.GetSpatialContextAsync(latitude, longitude, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((GeospatialContextDTO?)null);
     }
 
     private static RiskMetrics MaxMetrics() => new()
@@ -278,7 +269,5 @@ public class RiskEvaluationServiceTests
         Assert.Equal(cachedScore, result.Score);
         Assert.Equal(cachedLevel, result.Level);
         _repositoryMock.Verify(x => x.AddAsync(It.IsAny<RiskEvaluationEntity>()), Times.Once);
-        _riskCatalogClientMock.Verify(x => x.GetLatestRiskWeightsAsync(It.IsAny<CancellationToken>()), Times.Never);
-        _geospatialClientMock.Verify(x => x.GetSpatialContextAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

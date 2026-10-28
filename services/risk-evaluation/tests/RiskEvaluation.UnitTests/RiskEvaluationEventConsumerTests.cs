@@ -119,15 +119,24 @@ public class RiskEvaluationEventConsumerTests
     }
 
     [Fact]
-    public async Task CatalogPublicationInTheRiskCatalogFormat_IsDeadLetteredInsteadOfLost()
+    public async Task CatalogPublicationInTheRiskCatalogFormat_IsProcessed()
     {
-        // risk-catalog publishes Version as a number (RE-13), which this contract cannot read.
+        // Exactly what RiskCatalog.Application.Events.RiskCatalogPublishedEvent serializes to (RE-13).
         await ConsumeAsync(Message("risk-catalog-published", 4,
-            "{\"Version\":3,\"Notes\":\"n\",\"PublishedAt\":\"2026-10-26T00:00:00Z\"}"));
+            "{\"Version\":3,\"Notes\":\"n\",\"PublishedAt\":\"2026-10-26T00:00:00Z\",\"PublishedBy\":\"" +
+            Guid.NewGuid() + "\"}"));
 
-        var envelope = Assert.Single(_sink.Envelopes);
-        Assert.Equal("risk-catalog-published", envelope.OriginalTopic);
-        Assert.Equal(MessageErrorCodes.InvalidPayload, envelope.ErrorCode);
+        Assert.Empty(_sink.Envelopes);
+        _mediator.Verify(m => m.Publish(It.Is<RiskCatalogPublishedEvent>(e => e.Version == 3 && e.Notes == "n"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CatalogPublicationWithoutVersion_IsDeadLettered()
+    {
+        await ConsumeAsync(Message("risk-catalog-published", 5, "{\"Notes\":\"n\"}"));
+
+        Assert.Equal(MessageErrorCodes.InvalidPayload, Assert.Single(_sink.Envelopes).ErrorCode);
     }
 
     private sealed class InMemoryGuard : IConsumedMessageGuard
