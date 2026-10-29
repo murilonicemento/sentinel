@@ -1,12 +1,12 @@
 using Geospatial.Api.Contracts;
 using Geospatial.Api.Middlewares;
+using Geospatial.Api.Options;
 using Geospatial.Api.Observability;
 using Geospatial.Api.Security;
 using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.UseCases;
 using Geospatial.Infrastructure;
 using Geospatial.Infrastructure.HealthChecks;
-using Geospatial.Infrastructure.Options;
 using Microsoft.AspNetCore.Mvc;
 using Scalar.AspNetCore;
 using Serilog;
@@ -49,10 +49,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
         ApiProblems.IsVersionedApi(context.HttpContext) ? ModelValidationProblems.For(context) : defaultFactory(context);
 });
 
-builder.Services
-    .Configure<ElasticsearchOptions>(builder.Configuration.GetSection("Elasticsearch"))
-    .Configure<KafkaConsumerOptions>(builder.Configuration.GetSection("KafkaConsumerOptions"))
-    .Configure<Geospatial.Infrastructure.Options.KafkaProducerOptions>(builder.Configuration.GetSection("KafkaProducerOptions"));
+builder.Services.AddGeospatialOptions(builder.Configuration);
 
 builder.Services
     .AddScoped<IBatchEvaluateUseCase, BatchEvaluateUseCase>()

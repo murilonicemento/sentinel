@@ -34,6 +34,8 @@ public sealed class GeospatialDeadLetterSink : IDeadLetterSink
             ErrorReason = envelope.ErrorReason
         });
 
-        await _producer.ProduceAsync(_topic, new Message<Null, string> { Value = payload }, cancellationToken);
+        var message = new Message<Null, string> { Value = payload, Headers = new Headers() };
+        using var activity = KafkaTracing.StartPublish(_topic, message.Headers);
+        await _producer.ProduceAsync(_topic, message, cancellationToken);
     }
 }

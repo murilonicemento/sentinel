@@ -2,6 +2,6 @@
 
 public class ContainsPointPayloadDTO
 {
-    public PointDTO Point { get; set; }
-    public PolygonDTO Area { get; set; }
+    public required PointDTO Point { get; set; }
+    public required PolygonDTO Area { get; set; }
 }
