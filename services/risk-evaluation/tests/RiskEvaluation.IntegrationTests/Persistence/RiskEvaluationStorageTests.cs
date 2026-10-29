@@ -13,7 +13,10 @@ namespace RiskEvaluation.IntegrationTests.Persistence;
 
 public sealed class StorageFixture : IAsyncLifetime
 {
-    private readonly MongoDbContainer _mongo = new MongoDbBuilder("mongo:7").Build();
+    // No credentials: the mongo image then skips the temporary init server, whose port was sometimes still bound
+    // when the real mongod started under the load of the whole solution run (exit 48, "Address already in use").
+    private readonly MongoDbContainer _mongo = new MongoDbBuilder("mongo:7").WithUsername(string.Empty).WithPassword(string.Empty)
+        .Build();
     private readonly RedisContainer _redis = new RedisBuilder("redis:7").Build();
 
     public IMongoDatabase Database { get; private set; } = null!;
