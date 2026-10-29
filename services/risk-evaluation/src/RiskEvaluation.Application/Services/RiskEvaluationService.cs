@@ -47,7 +47,7 @@ public class RiskEvaluationService : IRiskEvaluationService
         var matrixLevel = catalog?.MatrixLevelFor(source?.EventType, source?.Intensity);
 
         var cached = await _cache.GetAsync(latitude, longitude);
-        
+
         if (cached != null && IsRecent(cached.CalculatedAt))
         {
             var cachedLevel = Floor(Enum.Parse<RiskLevel>(cached.Level), matrixLevel);

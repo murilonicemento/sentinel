@@ -53,7 +53,7 @@ public static class ServiceCollectionExtension
 
     private static IServiceCollection AddRepositories(this IServiceCollection services) =>
         services
-            .AddSingleton<IGeospatialEventRepository, ElasticsearchGeospatialEventRepository>() ;
+            .AddSingleton<IGeospatialEventRepository, ElasticsearchGeospatialEventRepository>();
 
     private static IServiceCollection AddGeospatialCalculator(this IServiceCollection services) =>
         services.AddScoped<IGeospatialCalculator, NetTopologyGeospatialCalculator>();

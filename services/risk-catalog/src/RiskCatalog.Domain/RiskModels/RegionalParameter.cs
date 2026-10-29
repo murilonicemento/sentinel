@@ -24,7 +24,7 @@ public class RegionalParameter
         Description = description;
     }
 
-    public RegionalParameter(Guid id, double adjustmentFactor, string description, 
+    public RegionalParameter(Guid id, double adjustmentFactor, string description,
         double? centerLatitude, double? centerLongitude, string? regionBoundsJson, double? coverageRadiusKm)
     {
         Id = id;

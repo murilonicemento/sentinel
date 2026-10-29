@@ -452,7 +452,7 @@ public class RiskModelServiceTests
         result.Should().BeTrue();
         _riskMatrixRepositoryMock.Verify(
             x => x.AddRiskMatrixAsync(
-                It.Is<RiskMatrix>(rm => 
+                It.Is<RiskMatrix>(rm =>
                     rm.EventTypeId == eventType.Id &&
                     rm.SeverityLevel == SeverityLevelEnum.High &&
                     rm.RiskLevel == RiskLevelEnum.Critical &&

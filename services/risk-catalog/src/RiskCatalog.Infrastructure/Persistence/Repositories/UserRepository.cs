@@ -30,7 +30,7 @@ public class UserRepository : IUserRepository
     }
 
     public async Task<IEnumerable<User>> FindAsync(
-        System.Linq.Expressions.Expression<Func<User, bool>> predicate, 
+        System.Linq.Expressions.Expression<Func<User, bool>> predicate,
         CancellationToken cancellationToken = default)
     {
         return await _dbSet.Where(predicate).ToListAsync(cancellationToken);

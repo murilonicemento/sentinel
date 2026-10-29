@@ -10,7 +10,7 @@ public class RiskEvaluationEntity
     public DateTime Timestamp { get; private set; }
     public double Score { get; private set; }
     public RiskLevel Level { get; private set; }
-    
+
     public RiskEvaluationEntity(int latitude, int longitude, double score, RiskLevel level)
     {
         Id = Guid.NewGuid();

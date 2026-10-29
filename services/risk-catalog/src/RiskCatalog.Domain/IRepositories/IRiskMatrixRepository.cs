@@ -11,7 +11,7 @@ public interface IRiskMatrixRepository
         CancellationToken cancellationToken = default);
 
     public Task<bool> AddRiskMatrixAsync(RiskMatrix riskMatrix, CancellationToken cancellationToken = default);
-    
+
     public Task<bool> MarkVersionAsActiveAsync(int version, CancellationToken cancellationToken = default);
 
     /// <summary>Matrix entries with their event type, ordered by event type code, severity, version and id.</summary>

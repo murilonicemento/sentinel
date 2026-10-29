@@ -74,7 +74,7 @@ public sealed class AlertEscalationWorker : BackgroundService
                     GetNextEscalationLevel(window.CurrentEscalationLevel, config.EscalationIntervals, elapsed);
 
                 if (!nextLevel.HasValue || !window.Escalate(nextLevel.Value)) continue;
-                
+
                 await repository.UpdateAsync(window, cancellationToken);
 
                 metrics.AlertEscalated(window.Region, window.RiskType.ToString(), nextLevel.Value);

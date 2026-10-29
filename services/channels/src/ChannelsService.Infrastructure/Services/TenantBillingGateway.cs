@@ -33,7 +33,7 @@ public class TenantBillingGateway : ITenantBillingGateway
         try
         {
             var response = await _httpClient.GetAsync($"/api/v1/tenants-billing/tenants/{tenantId}", cancellationToken);
-            
+
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Tenant {TenantId} validation failed with status {StatusCode}", tenantId,

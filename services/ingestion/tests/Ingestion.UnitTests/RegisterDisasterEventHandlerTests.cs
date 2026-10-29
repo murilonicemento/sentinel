@@ -41,7 +41,7 @@ public class RegisterDisasterEventHandlerTests
         };
 
         _mockSensorCollectionService.Setup(x => x.ProcessSensorCollection(
-            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Disaster", 
+            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Disaster",
             It.IsAny<CancellationToken>()))
             .ReturnsAsync(datasourceId);
 
@@ -51,7 +51,7 @@ public class RegisterDisasterEventHandlerTests
         // Assert
         Assert.Equal(datasourceId, result);
         _mockSensorCollectionService.Verify(x => x.ProcessSensorCollection(
-            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Disaster", 
+            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Disaster",
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -79,7 +79,7 @@ public class RegisterDisasterEventHandlerTests
         };
 
         _mockSensorCollectionService.Setup(x => x.ProcessSensorCollection(
-            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Disaster", 
+            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Disaster",
             It.IsAny<CancellationToken>()))
             .ReturnsAsync(datasourceId);
 
@@ -89,7 +89,7 @@ public class RegisterDisasterEventHandlerTests
         // Assert
         Assert.Equal(datasourceId, result);
         _mockSensorCollectionService.Verify(x => x.ProcessSensorCollection(
-            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Disaster", 
+            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Disaster",
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -117,7 +117,7 @@ public class RegisterDisasterEventHandlerTests
 
         var expectedException = new InvalidOperationException("Service error");
         _mockSensorCollectionService.Setup(x => x.ProcessSensorCollection(
-            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Disaster", 
+            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Disaster",
             It.IsAny<CancellationToken>()))
             .ThrowsAsync(expectedException);
 

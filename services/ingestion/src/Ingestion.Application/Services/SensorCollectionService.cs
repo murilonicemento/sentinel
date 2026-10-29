@@ -94,7 +94,7 @@ public class SensorCollectionService : ISensorCollectionService
         }
 
         var dedupKey = $"ing:{tenantId}:{dataSourceId}:{collectedAt:yyyyMMddHHmmss}";
-        
+
         if (!await _eventDeduplicator.TryBeginAsync(dedupKey, ProcessingLease))
         {
             _logger.LogInformation("Event duplicated. Key: {dedupKey}", dedupKey);

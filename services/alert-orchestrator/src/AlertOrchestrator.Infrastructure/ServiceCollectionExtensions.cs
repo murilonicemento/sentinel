@@ -86,7 +86,7 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(10);
         })
         .AddHttpMessageHandler<ServiceTokenHandler>();
-        services.AddScoped<ITenantBillingGateway>(sp => 
+        services.AddScoped<ITenantBillingGateway>(sp =>
             sp.GetRequiredService<TenantBillingGateway>());
 
         // Cooldown Service

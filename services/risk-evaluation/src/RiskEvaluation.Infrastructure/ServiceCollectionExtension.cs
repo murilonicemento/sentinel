@@ -81,7 +81,7 @@ public static class ServiceCollectionExtension
             var bootstrapServers = configuration["Kafka:BootstrapServers"];
             var topic = configuration["Kafka:Topic"];
             var logger = sp.GetRequiredService<ILogger<KafkaEventPublisher>>();
-            
+
             return new KafkaEventPublisher(bootstrapServers!, topic!, logger);
         });
 

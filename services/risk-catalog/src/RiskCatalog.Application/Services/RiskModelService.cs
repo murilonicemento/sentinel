@@ -121,7 +121,7 @@ public class RiskModelService : IRiskModelService
         if (cachedResult != null)
         {
             _logger.LogInformation("IDF curve retrieved from cache. EventTypeCode: {eventTypeCode}", eventTypeCode);
-        
+
             return cachedResult;
         }
 
@@ -428,8 +428,8 @@ public class RiskModelService : IRiskModelService
                 "Regional risk parameters already exist for the given region.");
         }
 
-        var regionBoundsJson = regionalRiskParametersDto.RegionBounds != null 
-            ? System.Text.Json.JsonSerializer.Serialize(regionalRiskParametersDto.RegionBounds) 
+        var regionBoundsJson = regionalRiskParametersDto.RegionBounds != null
+            ? System.Text.Json.JsonSerializer.Serialize(regionalRiskParametersDto.RegionBounds)
             : null;
 
         var regionalParameter = new RegionalParameter
