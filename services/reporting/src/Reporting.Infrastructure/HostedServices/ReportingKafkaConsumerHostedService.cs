@@ -377,6 +377,7 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
             Value = messageBody,
             Headers = headers
         };
+        using var activity = KafkaTracing.StartPublish(deadLetterTopic, headers);
 
         var deliveryResult = await producer.ProduceAsync(deadLetterTopic, message, cancellationToken);
         _logger.LogWarning(

@@ -35,7 +35,7 @@ public sealed class KafkaReportingReplayPublisher : IReportingReplayPublisher
         using var producer = new ProducerBuilder<Null, string>(producerConfig).Build();
         var messageBody = ReportingKafkaConsumerHostedService.BuildReprocessingMessage(payload, sourceTopic, requestedBy);
 
-        var result = await producer.ProduceAsync(replayTopic, new Message<Null, string>
+        var message = new Message<Null, string>
         {
             Value = messageBody,
             Headers = new Headers
@@ -44,7 +44,9 @@ public sealed class KafkaReportingReplayPublisher : IReportingReplayPublisher
                 { "replay-requested-at", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o")) },
                 { "replay-requested-by", Encoding.UTF8.GetBytes(requestedBy) }
             }
-        }, cancellationToken);
+        };
+        using var activity = KafkaTracing.StartPublish(replayTopic, message.Headers);
+        var result = await producer.ProduceAsync(replayTopic, message, cancellationToken);
 
         return new ReplayPublishResult(replayTopic, result.Partition.Value, result.Offset.Value, sourceTopic,
             requestedBy);

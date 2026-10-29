@@ -4,6 +4,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Reporting.Infrastructure.Messaging;
 
 namespace Reporting.Infrastructure.HostedServices;
 
@@ -181,7 +182,7 @@ public sealed class ReportingDeadLetterConsumerHostedService : BackgroundService
         };
 
         using var producer = new ProducerBuilder<Null, string>(producerConfig).Build();
-        var result = await producer.ProduceAsync(replayTopic, new Message<Null, string>
+        var message = new Message<Null, string>
         {
             Value = replayPayload,
             Headers = new Headers
@@ -190,7 +191,9 @@ public sealed class ReportingDeadLetterConsumerHostedService : BackgroundService
                 { "replay-requested-at", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o")) },
                 { "replay-requested-by", Encoding.UTF8.GetBytes("dlq-consumer") }
             }
-        }, cancellationToken);
+        };
+        using var activity = KafkaTracing.StartPublish(replayTopic, message.Headers);
+        var result = await producer.ProduceAsync(replayTopic, message, cancellationToken);
 
         _logger.LogInformation("Published replay payload to topic {ReplayTopic} at partition {Partition} offset {Offset}", replayTopic, result.Partition.Value, result.Offset.Value);
     }
