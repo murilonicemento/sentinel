@@ -60,7 +60,7 @@ Cada Infrastructure com Kafka tem uma cópia de `Messaging/KafkaTracing`:
 - **Consumidores** continuam o trace com um span `<tópico> process` (Consumer). Isso vale para `ReliableConsumerLoop`, o consumidor do audit-compliance e o do reporting.
 - Mensagens sem cabeçalho ou com cabeçalho inválido iniciam um trace novo.
 
-A implementação usa só `System.Diagnostics` (`DistributedContextPropagator`, W3C por padrão), então a camada Infrastructure não depende do OpenTelemetry. Os DLQs copiam os headers da mensagem original e preservam o trace de origem. Os headers são aditivos: consumidores antigos os ignoram.
+A implementação usa só `System.Diagnostics` (`DistributedContextPropagator`, W3C por padrão), então a camada Infrastructure não depende do OpenTelemetry. Os DLQs e os replays copiam os headers da mensagem original e abrem um span de publicação filho do processamento (X-20). Os headers são aditivos: consumidores antigos os ignoram.
 
 ### 5. Liveness, readiness e `/health`
 
@@ -115,6 +115,6 @@ Alternativas consideradas:
 
 ## Decisões ainda pendentes
 
-- Ligar o trace da requisição ao do outbox do ingestion (X-19, exige coluna nova em `outbox`).
+- ~~Ligar o trace da requisição ao do outbox do ingestion (X-19)~~ resolvido em 2026-10-28: coluna aditiva `outbox.trace_parent`; o relay publica como filho do trace da requisição.
 - Alertas e dashboards por serviço, com limiares derivados de baseline (X-21).
 - Amostragem, retenção e armazenamento de traces e logs fora do ambiente local.
