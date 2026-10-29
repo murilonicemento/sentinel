@@ -16,33 +16,26 @@ public class SensorEventDetectedPublisher : IPublisher
         _logger = logger;
     }
 
+    /// <summary>Throws when the broker does not acknowledge the message, so the outbox row stays pending.</summary>
     public async Task PublishAsync(string topic, string payload, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var message = new Message<Null, string> { Value = payload, Headers = new Headers() };
-            using var activity = KafkaTracing.StartPublish(topic, message.Headers);
-            var response = await _producer.ProduceAsync(topic, message, cancellationToken);
+        var message = new Message<Null, string> { Value = payload, Headers = new Headers() };
+        using var activity = KafkaTracing.StartPublish(topic, message.Headers);
+        var response = await _producer.ProduceAsync(topic, message, cancellationToken);
 
-            _logger.LogInformation(
-                "{EventType} message published successfully in Kafka with status {status}; partition {partition}; offset {offset}",
-                nameof(SensorEventDetected),
-                response.Status,
-                response.Partition,
-                response.Offset
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to publish {EventType} message in Kafka.", nameof(SensorEventDetected));
-        }
+        _logger.LogInformation(
+            "{EventType} message published successfully in Kafka with status {status}; partition {partition}; offset {offset}",
+            nameof(SensorEventDetected),
+            response.Status,
+            response.Partition,
+            response.Offset
+        );
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        if (_producer is IAsyncDisposable asyncDisposable)
-            await asyncDisposable.DisposeAsync();
-        else
-            _producer.Flush(TimeSpan.FromSeconds(5));
-    }
+    /// <summary>
+    /// Nothing to release: the producer is a DI singleton disposed by the container, and every
+    /// <see cref="PublishAsync"/> awaits the broker acknowledgement, so no message is left queued. Flushing here ran
+    /// after the container had already disposed the producer (ObjectDisposedException on shutdown).
+    /// </summary>
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

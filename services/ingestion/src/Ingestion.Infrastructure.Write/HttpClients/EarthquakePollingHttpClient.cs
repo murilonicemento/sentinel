@@ -40,11 +40,14 @@ public class EarthquakePollingHttpClient : ISensorPollingClient
         if (featureCollection?.Features is null)
             return [];
 
-        var collections = featureCollection.Features.Select(SensorCollectionDTO (f) => new DisasterCollectionDTO
+        // USGS may omit properties or geometry on a feature; without a position there is nothing to evaluate.
+        var located = featureCollection.Features
+            .Where(f => f.Properties is not null && f.Geometry?.Coordinates is { Length: >= 2 });
+        var collections = located.Select(SensorCollectionDTO (f) => new DisasterCollectionDTO
         {
             DataSourceId = dataSourceId,
             TenantId = tenantId,
-            CollectedAt = f.Properties.Time is not null
+            CollectedAt = f.Properties!.Time is not null
                 ? DateTimeOffset.FromUnixTimeMilliseconds(f.Properties.Time.Value).UtcDateTime
                 : null,
             Domain = SensorDomainEnum.Disaster,
@@ -55,8 +58,8 @@ public class EarthquakePollingHttpClient : ISensorPollingClient
                 new SampleSensorDTO
                 {
                     SensorValue = f.Properties.Mag ?? 0,
-                    Unit = f.Properties.MagType,
-                    Latitude = f.Geometry.Coordinates[1],
+                    Unit = f.Properties.MagType ?? string.Empty,
+                    Latitude = f.Geometry!.Coordinates[1],
                     Longitude = f.Geometry.Coordinates[0],
                     RecordedAt = DateTimeOffset.FromUnixTimeMilliseconds(f.Properties.Time.GetValueOrDefault(
                         new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds())).UtcDateTime

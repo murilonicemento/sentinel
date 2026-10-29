@@ -32,7 +32,8 @@ public class RegisterDataSourceHandlerTests
             _mockTenantRepository.Object,
             _mockDataSourceRepository.Object,
             _mockEventTypePermissionRepository.Object,
-            _mockTenantBillingGateway.Object
+            _mockTenantBillingGateway.Object,
+            new InlineUnitOfWork()
         );
     }
 

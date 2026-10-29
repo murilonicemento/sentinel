@@ -1,5 +1,6 @@
 using Ingestion.Application.Commands;
 using Ingestion.Application.Errors;
+using Ingestion.Application.Interfaces.Repositories;
 using Ingestion.Application.Interfaces.Services;
 using Ingestion.Domain.AggregateRoots;
 using Ingestion.Domain.Aggregates;
@@ -15,14 +16,17 @@ public class RegisterDataSourceHandler : IRequestHandler<RegisterDataSourceComma
     private readonly IDataSourceRepository _dataSourceRepository;
     private readonly IEventTypePermissionRepository _eventTypePermissionRepository;
     private readonly ITenantBillingGateway _tenantBillingGateway;
+    private readonly IUnitOfWork _unitOfWork;
 
     public RegisterDataSourceHandler(ITenantRepository tenantRepository, IDataSourceRepository dataSourceRepository,
-        IEventTypePermissionRepository eventTypePermissionRepository, ITenantBillingGateway tenantBillingGateway)
+        IEventTypePermissionRepository eventTypePermissionRepository, ITenantBillingGateway tenantBillingGateway,
+        IUnitOfWork unitOfWork)
     {
         _tenantRepository = tenantRepository;
         _dataSourceRepository = dataSourceRepository;
         _eventTypePermissionRepository = eventTypePermissionRepository;
         _tenantBillingGateway = tenantBillingGateway;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<(Guid dataSourceId, Guid tenantId)> Handle(
@@ -65,11 +69,15 @@ public class RegisterDataSourceHandler : IRequestHandler<RegisterDataSourceComma
                 EventType = eventTypePermission.EventType
             }).ToList();
 
-        var (registeredDataSourceId, tenantId) = await _dataSourceRepository.RegisterAsync(dataSource);
+        // The data source and its event permissions are written together, never one without the other.
+        (Guid dataSourceId, Guid tenantId) registered = default;
+        await _unitOfWork.ExecuteAsync(async _ =>
+        {
+            registered = await _dataSourceRepository.RegisterAsync(dataSource);
+            if (!await _eventTypePermissionRepository.RegisterManyAsync(eventPermissions))
+                throw new Exception("Unexpected exception occurred.");
+        }, cancellationToken);
 
-        if (!await _eventTypePermissionRepository.RegisterManyAsync(eventPermissions))
-            throw new Exception("Unexpected exception occurred.");
-
-        return (registeredDataSourceId, tenantId);
+        return registered;
     }
 }

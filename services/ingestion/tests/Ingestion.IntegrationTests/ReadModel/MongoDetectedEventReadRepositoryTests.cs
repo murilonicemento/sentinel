@@ -11,7 +11,10 @@ namespace Ingestion.IntegrationTests.ReadModel;
 
 public sealed class MongoReadModelFixture : IAsyncLifetime
 {
-    private readonly MongoDbContainer _container = new MongoDbBuilder("mongo:7").Build();
+    // No credentials: the mongo image then skips the temporary init server, whose port was sometimes still bound
+    // when the real mongod started under the load of the whole solution run (exit 48, "Address already in use").
+    private readonly MongoDbContainer _container = new MongoDbBuilder("mongo:7").WithUsername(string.Empty).WithPassword(string.Empty)
+        .Build();
 
     public string ConnectionString => _container.GetConnectionString();
 

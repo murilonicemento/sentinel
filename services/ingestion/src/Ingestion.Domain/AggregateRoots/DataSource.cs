@@ -6,13 +6,13 @@ namespace Ingestion.Domain.AggregateRoots;
 public class DataSource
 {
     public Guid Id { get; }
-    public string Name { get; }
-    public string Endpoint { get; }
-    public string DataSourceType { get; }
-    public string MeasurementType { get; }
-    public string CollectionFrequency { get; }
+    public string Name { get; } = string.Empty;
+    public string Endpoint { get; } = string.Empty;
+    public string DataSourceType { get; } = string.Empty;
+    public string MeasurementType { get; } = string.Empty;
+    public string CollectionFrequency { get; } = string.Empty;
     public Guid TenantId { get; }
-    public DateTime CreatedAt { get; } = DateTime.Now;
+    public DateTime CreatedAt { get; } = DateTime.UtcNow;
     public IEnumerable<DataCollection> DataCollections { get; set; } = [];
     public IEnumerable<EventTypePermission> EventPermissions { get; set; } = [];
 

@@ -33,7 +33,8 @@ public class DataSourceRepository : IDataSourceRepository
                         data_source.id = @Id AND tenant_id = @TenantId AND tenant.is_active = true";
 
         var dataSource =
-            _writeDbContext.Connection.QueryFirstOrDefault<DataSource>(query, new { Id = id, TenantId = tenantId });
+            _writeDbContext.Connection.QueryFirstOrDefault<DataSource>(query, new { Id = id, TenantId = tenantId },
+                _writeDbContext.Transaction);
 
         if (dataSource is null) return dataSource;
 
@@ -62,7 +63,7 @@ public class DataSourceRepository : IDataSourceRepository
 
         var dataSource =
             await _writeDbContext.Connection.QueryFirstOrDefaultAsync<DataSource>(query,
-                new { Name = name, TenantId = tenantId });
+                new { Name = name, TenantId = tenantId }, _writeDbContext.Transaction);
 
         if (dataSource is not null)
             dataSource.DataCollections = GetDataCollectionByDataSourceId(dataSource.Id);
@@ -76,7 +77,7 @@ public class DataSourceRepository : IDataSourceRepository
                         data_source (id, name, data_source_type, measurement_type, endpoint, collection_frequency, tenant_id, created_at) 
                         VALUES (@Id, @Name, @DataSourceType, @MeasurementType, @Endpoint, @CollectionFrequency, @TenantId, @CreatedAt)";
 
-        await _writeDbContext.Connection.ExecuteAsync(query, dataSource);
+        await _writeDbContext.Connection.ExecuteAsync(query, dataSource, _writeDbContext.Transaction);
 
         return (dataSource.Id, dataSource.TenantId);
     }
@@ -86,7 +87,8 @@ public class DataSourceRepository : IDataSourceRepository
         var query =
             @"SELECT id, data_source_id, collected_at, payload, tenant_id, created_at FROM data_collection WHERE data_source_id = @DataSourceId";
 
-        return _writeDbContext.Connection.Query<DataCollection>(query, new { DataSourceId = dataSourceId });
+        return _writeDbContext.Connection.Query<DataCollection>(query, new { DataSourceId = dataSourceId },
+            _writeDbContext.Transaction);
     }
 
     private IEnumerable<EventTypePermission> GetEventTypePermissionsByDataSourceId(Guid dataSourceId)
@@ -94,6 +96,7 @@ public class DataSourceRepository : IDataSourceRepository
         var query =
             @"SELECT id, data_source_id, event_domain, event_type FROM event_type_permission WHERE data_source_id = @DataSourceId";
 
-        return _writeDbContext.Connection.Query<EventTypePermission>(query, new { DataSourceId = dataSourceId });
+        return _writeDbContext.Connection.Query<EventTypePermission>(query, new { DataSourceId = dataSourceId },
+            _writeDbContext.Transaction);
     }
 }

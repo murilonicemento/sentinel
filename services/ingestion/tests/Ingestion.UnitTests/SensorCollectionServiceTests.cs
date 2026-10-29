@@ -23,6 +23,9 @@ public class SensorCollectionServiceTests
     private readonly Mock<IDetectedEventReadRepository> _readModel = new();
     private readonly Mock<IOutboxRepository> _outbox = new();
     private readonly Mock<IObjectStorageProvider> _storage = new();
+    private readonly Mock<IDataCollectionRepository> _collections = new();
+    private readonly Mock<ISampleSensorRepository> _samples = new();
+    private readonly InlineUnitOfWork _unitOfWork = new();
     private readonly DataSource _dataSource;
 
     public SensorCollectionServiceTests()
@@ -44,7 +47,7 @@ public class SensorCollectionServiceTests
         var geospatial = new Mock<IGeospatialValidationService>();
         geospatial.Setup(g => g.ValidateCoordinatesAsync(It.IsAny<double>(), It.IsAny<double>(),
             It.IsAny<CancellationToken>())).ReturnsAsync(true);
-        return new SensorCollectionService(dataSources.Object, Mock.Of<IDataCollectionRepository>(),
+        return new SensorCollectionService(dataSources.Object, _collections.Object, _samples.Object, _unitOfWork,
             _deduplicator.Object, _storage.Object, _outbox.Object, _readModel.Object, geospatial.Object,
             NullLogger<SensorCollectionService>.Instance);
     }
@@ -78,6 +81,53 @@ public class SensorCollectionServiceTests
     }
 
     [Fact]
+    public async Task Collection_WritesCollectionSamplesAndOutboxInOneUnitOfWork()
+    {
+        DataCollection? collection = null;
+        List<SampleSensor> samples = [];
+        var outboxIds = new List<Guid>();
+        var eventIds = new List<Guid>();
+        _collections.Setup(r => r.RegisterAsync(It.IsAny<DataCollection>()))
+            .Callback<DataCollection>(c => collection = c).ReturnsAsync(Guid.NewGuid());
+        _samples.Setup(r => r.RegisterManyAsync(It.IsAny<IEnumerable<SampleSensor>>()))
+            .Callback<IEnumerable<SampleSensor>>(s => samples = s.ToList()).Returns(Task.CompletedTask);
+        _outbox.Setup(o => o.RegisterAsync(It.IsAny<OutboxMessage>()))
+            .Callback<OutboxMessage>(m =>
+            {
+                outboxIds.Add(m.Id);
+                eventIds.Add(JsonDocument.Parse(m.Payload).RootElement.GetProperty("EventId").GetGuid());
+            })
+            .ReturnsAsync(Guid.NewGuid());
+
+        await ProcessAsync();
+
+        Assert.Equal(1, _unitOfWork.Executions);
+        Assert.NotNull(collection);
+        Assert.Equal(2, samples.Count);
+        Assert.All(samples, sample => Assert.Equal(collection.Id, sample.DataCollectionId));
+        Assert.Equal(eventIds, outboxIds);
+    }
+
+    [Fact]
+    public async Task RetriedCollection_ReusesTheCollectionAndSampleIds()
+    {
+        var collectionIds = new List<Guid>();
+        var sampleIds = new List<Guid>();
+        _collections.Setup(r => r.RegisterAsync(It.IsAny<DataCollection>()))
+            .Callback<DataCollection>(c => collectionIds.Add(c.Id)).ReturnsAsync(Guid.NewGuid());
+        _samples.Setup(r => r.RegisterManyAsync(It.IsAny<IEnumerable<SampleSensor>>()))
+            .Callback<IEnumerable<SampleSensor>>(s => sampleIds.AddRange(s.Select(sample => sample.Id)))
+            .Returns(Task.CompletedTask);
+
+        await ProcessAsync();
+        await ProcessAsync();
+
+        Assert.Equal(collectionIds[0], collectionIds[1]);
+        Assert.Equal(sampleIds[..2], sampleIds[2..]);
+        Assert.NotEqual(sampleIds[0], sampleIds[1]);
+    }
+
+    [Fact]
     public async Task DuplicateCollection_IsSkippedBeforeStoringAnything()
     {
         _deduplicator.Setup(d => d.TryBeginAsync(It.IsAny<string>(), It.IsAny<TimeSpan>())).ReturnsAsync(false);
@@ -86,6 +136,7 @@ public class SensorCollectionServiceTests
 
         _storage.VerifyNoOtherCalls();
         _outbox.VerifyNoOtherCalls();
+        Assert.Equal(0, _unitOfWork.Executions);
     }
 
     [Fact]

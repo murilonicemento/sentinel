@@ -8,7 +8,7 @@ public record CollectionStatisticsResponseDTO
     public int TotalEvents { get; set; }
 
     [JsonIgnore]
-    public List<ClimaticEventEnum> TotalByTypeRaw { get; set; }
+    public List<ClimaticEventEnum> TotalByTypeRaw { get; set; } = [];
 
     public Dictionary<string, int> TotalByType =>
         TotalByTypeRaw

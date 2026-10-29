@@ -14,16 +14,14 @@ public class SampleSensorRepository : ISampleSensorRepository
         _writeDbContext = writeDbContext;
     }
 
-    public async Task<Guid> RegisterAsync(SampleSensor sampleSensor)
+    public async Task RegisterManyAsync(IEnumerable<SampleSensor> sampleSensors)
     {
-        var query = @"INSERT INTO 
-                        sample_sensor 
-                            (id, data_collection_id, sensor_value, unit, latitude, longitude, recorded_at) 
-                        VALUES 
-                            (@Id, @DataCollectionId, @SensorValue, @Unit, @Latitude, @Longitude, @RecordedAt)";
-
-        await _writeDbContext.Connection.ExecuteAsync(query, sampleSensor);
-
-        return sampleSensor.Id;
+        var query = @"INSERT INTO
+                        sensor_sample
+                            (id, data_collection_id, sensor_value, unit, latitude, longitude, recorded_at)
+                        VALUES
+                            (@Id, @DataCollectionId, @SensorValue, @Unit, @Latitude, @Longitude, @RecordedAt)
+                        ON CONFLICT (id) DO NOTHING";
+        await _writeDbContext.Connection.ExecuteAsync(query, sampleSensors, _writeDbContext.Transaction);
     }
 }

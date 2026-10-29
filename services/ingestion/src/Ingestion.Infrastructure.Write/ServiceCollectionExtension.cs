@@ -4,12 +4,14 @@ using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Application.Interfaces.Providers;
 using Ingestion.Application.Interfaces.Publishers;
+using Ingestion.Application.Interfaces.Repositories;
 using Ingestion.Application.Interfaces.Services;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Infrastructure.Write.Cache.Deduplicators;
 using Ingestion.Infrastructure.Write.HostedServices;
 using Ingestion.Infrastructure.Write.HttpClients;
 using Ingestion.Infrastructure.Write.Messaging.Publishers;
+using Ingestion.Infrastructure.Write.Persistence;
 using Ingestion.Infrastructure.Write.Persistence.DbContext;
 using Ingestion.Infrastructure.Write.Persistence.Repositories;
 using Ingestion.Infrastructure.Write.Providers;
@@ -19,6 +21,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Minio;
+using Npgsql;
 using Polly;
 using Polly.Extensions.Http;
 using Polly.Retry;
@@ -33,7 +36,7 @@ public static class ServiceCollectionExtension
         IConfiguration configuration
     ) =>
         services
-            .AddSingleton<WriteDbContext>()
+            .AddWriteDatabase(configuration)
             .AddRepositories()
             .AddProviders(configuration)
             .AddPublishers(configuration)
@@ -42,6 +45,19 @@ public static class ServiceCollectionExtension
             .AddHttpClients(configuration);
 
 
+    /// <summary>One pooled data source for the process; each scope opens its own connection from it.</summary>
+    private static IServiceCollection AddWriteDatabase(this IServiceCollection services, IConfiguration configuration)
+    {
+        var connectionString = configuration.GetConnectionString("IngestionWriteDatabase");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException("Configuration 'ConnectionStrings:IngestionWriteDatabase' is required.");
+
+        return services
+            .AddSingleton(_ => NpgsqlDataSource.Create(connectionString))
+            .AddScoped<WriteDbContext>()
+            .AddScoped<IUnitOfWork, UnitOfWork>();
+    }
+
     private static IServiceCollection AddRepositories(this IServiceCollection services) =>
         services
             .AddScoped<ITenantRepository, TenantRepository>()
@@ -49,7 +65,7 @@ public static class ServiceCollectionExtension
             .AddScoped<IDataCollectionRepository, DataCollectionRepository>()
             .AddScoped<ISampleSensorRepository, SampleSensorRepository>()
             .AddScoped<IEventTypePermissionRepository, EventTypePermissionRepository>()
-            .AddSingleton<IOutboxRepository, OutboxRepository>();
+            .AddScoped<IOutboxRepository, OutboxRepository>();
 
     private static IServiceCollection AddProviders(
         this IServiceCollection services,
@@ -86,9 +102,11 @@ public static class ServiceCollectionExtension
 
     private static IServiceCollection AddEvents(this IServiceCollection services, IConfiguration configuration) =>
         services
-            .AddScoped<IConnectionMultiplexer>(sp =>
+            // One multiplexer per process: it is thread-safe and meant to be shared.
+            .AddSingleton<IConnectionMultiplexer>(sp =>
             {
-                var configurationOptions = ConfigurationOptions.Parse(configuration["ConnectionStrings:Redis"]!);
+                var configurationOptions = ConfigurationOptions.Parse(configuration["ConnectionStrings:Redis"]
+                    ?? throw new InvalidOperationException("Configuration 'ConnectionStrings:Redis' is required."));
                 configurationOptions.AbortOnConnectFail = false;
 
                 return ConnectionMultiplexer.Connect(configurationOptions);

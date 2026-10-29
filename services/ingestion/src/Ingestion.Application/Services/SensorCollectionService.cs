@@ -23,6 +23,8 @@ public class SensorCollectionService : ISensorCollectionService
 
     private readonly IDataSourceRepository _dataSourceRepository;
     private readonly IDataCollectionRepository _dataCollectionRepository;
+    private readonly ISampleSensorRepository _sampleSensorRepository;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IEventDeduplicator _eventDeduplicator;
     private readonly IObjectStorageProvider _minioProvider;
     private readonly IOutboxRepository _outboxRepository;
@@ -33,6 +35,8 @@ public class SensorCollectionService : ISensorCollectionService
     public SensorCollectionService(
         IDataSourceRepository dataSourceRepository,
         IDataCollectionRepository dataCollectionRepository,
+        ISampleSensorRepository sampleSensorRepository,
+        IUnitOfWork unitOfWork,
         IEventDeduplicator eventDeduplicator,
         IObjectStorageProvider minioProvider,
         IOutboxRepository outboxRepository,
@@ -42,6 +46,8 @@ public class SensorCollectionService : ISensorCollectionService
     {
         _dataSourceRepository = dataSourceRepository;
         _dataCollectionRepository = dataCollectionRepository;
+        _sampleSensorRepository = sampleSensorRepository;
+        _unitOfWork = unitOfWork;
         _eventDeduplicator = eventDeduplicator;
         _minioProvider = minioProvider;
         _outboxRepository = outboxRepository;
@@ -118,13 +124,20 @@ public class SensorCollectionService : ISensorCollectionService
     {
         var dataSourceId = dataSource.Id;
 
-        var collectionGuid = Guid.NewGuid();
+        // Every id below derives from the collection key, so a retry rewrites the same object and the inserts skip
+        // the rows a previous attempt already committed.
+        var collectionGuid = DeterministicEventId.For($"{dedupKey}/collection", 0);
         var objectName = $"raw/{collectionGuid}.json";
         var putResponse = await _minioProvider.UploadJsonAsync(objectName, payload);
 
         var dataCollection = new DataCollection(collectionGuid, dataSourceId, collectedAt,
             JsonSerializer.Serialize(putResponse), tenantId);
-        await _dataCollectionRepository.RegisterAsync(dataCollection);
+        var sampleSensors = samples
+            .Select((sample, index) => new SampleSensor(DeterministicEventId.For($"{dedupKey}/sample", index),
+                collectionGuid, sample.SensorValue, sample.Unit, sample.Latitude, sample.Longitude,
+                sample.RecordedAt))
+            .ToList();
+        var outboxMessages = new List<OutboxMessage>();
 
         for (var sampleIndex = 0; sampleIndex < samples.Count; sampleIndex++)
         {
@@ -162,9 +175,17 @@ public class SensorCollectionService : ISensorCollectionService
                     sample.Latitude, sample.Longitude, collectedAt),
                 cancellationToken);
 
-            var outbox = new OutboxMessage(Guid.NewGuid(), collectionGuid,
-                $"{domain.ToLower()}-event-detected", JsonSerializer.Serialize(evt));
-            await _outboxRepository.RegisterAsync(outbox);
+            outboxMessages.Add(new OutboxMessage(evt.EventId, collectionGuid,
+                $"{domain.ToLower()}-event-detected", JsonSerializer.Serialize(evt)));
         }
+
+        // Transactional outbox: the collection, its samples and the events to publish are committed together.
+        await _unitOfWork.ExecuteAsync(async _ =>
+        {
+            await _dataCollectionRepository.RegisterAsync(dataCollection);
+            await _sampleSensorRepository.RegisterManyAsync(sampleSensors);
+            foreach (var outboxMessage in outboxMessages)
+                await _outboxRepository.RegisterAsync(outboxMessage);
+        }, cancellationToken);
     }
 }
