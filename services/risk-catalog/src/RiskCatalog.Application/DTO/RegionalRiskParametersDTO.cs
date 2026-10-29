@@ -6,7 +6,7 @@ public record RegionalRiskParametersDTO
 {
     [Required] public Guid RegionId { get; set; }
     [Required] public double AdjustmentFactor { get; set; }
-    [Required] public string Description { get; set; }
+    [Required] public string Description { get; set; } = string.Empty;
     public double? CenterLatitude { get; set; }
     public double? CenterLongitude { get; set; }
     public PolygonDTO? RegionBounds { get; set; }

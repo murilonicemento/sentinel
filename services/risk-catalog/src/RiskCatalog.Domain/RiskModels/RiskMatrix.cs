@@ -11,7 +11,8 @@ public class RiskMatrix
     public SeverityLevelEnum SeverityLevel { get; set; }
     public RiskLevelEnum RiskLevel { get; set; }
     public int Version { get; set; }
-    public virtual EventType EventType { get; set; }
+    // Navigations are filled by EF Core when loaded (its documented `= null!` pattern for required ones).
+    public virtual EventType EventType { get; set; } = null!;
 
     public RiskMatrix()
     {

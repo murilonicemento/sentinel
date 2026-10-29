@@ -447,9 +447,8 @@ public class RiskModelService : IRiskModelService
 
         if (isCreated)
         {
-            var regionalParameterCreated = await _regionalParameterRepository.GetByAdjustmentFactorAsync(
-                regionalRiskParametersDto.AdjustmentFactor,
-                cancellationToken);
+            // EF assigns the key on insert; reading the row back by adjustment factor could return another region.
+            var regionalParameterCreated = regionalParameter;
             var cacheKey = $"{RegionalParameterCachePrefix}:{regionalParameterCreated.Id}";
             await _cacheService.RemoveAsync(cacheKey, cancellationToken);
 

@@ -756,6 +756,26 @@ public class RiskModelServiceTests
     }
 
     [Fact]
+    public async Task CreateRegionalRiskParametersAsync_InvalidatesTheCacheOfTheInsertedRegion()
+    {
+        var insertedId = Guid.NewGuid();
+        _regionalParameterRepositoryMock
+            .SetupSequence(x => x.GetByAdjustmentFactorAsync(1.2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((RegionalParameter?)null)
+            .ReturnsAsync(new RegionalParameter(Guid.NewGuid(), 1.2, "Another region with the same factor"));
+        _regionalParameterRepositoryMock
+            .Setup(x => x.AddRegionalParameterAsync(It.IsAny<RegionalParameter>(), It.IsAny<CancellationToken>()))
+            .Callback<RegionalParameter, CancellationToken>((parameter, _) => parameter.Id = insertedId)
+            .ReturnsAsync(true);
+
+        await _riskModelService.CreateRegionalRiskParametersAsync(
+            new CreateRegionalRiskParameterDTO { AdjustmentFactor = 1.2, Description = "Coast" });
+
+        _cacheServiceMock.Verify(x => x.RemoveAsync($"regional-parameter:{insertedId}", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task CreateRegionalRiskParametersAsync_WhenRegionalParameterAlreadyExists_ShouldThrowArgumentException()
     {
         var regionalParameterDto = new CreateRegionalRiskParameterDTO

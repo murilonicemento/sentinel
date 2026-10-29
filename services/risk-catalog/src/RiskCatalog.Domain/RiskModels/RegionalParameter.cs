@@ -7,7 +7,7 @@ public class RegionalParameter
     [Key]
     public Guid Id { get; set; }
     public double AdjustmentFactor { get; set; }
-    public string Description { get; set; }
+    public string Description { get; set; } = string.Empty;
     public double? CenterLatitude { get; set; }
     public double? CenterLongitude { get; set; }
     public string? RegionBoundsJson { get; set; } // Store as JSON string for PolygonDTO
