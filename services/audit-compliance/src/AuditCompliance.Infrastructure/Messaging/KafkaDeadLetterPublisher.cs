@@ -41,6 +41,9 @@ public sealed class KafkaDeadLetterPublisher : IDisposable
 
         headers.Add("x-error-code", System.Text.Encoding.UTF8.GetBytes(envelope.ErrorCode));
 
+        // The original headers are copied above; a new span replaces their traceparent as a child of the failed
+        // processing, so the dead letter shows up in the same trace.
+        using var activity = KafkaTracing.StartPublish(_topic, headers);
         await _producer.ProduceAsync(_topic, new Message<string?, string>
         {
             Key = envelope.Key,

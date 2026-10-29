@@ -14,7 +14,12 @@ namespace AuditCompliance.IntegrationTests.Support;
 /// </summary>
 public class AuditComplianceApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly MongoDbContainer _mongo = new MongoDbBuilder().WithImage("mongo:7").Build();
+    // Sem credenciais: assim a imagem do mongo não sobe o servidor temporário de inicialização, cuja porta às vezes
+    // ainda estava ocupada quando o mongod definitivo subia sob a carga da solution inteira (AUD-01: código 48,
+    // "Address already in use").
+    private readonly MongoDbContainer _mongo = new MongoDbBuilder("mongo:7")
+        .WithUsername(string.Empty).WithPassword(string.Empty)
+        .Build();
 
     public string DatabaseName { get; } = $"audit_tests_{Guid.NewGuid():N}";
 

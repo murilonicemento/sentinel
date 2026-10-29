@@ -13,7 +13,7 @@ public sealed class KafkaPipelineFactory : AuditComplianceApiFactory
     public const string ReplayTopic = "audit-events-replay";
     public const string DeadLetterTopic = "audit-events-dlq";
 
-    private readonly KafkaContainer _kafka = new KafkaBuilder().WithImage("confluentinc/cp-kafka:7.6.0").Build();
+    private readonly KafkaContainer _kafka = new KafkaBuilder("confluentinc/cp-kafka:7.6.0").Build();
 
     public string BootstrapServers => _kafka.GetBootstrapAddress();
 
