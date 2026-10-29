@@ -49,15 +49,26 @@ public sealed class ChannelsApiFactory : WebApplicationFactory<Program>
 
 public sealed class FakeDispatchService : INotificationDispatchService
 {
+    private readonly List<string> _dispatched = [];
+
     public bool Succeeds { get; set; } = true;
 
-    public Task<DeliveryResultDTO> DispatchAsync(NotificationEvent notification, CancellationToken cancellationToken) =>
-        Task.FromResult(new DeliveryResultDTO
+    /// <summary>Event ids of every notification that reached the dispatch service.</summary>
+    public IReadOnlyList<string> Dispatched
+    {
+        get { lock (_dispatched) return [.. _dispatched]; }
+    }
+
+    public Task<DeliveryResultDTO> DispatchAsync(NotificationEvent notification, CancellationToken cancellationToken)
+    {
+        lock (_dispatched) _dispatched.Add(notification.EventId);
+        return Task.FromResult(new DeliveryResultDTO
         {
             Success = Succeeds,
             ProviderName = Succeeds ? "sms-provider" : null,
             Error = Succeeds ? null : "provider timeout at 10.0.0.12"
         });
+    }
 }
 
 public sealed class InMemoryDeliveryRepository : IDeliveryRepository
