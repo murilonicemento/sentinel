@@ -4,6 +4,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using TenantsBilling.Infrastructure.Messaging;
 using TenantsBilling.Infrastructure.Messaging.Reliability;
 
 namespace TenantsBilling.Infrastructure.HostedServices;
@@ -85,7 +86,7 @@ public sealed class TenantDeadLetterConsumerHostedService : BackgroundService
             replayRequestedBy = deadLetter.ReplayRequestedBy ?? "dlq-consumer"
         });
 
-        var delivery = await _replayProducer!.ProduceAsync(_replayTopic, new Message<Null, string>
+        var message = new Message<Null, string>
         {
             Value = replayPayload,
             Headers = new Headers
@@ -94,7 +95,9 @@ public sealed class TenantDeadLetterConsumerHostedService : BackgroundService
                 { "replay-requested-at", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o")) },
                 { "replay-requested-by", Encoding.UTF8.GetBytes("dlq-consumer") }
             }
-        }, cancellationToken);
+        };
+        using var activity = KafkaTracing.StartPublish(_replayTopic, message.Headers);
+        var delivery = await _replayProducer!.ProduceAsync(_replayTopic, message, cancellationToken);
 
         _logger.LogInformation("Scheduled replay for dead-letter payload from {SourceTopic} to {ReplayTopic} at offset {Offset}",
             deadLetter.SourceTopic, _replayTopic, delivery.Offset.Value);
