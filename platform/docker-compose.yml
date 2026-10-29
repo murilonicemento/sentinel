@@ -393,7 +393,10 @@ services:
     networks:
       - sentinel-network
   minio:
-    image: minio/minio:RELEASE.2025-12-11T05-00-58Z
+    # As imagens públicas do MinIO deixaram de ser publicadas; esta é a build da Chainguard a partir do fonte
+    # (MinIO RELEASE.2026-10-23, AGPL), fixada por digest porque o plano gratuito só publica `latest`. Roda como
+    # uid 65532: um volume minio-data criado pela imagem antiga (root) precisa de chown ou ser recriado.
+    image: cgr.dev/chainguard/minio@sha256:e70b2b1e74d79457f808710483bd726ff364529ca30736eaa15a6ab547d3a5a7
     container_name: minio
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}

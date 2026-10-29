@@ -1,9 +1,10 @@
 ﻿-- INGESTION SERVICE DATABASE SCHEMA
+-- Mantido à mão (o ingestion usa Dapper, sem migrations EF). Idempotente: rodar a seção num banco existente aplica só
+-- o que falta, como a coluna outbox.trace_parent (X-19).
 
-\c
-ingestion;
+\c ingestion;
 
-CREATE TABLE tenant
+CREATE TABLE IF NOT EXISTS tenant
 (
     id         uuid PRIMARY KEY      DEFAULT gen_random_uuid(),
     name       varchar(100) NOT NULL,
@@ -11,7 +12,7 @@ CREATE TABLE tenant
     created_at timestamptz  NOT NULL DEFAULT now()
 );
 
-CREATE TABLE data_source
+CREATE TABLE IF NOT EXISTS data_source
 (
     id                   uuid PRIMARY KEY,
     name                 varchar(100) NOT NULL,
@@ -23,7 +24,7 @@ CREATE TABLE data_source
     created_at           timestamptz  not null default now()
 );
 
-CREATE TABLE event_type_permission
+CREATE TABLE IF NOT EXISTS event_type_permission
 (
     id             uuid PRIMARY KEY,
     data_source_id uuid        NOT NULL REFERENCES data_source (id),
@@ -32,17 +33,17 @@ CREATE TABLE event_type_permission
     UNIQUE (data_source_id, event_domain, event_type)
 );
 
-CREATE TABLE data_collection
+CREATE TABLE IF NOT EXISTS data_collection
 (
     id             uuid PRIMARY KEY,
     data_source_id uuid        NOT NULL REFERENCES data_source (id),
     collected_at   timestamptz NOT NULL,
     payload        jsonb       NOT NULL,
     tenant_id      uuid NULL,
-    created_at     timestamptz not null default now(),
+    created_at     timestamptz not null default now()
 );
 
-CREATE TABLE sensor_sample
+CREATE TABLE IF NOT EXISTS sensor_sample
 (
     id                 uuid PRIMARY KEY,
     data_collection_id uuid             NOT NULL REFERENCES data_collection (id),
@@ -53,7 +54,7 @@ CREATE TABLE sensor_sample
     recorded_at        timestamptz      NOT NULL
 );
 
-CREATE TABLE outbox
+CREATE TABLE IF NOT EXISTS outbox
 (
     id           uuid PRIMARY KEY,
     aggregate_id uuid NULL,
@@ -63,7 +64,10 @@ CREATE TABLE outbox
     processed_at timestamptz NULL
 );
 
-CREATE INDEX idx_outbox_processed ON outbox (processed) WHERE processed = false;
+-- W3C traceparent da requisição que gravou a linha (55 caracteres na versão 00); nulo em linhas anteriores.
+ALTER TABLE outbox ADD COLUMN IF NOT EXISTS trace_parent varchar(55) NULL;
+
+CREATE INDEX IF NOT EXISTS idx_outbox_processed ON outbox (processed) WHERE processed = false;
 
 -- RISK CATALOG SERVICE DATABASE SCHEMA
 
