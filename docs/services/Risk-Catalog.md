@@ -112,6 +112,8 @@ Este contexto responde:
 | **CurvaIDF**          | Modela comportamento pluviométrico                         |
 | **ParametroRegional** | Ajusta critérios conforme localidade                       |
 
+**Identidade da região (RC-14, ADR-0005):** cada parâmetro regional tem um `regionCode` único, sem diferenciar maiúsculas, com 1 a 64 letras, dígitos, `.`, `_`, `:` ou `-` (ex.: código IBGE `3550308` ou `sp-capital`). Duas regiões são a mesma quando o código coincide; o fator de ajuste é só um valor e pode se repetir entre regiões. O código é obrigatório no v1; a rota legada gera `legacy-<id>` quando ele não é informado.
+
 ---
 
 ### **Características**
