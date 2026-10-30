@@ -36,9 +36,11 @@ public sealed class ReliableMessageProcessor
             try
             {
                 var outcome = await handle(cancellationToken);
-                if (!outcome.IsRejected) return true;
+                if (outcome.IsRejected)
+                    return await TryDeadLetterAsync(result, outcome.ErrorCode!, outcome.ErrorReason!, cancellationToken);
 
-                return await TryDeadLetterAsync(result, outcome.ErrorCode!, outcome.ErrorReason!, cancellationToken);
+                MessagingMetrics.Processed(result.Topic);
+                return true;
             }
             catch (Exception exception) when (exception is not OperationCanceledException ||
                                               !cancellationToken.IsCancellationRequested)
@@ -58,10 +60,12 @@ public sealed class ReliableMessageProcessor
                     _logger.LogError(exception,
                         "{Topic}[{Partition}]@{Offset} failed after {Attempts} attempts; consumption paused",
                         result.Topic, result.Partition.Value, result.Offset.Value, attempt);
+                    MessagingMetrics.NotDurable(result.Topic);
                     return false;
                 }
 
                 var delay = Backoff(attempt);
+                MessagingMetrics.Retried(result.Topic);
                 _logger.LogWarning(exception,
                     "Transient failure processing {Topic}[{Partition}]@{Offset}, attempt {Attempt}/{MaxAttempts}; retrying in {DelayMs} ms",
                     result.Topic, result.Partition.Value, result.Offset.Value, attempt,
@@ -92,6 +96,7 @@ public sealed class ReliableMessageProcessor
 
             _logger.LogWarning("{Topic}[{Partition}]@{Offset} sent to dead-letter with code {ErrorCode}",
                 result.Topic, result.Partition.Value, result.Offset.Value, errorCode);
+            MessagingMetrics.DeadLettered(result.Topic);
             return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException ||
@@ -100,6 +105,7 @@ public sealed class ReliableMessageProcessor
             // Not committing keeps the message; it is read again after the pause.
             _logger.LogError(exception, "Failed to publish {Topic}[{Partition}]@{Offset} to the dead-letter topic",
                 result.Topic, result.Partition.Value, result.Offset.Value);
+            MessagingMetrics.NotDurable(result.Topic);
             return false;
         }
     }

@@ -19,7 +19,7 @@ public static class ObservabilityExtensions
     /// <summary>Health checks with this tag decide readiness; liveness never checks dependencies.</summary>
     public const string ReadinessTag = "ready";
 
-    /// <summary>Activity source of the Kafka producers and consumers.</summary>
+    /// <summary>Activity source and meter of the Kafka producers and consumers.</summary>
     public const string MessagingActivitySource = "Sentinel.Messaging";
 
     /// <summary>
@@ -63,6 +63,7 @@ public static class ObservabilityExtensions
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
+                .AddMeter(MessagingActivitySource)
                 .AddMeter(meters ?? [])
                 .AddPrometheusExporter());
 

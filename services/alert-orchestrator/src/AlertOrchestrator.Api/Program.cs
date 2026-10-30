@@ -60,7 +60,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 });
 builder.Services.AddMediatR(cfg => { cfg.RegisterServicesFromAssembly(typeof(RiskUpdatedEvent).Assembly); });
 
-builder.AddSentinelObservability("alert-orchestrator", activitySources: ["AlertOrchestrator"]);
+builder.AddSentinelObservability("alert-orchestrator", activitySources: ["AlertOrchestrator"], meters: ["AlertOrchestrator"]);
 
 var kafkaConfig = builder.Configuration.GetSection("Kafka");
 var kafkaTopicsConfig = kafkaConfig.GetSection("Topics");

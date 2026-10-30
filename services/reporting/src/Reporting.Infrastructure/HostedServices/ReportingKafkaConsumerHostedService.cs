@@ -96,6 +96,7 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                             0,
                             stoppingToken);
                         consumer.Commit(consumeResult);
+                        MessagingMetrics.DeadLettered(consumeResult.Topic);
                         continue;
                     }
 
@@ -117,6 +118,7 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                         stoppingToken))
                     {
                         consumer.Commit(consumeResult);
+                        MessagingMetrics.Processed(consumeResult.Topic);
                     }
                     else
                     {
@@ -130,6 +132,7 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                             maxAttempts,
                             stoppingToken);
                         consumer.Commit(consumeResult);
+                        MessagingMetrics.DeadLettered(consumeResult.Topic);
                     }
                 }
                 catch (OperationCanceledException)
@@ -143,6 +146,7 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                     // after a pause instead.
                     if (consumeResult is not null)
                     {
+                        MessagingMetrics.NotDurable(consumeResult.Topic);
                         consumer.Seek(consumeResult.TopicPartitionOffset);
                         await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
                     }
