@@ -69,6 +69,10 @@ ALTER TABLE outbox ADD COLUMN IF NOT EXISTS trace_parent varchar(55) NULL;
 
 CREATE INDEX IF NOT EXISTS idx_outbox_processed ON outbox (processed) WHERE processed = false;
 
+-- Últimas coletas de uma fonte de dados (regra de frequência, ING-23).
+CREATE INDEX IF NOT EXISTS idx_data_collection_source_collected_at
+    ON data_collection (data_source_id, collected_at DESC);
+
 -- Fontes de fogo cadastradas antes da correção do tipo de medição foram gravadas como "WildFire" (o domínio aceita
 -- os dois valores; esta normalização é idempotente).
 UPDATE data_source SET measurement_type = 'Fire' WHERE measurement_type = 'WildFire';

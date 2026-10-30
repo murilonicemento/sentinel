@@ -8,6 +8,12 @@ namespace Ingestion.Infrastructure.Write.Persistence.Repositories;
 
 public class DataSourceRepository : IDataSourceRepository
 {
+    /// <summary>
+    /// Only the most recent collections are loaded: the frequency rule reads the last one, and loading every collection
+    /// made each write grow with the data source's history (ING-23).
+    /// </summary>
+    public const int RecentCollectionsLimit = 2;
+
     private readonly WriteDbContext _writeDbContext;
 
     public DataSourceRepository(WriteDbContext writeDbContext)
@@ -85,10 +91,13 @@ public class DataSourceRepository : IDataSourceRepository
     private IEnumerable<DataCollection> GetDataCollectionByDataSourceId(Guid dataSourceId)
     {
         var query =
-            @"SELECT id, data_source_id, collected_at, payload, tenant_id, created_at FROM data_collection WHERE data_source_id = @DataSourceId";
+            @"SELECT id, data_source_id, collected_at, payload, tenant_id, created_at FROM data_collection
+              WHERE data_source_id = @DataSourceId
+              ORDER BY collected_at DESC, id DESC
+              LIMIT @Limit";
 
-        return _writeDbContext.Connection.Query<DataCollection>(query, new { DataSourceId = dataSourceId },
-            _writeDbContext.Transaction);
+        return _writeDbContext.Connection.Query<DataCollection>(query,
+            new { DataSourceId = dataSourceId, Limit = RecentCollectionsLimit }, _writeDbContext.Transaction);
     }
 
     private IEnumerable<EventTypePermission> GetEventTypePermissionsByDataSourceId(Guid dataSourceId)

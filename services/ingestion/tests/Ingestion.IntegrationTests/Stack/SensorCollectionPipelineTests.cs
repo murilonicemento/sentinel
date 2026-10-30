@@ -4,6 +4,9 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Confluent.Kafka;
+using Ingestion.Domain.Interfaces.Repositories;
+using Ingestion.Infrastructure.Write.Persistence.Repositories;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Ingestion.IntegrationTests.Stack;
@@ -86,6 +89,30 @@ public class SensorCollectionPipelineTests(IngestionStackFactory stack)
             dataSourceId));
     }
 
+    /// <summary>ING-23: the data source carries only its latest collections, however long its history is.</summary>
+    [Fact]
+    public async Task DataSource_LoadsOnlyTheMostRecentCollections()
+    {
+        var dataSourceId = await CreateRainDataSourceAsync();
+        var client = stack.ClientFor("Ingestion.Write", IngestionStackFactory.TenantA);
+        var now = CollectedAt();
+        // Whole seconds, so the comparison does not depend on Postgres' microsecond precision.
+        var latest = now.AddTicks(-(now.Ticks % TimeSpan.TicksPerSecond));
+        foreach (var hoursAgo in new[] { 8, 6, 4, 2, 0 })
+            (await client.PostAsJsonAsync("/api/ingestion/sensor-collection",
+                Collection(dataSourceId, latest.AddHours(-hoursAgo)))).EnsureSuccessStatusCode();
+
+        await using var scope = stack.Services.CreateAsyncScope();
+        var dataSource = scope.ServiceProvider.GetRequiredService<IDataSourceRepository>()
+            .GetByIdAndTenantId(dataSourceId, IngestionStackFactory.TenantA);
+
+        Assert.Equal(5L, await stack.ScalarAsync<long>(
+            "SELECT count(*) FROM data_collection WHERE data_source_id = @p", dataSourceId));
+        Assert.Equal([latest, latest.AddHours(-2)],
+            dataSource!.DataCollections.Select(c => c.CollectedAt.ToUniversalTime()));
+        Assert.Equal(DataSourceRepository.RecentCollectionsLimit, dataSource.DataCollections.Count());
+    }
+
     [Fact]
     public async Task Relay_PublishesEachEventOnceInTheRequestTraceAndMarksItProcessed()
     {
@@ -124,8 +151,13 @@ public class SensorCollectionPipelineTests(IngestionStackFactory stack)
             Assert.True(message.Message.Headers.TryGetLastBytes("traceparent", out var header));
             Assert.Equal(traceId, ActivityContext.Parse(Encoding.UTF8.GetString(header), null).TraceId);
         });
-        Assert.Equal(0L, await stack.ScalarAsync<long>(
-            "SELECT count(*) FROM outbox WHERE aggregate_id = @p AND NOT processed", collectionId));
+        // The relay marks the rows after publishing, so the flag may land a moment after the messages.
+        long pending;
+        while ((pending = await stack.ScalarAsync<long>(
+                   "SELECT count(*) FROM outbox WHERE aggregate_id = @p AND NOT processed", collectionId)) > 0 &&
+               deadline.Elapsed < RelayTimeout)
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+        Assert.Equal(0L, pending);
 
         // A later relay pass must not publish the processed rows again.
         await Task.Delay(TimeSpan.FromSeconds(3));
