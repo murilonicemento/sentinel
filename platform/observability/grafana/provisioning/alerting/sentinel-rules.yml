@@ -1,0 +1,314 @@
+# Regras de alerta da plataforma (ADR-0006), no formato de provisionamento do Grafana unified alerting.
+# Os limiares são valores iniciais: calibre-os com a baseline de cada ambiente (observability.md).
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: availability
+    folder: Sentinel
+    interval: 1m
+    rules:
+      - uid: sentinel-service-down
+        title: "Serviço fora do ar"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'up{job="sentinel-services"}'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        noDataState: Alerting
+        execErrState: Error
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.service }} não responde ao Prometheus"
+          description: "O /metrics do serviço não é raspado há 2 minutos. Verifique o contêiner e /health/live."
+      - uid: sentinel-http-errors
+        title: "Taxa de erro 5xx alta"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (service) (rate(http_server_request_duration_seconds_count{http_route!~"/health.*|/metrics",http_response_status_code=~"5.."}[5m])) / sum by (service) (rate(http_server_request_duration_seconds_count{http_route!~"/health.*|/metrics"}[5m]))'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0.05] }
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.service }}: mais de 5% das respostas são 5xx"
+          description: "Respostas 5xx acima de 5% por 10 minutos. Procure o traceId das respostas no Loki."
+      - uid: sentinel-http-latency
+        title: "Latência p95 alta"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'histogram_quantile(0.95, sum by (service, le) (rate(http_server_request_duration_seconds_bucket{http_route!~"/health.*|/metrics"}[5m])))'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [2] }
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.service }}: p95 acima de 2 s"
+          description: "Latência p95 das rotas de API acima de 2 s por 10 minutos."
+  - orgId: 1
+    name: messaging
+    folder: Sentinel
+    interval: 1m
+    rules:
+      - uid: sentinel-dead-letters
+        title: "Mensagens enviadas ao DLQ"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (service, topic) (increase(sentinel_messages_handled_total{outcome="dead_lettered"}[10m]))'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.service }}: mensagens de {{ $labels.topic }} foram para o DLQ"
+          description: "Mensagens rejeitadas ou com erro permanente. Inspecione o tópico de dead-letter do serviço (ADR-0003)."
+      - uid: sentinel-consumer-paused
+        title: "Consumidor pausado"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (service, topic) (increase(sentinel_messages_handled_total{outcome="not_durable"}[10m]))'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.service }}: consumo de {{ $labels.topic }} parado"
+          description: "Retentativas esgotadas ou DLQ indisponível por 10 minutos: o consumidor volta ao offset e pausa. Uma dependência do serviço está fora do ar."
+      - uid: sentinel-audit-dead-letters
+        title: "audit-compliance: mensagens no DLQ"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'sum(increase(audit_events_dead_lettered_total[10m]))'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels: { severity: warning }
+        annotations:
+          summary: "audit-compliance enviou eventos para audit-events-dlq"
+          description: "Eventos de auditoria inválidos ou com falha permanente."
+  - orgId: 1
+    name: ingestion
+    folder: Sentinel
+    interval: 1m
+    rules:
+      - uid: sentinel-outbox-backlog
+        title: "Outbox do ingestion acumulando"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'max(ingestion_outbox_pending)'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [100] }
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Mais de 100 eventos esperando publicação no Kafka"
+          description: "O relay do outbox não está acompanhando a ingestão por 15 minutos. Verifique o Kafka e os logs do ingestion."
+      - uid: sentinel-polling-failures
+        title: "Polling com falhas"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (source) (increase(ingestion_polling_requests_total{result="failure"}[1h]))'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [3] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels: { severity: warning }
+        annotations:
+          summary: "Polling de {{ $labels.source }} falhou mais de 3 vezes em 1 h"
+          description: "O provedor está indisponível, a chave expirou ou a cota acabou."
+      - uid: sentinel-polling-rejected
+        title: "Leituras de polling rejeitadas"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (source) (increase(ingestion_polling_readings_total{result="rejected"}[1h]))'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels: { severity: warning }
+        annotations:
+          summary: "Leituras de {{ $labels.source }} rejeitadas pela fonte de dados"
+          description: "A assinatura aponta para uma fonte de dados incompatível (tipo de medição, unidade ou permissão de evento)."
+  - orgId: 1
+    name: delivery
+    folder: Sentinel
+    interval: 1m
+    rules:
+      - uid: sentinel-notification-failures
+        title: "Falhas de entrega de notificações"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'sum(rate(channels_service_notifications_total{status!="success"}[15m])) / sum(rate(channels_service_notifications_total[15m]))'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0.2] }
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels: { severity: critical }
+        annotations:
+          summary: "Mais de 20% das notificações falharam"
+          description: "Entregas falhando por 15 minutos. Verifique os provedores (Twilio, SendGrid) e o DLQ notification-events-dlq."

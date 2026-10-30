@@ -628,6 +628,8 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      # Destino dos alertas (ADR-0006); sem valor, as notificações falham e os alertas ficam só no Grafana.
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-http://alert-receiver.invalid/sentinel}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
