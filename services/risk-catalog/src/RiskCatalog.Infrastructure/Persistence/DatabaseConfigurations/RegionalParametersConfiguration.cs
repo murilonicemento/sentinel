@@ -14,6 +14,11 @@ public class RegionalParametersConfiguration : IEntityTypeConfiguration<Regional
             .IsRequired()
             .HasColumnType("uuid")
             .HasColumnName("id");
+        builder.Property(rp => rp.RegionCode)
+            .IsRequired()
+            .HasColumnType($"varchar({Domain.RiskModels.RegionCode.MaxLength})")
+            .HasColumnName("region_code");
+        builder.HasIndex(rp => rp.RegionCode).IsUnique();
         builder.Property(rp => rp.AdjustmentFactor)
             .IsRequired()
             .HasColumnType("double precision")

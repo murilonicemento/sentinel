@@ -22,12 +22,12 @@ public class RegionalParameterRepository : IRegionalParameterRepository
                 cancellationToken: cancellationToken);
     }
 
-    public async Task<RegionalParameter?> GetByAdjustmentFactorAsync(
-        double adjustmentFactor,
+    public async Task<RegionalParameter?> GetByRegionCodeAsync(
+        string regionCode,
         CancellationToken cancellationToken = default)
     {
         return await _dbContext.RegionalParameters.FirstOrDefaultAsync(regionalParameter =>
-            regionalParameter.AdjustmentFactor == adjustmentFactor, cancellationToken);
+            regionalParameter.RegionCode == regionCode, cancellationToken);
     }
 
     public async Task<bool> AddRegionalParameterAsync(

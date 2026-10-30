@@ -233,7 +233,15 @@ namespace RiskCatalog.Infrastructure.Persistence.Migrations
                     b.Property<string>("RegionBoundsJson")
                         .HasColumnType("text");
 
+                    b.Property<string>("RegionCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("region_code");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("RegionCode")
+                        .IsUnique();
 
                     b.ToTable("regional_parameter", (string)null);
                 });

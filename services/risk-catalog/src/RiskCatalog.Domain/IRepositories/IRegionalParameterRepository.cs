@@ -8,8 +8,9 @@ public interface IRegionalParameterRepository
         Guid regionId,
         CancellationToken cancellationToken = default);
 
-    public Task<RegionalParameter?> GetByAdjustmentFactorAsync(
-        double adjustmentFactor,
+    /// <summary>Region with the normalized code (RC-14).</summary>
+    public Task<RegionalParameter?> GetByRegionCodeAsync(
+        string regionCode,
         CancellationToken cancellationToken = default);
 
     public Task<bool> AddRegionalParameterAsync(

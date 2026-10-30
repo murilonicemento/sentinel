@@ -6,6 +6,10 @@ public class RegionalParameter
 {
     [Key]
     public Guid Id { get; set; }
+
+    /// <summary>Normalized <see cref="RiskModels.RegionCode"/>, unique across regional parameters.</summary>
+    public string RegionCode { get; set; } = string.Empty;
+
     public double AdjustmentFactor { get; set; }
     public string Description { get; set; } = string.Empty;
     public double? CenterLatitude { get; set; }

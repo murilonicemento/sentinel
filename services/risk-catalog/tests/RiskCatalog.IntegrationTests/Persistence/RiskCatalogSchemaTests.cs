@@ -85,7 +85,7 @@ public class RiskCatalogSchemaTests : IClassFixture<RiskCatalogPostgresFixture>
         var id = Guid.NewGuid();
         await using (var context = _fixture.CreateContext())
             Assert.True(await new RegionalParameterRepository(context).AddRegionalParameterAsync(
-                new RegionalParameter(id, 1.2, "Coast", -23.5, -46.6, null, 15)));
+                new RegionalParameter(id, 1.2, "Coast", -23.5, -46.6, null, 15) { RegionCode = $"coast-{id:N}" }));
 
         await using (var context = _fixture.CreateContext())
         {
@@ -130,6 +130,21 @@ public class RiskCatalogSchemaTests : IClassFixture<RiskCatalogPostgresFixture>
         Assert.Equal(("High", "Critical"), (entry.SeverityLevel, entry.RiskLevel));
     }
 
+    /// <summary>RC-14: the unique index rejects a second region with the same code even if a writer skips the service.</summary>
+    [Fact]
+    public async Task RegionCode_IsUniqueInTheSchema()
+    {
+        var code = $"unique-{Guid.NewGuid():N}";
+        await using (var context = _fixture.CreateContext())
+            await new RegionalParameterRepository(context).AddRegionalParameterAsync(
+                new RegionalParameter(Guid.NewGuid(), 1.1, "First", null, null, null, null) { RegionCode = code });
+
+        await using var second = _fixture.CreateContext();
+        await Assert.ThrowsAsync<DbUpdateException>(() => new RegionalParameterRepository(second)
+            .AddRegionalParameterAsync(new RegionalParameter(Guid.NewGuid(), 2.2, "Second", null, null, null, null)
+            { RegionCode = code }));
+    }
+
     [Fact]
     public async Task RegionalListing_IsPagedWithTheBoundsParsed()
     {
@@ -137,7 +152,8 @@ public class RiskCatalogSchemaTests : IClassFixture<RiskCatalogPostgresFixture>
             await new RegionalParameterRepository(context).AddRegionalParameterAsync(new RegionalParameter(
                 Guid.NewGuid(), 1.5, "Polygon", null, null,
                 "{\"Coordinates\":[{\"Latitude\":-23,\"Longitude\":-47},{\"Latitude\":-23,\"Longitude\":-46},{\"Latitude\":-24,\"Longitude\":-46}]}",
-                null));
+                null)
+            { RegionCode = $"polygon-{Guid.NewGuid():N}" });
 
         await using var read = _fixture.CreateContext();
         var page = await new CatalogListingService(new RegionalParameterRepository(read),

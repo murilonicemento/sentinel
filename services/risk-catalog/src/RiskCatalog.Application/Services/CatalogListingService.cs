@@ -29,6 +29,7 @@ public sealed class CatalogListingService
         return Page(items.Select(r => new RegionalRiskParametersDTO
         {
             RegionId = r.Id,
+            RegionCode = r.RegionCode,
             AdjustmentFactor = r.AdjustmentFactor,
             Description = r.Description,
             CenterLatitude = r.CenterLatitude,

@@ -108,6 +108,13 @@ public class RiskModelV1Controller : ControllerBase
     public async Task<IActionResult> CreateRegionalParameters([FromBody] CreateRegionalRiskParameterDTO request,
         CancellationToken cancellationToken)
     {
+        // RC-14: v1 requires the region's identity; only the legacy route generates one.
+        if (string.IsNullOrWhiteSpace(request.RegionCode))
+            return Invalid(HttpContext, new Dictionary<string, string[]>
+            {
+                ["regionCode"] = ["The regionCode field is required."]
+            });
+
         return await _riskModelService.CreateRegionalRiskParametersAsync(request, cancellationToken)
             ? StatusCode(StatusCodes.Status201Created,
                 Envelope(StatusCodes.Status201Created, new CreatedResourceDTO(request.Description)))

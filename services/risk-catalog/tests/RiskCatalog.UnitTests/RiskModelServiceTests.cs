@@ -720,90 +720,101 @@ public class RiskModelServiceTests
     #region CreateRegionalRiskParametersAsync Tests
 
     [Fact]
-    public async Task CreateRegionalRiskParametersAsync_WhenValidData_ShouldCreateRegionalParameter()
+    public async Task CreateRegionalRiskParametersAsync_StoresTheNormalizedRegionCode()
     {
-        var regionalParameterDto = new CreateRegionalRiskParameterDTO
-        {
-            AdjustmentFactor = 1.5,
-            Description = "Test Region"
-        };
-
-        var createdRegionId = Guid.NewGuid();
-
+        RegionalParameter? inserted = null;
         _regionalParameterRepositoryMock
-            .SetupSequence(x => x.GetByAdjustmentFactorAsync(
-                regionalParameterDto.AdjustmentFactor,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((RegionalParameter?)null)
-            .ReturnsAsync(new RegionalParameter(createdRegionId, regionalParameterDto.AdjustmentFactor, regionalParameterDto.Description));
-
-        _regionalParameterRepositoryMock
-            .Setup(x => x.AddRegionalParameterAsync(
-                It.IsAny<RegionalParameter>(),
-                It.IsAny<CancellationToken>()))
+            .Setup(x => x.AddRegionalParameterAsync(It.IsAny<RegionalParameter>(), It.IsAny<CancellationToken>()))
+            .Callback<RegionalParameter, CancellationToken>((parameter, _) => inserted = parameter)
             .ReturnsAsync(true);
 
-        var result = await _riskModelService.CreateRegionalRiskParametersAsync(regionalParameterDto);
+        var result = await _riskModelService.CreateRegionalRiskParametersAsync(new CreateRegionalRiskParameterDTO
+        {
+            RegionCode = "  SP-Capital ",
+            AdjustmentFactor = 1.5,
+            Description = "Test Region"
+        });
 
         result.Should().BeTrue();
-        _regionalParameterRepositoryMock.Verify(
-            x => x.AddRegionalParameterAsync(
-                It.Is<RegionalParameter>(rp =>
-                    rp.AdjustmentFactor == regionalParameterDto.AdjustmentFactor &&
-                    rp.Description == regionalParameterDto.Description),
-                It.IsAny<CancellationToken>()),
+        inserted!.RegionCode.Should().Be("sp-capital");
+        inserted.AdjustmentFactor.Should().Be(1.5);
+        _regionalParameterRepositoryMock.Verify(x => x.GetByRegionCodeAsync("sp-capital", It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    /// <summary>RC-14: the adjustment factor is a value, not an identity; two regions may share it.</summary>
+    [Fact]
+    public async Task CreateRegionalRiskParametersAsync_AllowsTwoRegionsWithTheSameFactor()
+    {
+        _regionalParameterRepositoryMock
+            .Setup(x => x.AddRegionalParameterAsync(It.IsAny<RegionalParameter>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        (await _riskModelService.CreateRegionalRiskParametersAsync(
+            new CreateRegionalRiskParameterDTO { RegionCode = "3550308", AdjustmentFactor = 1.5, Description = "SP" }))
+            .Should().BeTrue();
+        (await _riskModelService.CreateRegionalRiskParametersAsync(
+            new CreateRegionalRiskParameterDTO { RegionCode = "3304557", AdjustmentFactor = 1.5, Description = "RJ" }))
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CreateRegionalRiskParametersAsync_WithoutCode_GeneratesTheLegacyCodeFromTheId()
+    {
+        RegionalParameter? inserted = null;
+        _regionalParameterRepositoryMock
+            .Setup(x => x.AddRegionalParameterAsync(It.IsAny<RegionalParameter>(), It.IsAny<CancellationToken>()))
+            .Callback<RegionalParameter, CancellationToken>((parameter, _) => inserted = parameter)
+            .ReturnsAsync(true);
+
+        await _riskModelService.CreateRegionalRiskParametersAsync(
+            new CreateRegionalRiskParameterDTO { AdjustmentFactor = 1.1, Description = "Legacy client" });
+
+        inserted!.RegionCode.Should().Be($"legacy-{inserted.Id:N}");
+    }
+
+    [Theory]
+    [InlineData("-starts-with-dash")]
+    [InlineData("has space")]
+    [InlineData("çódigo")]
+    public async Task CreateRegionalRiskParametersAsync_WithInvalidCode_ThrowsArgumentException(string code)
+    {
+        var act = async () => await _riskModelService.CreateRegionalRiskParametersAsync(
+            new CreateRegionalRiskParameterDTO { RegionCode = code, AdjustmentFactor = 1.1, Description = "x" });
+
+        await act.Should().ThrowAsync<ArgumentException>().WithMessage("RegionCode must have*");
     }
 
     [Fact]
     public async Task CreateRegionalRiskParametersAsync_InvalidatesTheCacheOfTheInsertedRegion()
     {
-        var insertedId = Guid.NewGuid();
-        _regionalParameterRepositoryMock
-            .SetupSequence(x => x.GetByAdjustmentFactorAsync(1.2, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((RegionalParameter?)null)
-            .ReturnsAsync(new RegionalParameter(Guid.NewGuid(), 1.2, "Another region with the same factor"));
+        RegionalParameter? inserted = null;
         _regionalParameterRepositoryMock
             .Setup(x => x.AddRegionalParameterAsync(It.IsAny<RegionalParameter>(), It.IsAny<CancellationToken>()))
-            .Callback<RegionalParameter, CancellationToken>((parameter, _) => parameter.Id = insertedId)
+            .Callback<RegionalParameter, CancellationToken>((parameter, _) => inserted = parameter)
             .ReturnsAsync(true);
 
         await _riskModelService.CreateRegionalRiskParametersAsync(
-            new CreateRegionalRiskParameterDTO { AdjustmentFactor = 1.2, Description = "Coast" });
+            new CreateRegionalRiskParameterDTO { RegionCode = "coast", AdjustmentFactor = 1.2, Description = "Coast" });
 
-        _cacheServiceMock.Verify(x => x.RemoveAsync($"regional-parameter:{insertedId}", It.IsAny<CancellationToken>()),
+        _cacheServiceMock.Verify(x => x.RemoveAsync($"regional-parameter:{inserted!.Id}", It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
     [Fact]
-    public async Task CreateRegionalRiskParametersAsync_WhenRegionalParameterAlreadyExists_ShouldThrowArgumentException()
+    public async Task CreateRegionalRiskParametersAsync_WhenRegionCodeAlreadyExists_ShouldThrowArgumentException()
     {
-        var regionalParameterDto = new CreateRegionalRiskParameterDTO
-        {
-            AdjustmentFactor = 1.5,
-            Description = "Test Region"
-        };
-
-        var existingParameter = new RegionalParameter(
-            Guid.NewGuid(),
-            regionalParameterDto.AdjustmentFactor,
-            regionalParameterDto.Description);
-
         _regionalParameterRepositoryMock
-            .Setup(x => x.GetByAdjustmentFactorAsync(
-                regionalParameterDto.AdjustmentFactor,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(existingParameter);
+            .Setup(x => x.GetByRegionCodeAsync("sp-capital", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RegionalParameter(Guid.NewGuid(), 2.0, "Existing"));
 
-        var act = async () => await _riskModelService.CreateRegionalRiskParametersAsync(regionalParameterDto);
+        var act = async () => await _riskModelService.CreateRegionalRiskParametersAsync(
+            new CreateRegionalRiskParameterDTO { RegionCode = "SP-CAPITAL", AdjustmentFactor = 1.5, Description = "x" });
 
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("Regional risk parameters already exist for the given region.");
-
         _regionalParameterRepositoryMock.Verify(
-            x => x.AddRegionalParameterAsync(
-                It.IsAny<RegionalParameter>(),
-                It.IsAny<CancellationToken>()),
+            x => x.AddRegionalParameterAsync(It.IsAny<RegionalParameter>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 

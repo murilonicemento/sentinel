@@ -5,6 +5,7 @@ namespace RiskCatalog.Application.DTO;
 public record RegionalRiskParametersDTO
 {
     [Required] public Guid RegionId { get; set; }
+    public string RegionCode { get; set; } = string.Empty;
     [Required] public double AdjustmentFactor { get; set; }
     [Required] public string Description { get; set; } = string.Empty;
     public double? CenterLatitude { get; set; }

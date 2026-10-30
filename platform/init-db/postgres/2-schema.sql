@@ -259,7 +259,44 @@ BEGIN
     VALUES ('20261027021555_InitialBaseline', '9.0.20');
     END IF;
 END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261030013419_AddRegionCode') THEN
+    ALTER TABLE regional_parameter ADD region_code varchar(64);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261030013419_AddRegionCode') THEN
+    UPDATE regional_parameter SET region_code = 'legacy-' || replace(id::text, '-', '') WHERE region_code IS NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261030013419_AddRegionCode') THEN
+    ALTER TABLE regional_parameter ALTER COLUMN region_code SET NOT NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261030013419_AddRegionCode') THEN
+    CREATE UNIQUE INDEX "IX_regional_parameter_region_code" ON regional_parameter (region_code);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261030013419_AddRegionCode') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261030013419_AddRegionCode', '9.0.20');
+    END IF;
+END $EF$;
 COMMIT;
+
 
 -- ALERT ORCHESTRATOR SERVICE DATABASE SCHEMA
 

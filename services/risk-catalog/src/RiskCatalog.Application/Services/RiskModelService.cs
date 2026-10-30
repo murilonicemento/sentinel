@@ -202,6 +202,7 @@ public class RiskModelService : IRiskModelService
         var result = new RegionalRiskParametersDTO
         {
             RegionId = regionalParameter.Id,
+            RegionCode = regionalParameter.RegionCode,
             AdjustmentFactor = regionalParameter.AdjustmentFactor,
             Description = regionalParameter.Description,
             CenterLatitude = regionalParameter.CenterLatitude,
@@ -414,15 +415,20 @@ public class RiskModelService : IRiskModelService
             }
         }
 
-        var regionalParameterExist = await _regionalParameterRepository.GetByAdjustmentFactorAsync(
-            regionalRiskParametersDto.AdjustmentFactor,
-            cancellationToken) is not null;
+        // RC-14: the region code is the region's identity; the adjustment factor is just a value two regions may share.
+        var regionId = Guid.NewGuid();
+        string regionCode;
+        if (string.IsNullOrWhiteSpace(regionalRiskParametersDto.RegionCode))
+            regionCode = RegionCode.ForLegacy(regionId);
+        else if (!RegionCode.TryNormalize(regionalRiskParametersDto.RegionCode, out regionCode))
+            throw new ArgumentException(
+                "RegionCode must have 1 to 64 characters: letters, digits, '.', '_', ':' or '-'.",
+                nameof(CreateRegionalRiskParameterDTO.RegionCode));
 
-        if (regionalParameterExist)
+        if (await _regionalParameterRepository.GetByRegionCodeAsync(regionCode, cancellationToken) is not null)
         {
             _logger.LogWarning(
-                "Failed to create regional risk parameters. Regional risk parameters already exist. AdjustmentFactor: {adjustmentFactor}",
-                regionalRiskParametersDto.AdjustmentFactor);
+                "Failed to create regional risk parameters. Region {regionCode} already exists.", regionCode);
 
             throw new RiskCatalogException(RiskCatalogErrorKind.Conflict, RiskCatalogErrorCodes.RegionalParametersAlreadyExist,
                 "Regional risk parameters already exist for the given region.");
@@ -434,6 +440,8 @@ public class RiskModelService : IRiskModelService
 
         var regionalParameter = new RegionalParameter
         {
+            Id = regionId,
+            RegionCode = regionCode,
             AdjustmentFactor = regionalRiskParametersDto.AdjustmentFactor,
             Description = regionalRiskParametersDto.Description,
             CenterLatitude = regionalRiskParametersDto.CenterLatitude,
@@ -447,7 +455,6 @@ public class RiskModelService : IRiskModelService
 
         if (isCreated)
         {
-            // EF assigns the key on insert; reading the row back by adjustment factor could return another region.
             var regionalParameterCreated = regionalParameter;
             var cacheKey = $"{RegionalParameterCachePrefix}:{regionalParameterCreated.Id}";
             await _cacheService.RemoveAsync(cacheKey, cancellationToken);
