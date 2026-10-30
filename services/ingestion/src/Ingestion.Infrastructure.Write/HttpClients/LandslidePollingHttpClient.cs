@@ -1,75 +1,30 @@
 using System.Text.Json;
 using Ingestion.Application.DTO;
-using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Domain.Enums;
-using Microsoft.Extensions.Configuration;
+using Ingestion.Infrastructure.Write.Options;
 
 namespace Ingestion.Infrastructure.Write.HttpClients;
 
-public class LandslidePollingHttpClient : ISensorPollingClient
+/// <summary>
+/// Precipitation accumulated over the whole window (GHCND PRCP), the trigger the landslide source watches for; one
+/// reading per station and window end day. The data source must measure Rainfall.
+/// </summary>
+public class LandslidePollingHttpClient(HttpClient httpClient) : NoaaPollingClient(httpClient)
 {
-    private readonly HttpClient _httpClient;
-    private readonly IConfiguration _configuration;
+    public override string Source => PollingSources.Landslide;
+    protected override string[] DataTypes => ["PRCP"];
+    protected override string Unit => "mm";
+    protected override SensorDomainEnum Domain => SensorDomainEnum.Climatic;
 
-    public LandslidePollingHttpClient(HttpClient httpClient, IConfiguration configuration)
+    protected override List<SensorCollectionDTO> Map(PollingSubscription subscription, PollingWindow window,
+        List<NoaaResultDTO> results)
     {
-        _httpClient = httpClient;
-        _configuration = configuration;
-    }
-
-    public async Task<List<SensorCollectionDTO>> FetchAsync(CancellationToken cancellationToken)
-    {
-        var dataSourceId = Guid.Parse(_configuration["Polling:Landslide:DataSourceId"] ??
-                                      throw new ArgumentException("DataSourceId is required in config"));
-        var tenantId = Guid.Parse(_configuration["Polling:Landslide:TenantId"] ??
-                                  throw new ArgumentException("TenantId is required in config"));
-        var latitude = _configuration["Polling:Landslide:Latitude"] ??
-                       throw new ArgumentException("Latitude is required in config");
-        var longitude = _configuration["Polling:Landslide:Longitude"] ??
-                        throw new ArgumentException("Longitude is required in config");
-        var endDate = DateTime.UtcNow.Date;
-        var startDate = endDate.AddDays(-2);
-        var response = await _httpClient.GetAsync(
-            $"/data?datasetid=GHCND&datatypeid=PRCP&startdate={startDate:yyyy-MM-dd}&enddate={endDate:yyyy-MM-dd}&stationid=GHCND:USC00250050&limit=1000",
-            cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-            return [];
-
-        var json = await response.Content.ReadAsStringAsync(cancellationToken);
-        var prcpData = JsonSerializer.Deserialize<NoaaResponseDTO>(json,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-        if (prcpData is null || prcpData.Results.Count == 0)
-            return [];
-
-        var totalPrecipitation = prcpData.Results
-            .Where(r => r.DataType == "PRCP")
-            .Sum(r => r.Value / 10.0); // NOAA retorna décimos de mm
-        var collections = new List<SensorCollectionDTO>
-        {
-            new DisasterCollectionDTO
-            {
-                DataSourceId = dataSourceId,
-                TenantId = tenantId,
-                CollectedAt = DateTime.UtcNow,
-                Domain = SensorDomainEnum.Disaster,
-                DisasterType = DisasterEventEnum.Landslide,
-                Payload = JsonSerializer.Serialize(prcpData.Results),
-                Samples =
-                [
-                    new SampleSensorDTO
-                    {
-                        SensorValue = totalPrecipitation,
-                        Unit = "mm",
-                        Latitude = double.Parse(latitude),
-                        Longitude = double.Parse(longitude),
-                        RecordedAt = DateTime.UtcNow
-                    }
-                ]
-            }
-        };
-
-        return collections;
+        var day = window.To.Date;
+        return
+        [
+            Collection(subscription, DateTime.SpecifyKind(day, DateTimeKind.Utc),
+                $"{subscription.StationId}:PRCP-ACCUMULATED:{window.From:yyyy-MM-dd}:{day:yyyy-MM-dd}",
+                results.Sum(r => r.Value), JsonSerializer.Serialize(results))
+        ];
     }
 }

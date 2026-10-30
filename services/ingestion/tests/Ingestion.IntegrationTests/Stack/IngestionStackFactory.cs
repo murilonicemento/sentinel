@@ -30,6 +30,12 @@ public sealed class IngestionStackFactory : WebApplicationFactory<Program>, IAsy
     public static readonly Guid TenantA = Guid.Parse("6d3f1c8e-1a52-4b0e-9a59-2f0d6f1b9a01");
     public static readonly Guid TenantB = Guid.Parse("6d3f1c8e-1a52-4b0e-9a59-2f0d6f1b9a02");
 
+    /// <summary>Tenant A's earthquake data source, subscribed to the (stubbed) USGS source.</summary>
+    public static readonly Guid EarthquakeDataSource = Guid.Parse("6d3f1c8e-1a52-4b0e-9a59-2f0d6f1b9e01");
+
+    /// <summary>Two earthquakes the stubbed USGS reports around São Paulo, one hour ago.</summary>
+    public static readonly string[] PolledEarthquakes = ["us7000test1", "us7000test2"];
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:15.5")
         .WithDatabase("ingestion").Build();
 
@@ -76,6 +82,13 @@ public sealed class IngestionStackFactory : WebApplicationFactory<Program>, IAsy
         builder.UseSetting("MinIO:SecretKey", _minio.GetSecretKey());
         builder.UseSetting("MinIO:BucketName", "ingestion-tests");
         builder.UseSetting("Outbox:IntervalSeconds", "1");
+        builder.UseSetting("Polling:Earthquake:Enabled", "true");
+        builder.UseSetting("Polling:Earthquake:BaseUrl", "https://usgs.test");
+        builder.UseSetting("Polling:Earthquake:Subscriptions:0:TenantId", TenantA.ToString());
+        builder.UseSetting("Polling:Earthquake:Subscriptions:0:DataSourceId", EarthquakeDataSource.ToString());
+        builder.UseSetting("Polling:Earthquake:Subscriptions:0:Latitude", "-23.55");
+        builder.UseSetting("Polling:Earthquake:Subscriptions:0:Longitude", "-46.63");
+        builder.UseSetting("Polling:Earthquake:Subscriptions:0:RadiusKm", "200");
         builder.UseSetting("Jwt:Issuer", TestTokens.Issuer);
         builder.UseSetting("Jwt:Audience", TestTokens.Audience);
         builder.UseSetting("Jwt:SigningKey", TestTokens.SigningKey);
@@ -87,6 +100,7 @@ public sealed class IngestionStackFactory : WebApplicationFactory<Program>, IAsy
             services.AddSingleton<ITenantBillingGateway, ActiveTenants>();
             services.RemoveAll<IGeospatialValidationService>();
             services.AddSingleton<IGeospatialValidationService, ValidCoordinates>();
+            services.AddHttpClient("Earthquake").ConfigurePrimaryHttpMessageHandler(() => new UsgsStub());
         });
     }
 
@@ -127,6 +141,16 @@ public sealed class IngestionStackFactory : WebApplicationFactory<Program>, IAsy
         tenants.Parameters.AddWithValue("a", TenantA);
         tenants.Parameters.AddWithValue("b", TenantB);
         await tenants.ExecuteNonQueryAsync();
+
+        await using var earthquakeSource = new NpgsqlCommand("""
+            INSERT INTO data_source (id, name, endpoint, data_source_type, measurement_type, collection_frequency, tenant_id)
+            VALUES (@id, 'usgs', 'https://earthquake.usgs.gov', 'Api', 'Earthquake', 'Hourly', @tenant);
+            INSERT INTO event_type_permission (id, data_source_id, event_domain, event_type)
+            VALUES (gen_random_uuid(), @id, 'Disaster', 'Earthquake');
+            """, connection);
+        earthquakeSource.Parameters.AddWithValue("id", EarthquakeDataSource);
+        earthquakeSource.Parameters.AddWithValue("tenant", TenantA);
+        await earthquakeSource.ExecuteNonQueryAsync();
     }
 
     private async Task CreateReadModelIndexesAsync()
@@ -143,6 +167,24 @@ public sealed class IngestionStackFactory : WebApplicationFactory<Program>, IAsy
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Sentinel.sln")))
             directory = directory.Parent;
         return directory?.FullName ?? throw new InvalidOperationException("Sentinel.sln not found.");
+    }
+
+    /// <summary>USGS FDSN GeoJSON for <see cref="PolledEarthquakes"/>.</summary>
+    private sealed class UsgsStub : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var time = DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeMilliseconds();
+            var features = PolledEarthquakes.Select((id, index) =>
+                $$$"""{"id":"{{{id}}}","properties":{"mag":{{{(4.5 + index).ToString(System.Globalization.CultureInfo.InvariantCulture)}}},"magType":"mww","time":{{{time + index}}}},"geometry":{"type":"Point","coordinates":[-46.6,-23.5,10.0]}}""");
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    $$"""{"type":"FeatureCollection","features":[{{string.Join(',', features)}}]}""",
+                    System.Text.Encoding.UTF8, "application/json")
+            });
+        }
     }
 
     private sealed class ActiveTenants : ITenantBillingGateway

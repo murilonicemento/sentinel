@@ -8,8 +8,10 @@ using Ingestion.Application;
 using Ingestion.Infrastructure.Read;
 using Ingestion.Infrastructure.Read.HealthChecks;
 using Ingestion.Infrastructure.Write;
+using Ingestion.Infrastructure.Write.HostedServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using MongoDB.Bson;
@@ -25,6 +27,7 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        AddPollingSubscriptionsFile(builder);
 
         Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
@@ -35,7 +38,7 @@ public class Program
         BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
         ConventionRegistry.Register("IgnoreExtra", pack, _ => true);
 
-        builder.AddSentinelObservability("ingestion");
+        builder.AddSentinelObservability("ingestion", meters: [PollingMetrics.MeterName, OutboxMetrics.MeterName]);
         AddReadinessChecks(builder);
 
         builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
@@ -154,6 +157,27 @@ public class Program
         app.MapControllers();
         app.MapSentinelOperationalEndpoints();
         app.Run();
+    }
+
+    /// <summary>
+    /// Polling subscriptions (tenants, data sources, areas) come from an optional <c>appsettings.Polling.json</c>
+    /// mounted by the deployment. It sits right after <c>appsettings.{Environment}.json</c>, so User Secrets and
+    /// environment variables, where the provider keys live, still override it.
+    /// </summary>
+    private static void AddPollingSubscriptionsFile(WebApplicationBuilder builder)
+    {
+        var sources = builder.Configuration.Sources;
+        var environmentFile = $"appsettings.{builder.Environment.EnvironmentName}.json";
+        var anchor = sources.OfType<JsonConfigurationSource>().LastOrDefault(source =>
+            source.Path is "appsettings.json" || source.Path == environmentFile);
+        var file = new JsonConfigurationSource
+        {
+            Path = "appsettings.Polling.json",
+            Optional = true,
+            ReloadOnChange = false,
+            FileProvider = builder.Environment.ContentRootFileProvider
+        };
+        sources.Insert(anchor is null ? 0 : sources.IndexOf(anchor) + 1, file);
     }
 
     /// <summary>Postgres (collections and outbox) and MongoDB (queries) gate readiness; Redis only deduplicates

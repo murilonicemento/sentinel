@@ -45,6 +45,11 @@ public class OutboxRepository : IOutboxRepository
             "SELECT id, outbox_type, payload, trace_parent FROM outbox WHERE processed = false ORDER BY id LIMIT 50 FOR UPDATE SKIP LOCKED",
             transaction: _writeDbContext.Transaction);
 
+    /// <summary>Rows not yet relayed; served by the partial index on unprocessed rows.</summary>
+    public async Task<long> CountPendingAsync() =>
+        await _writeDbContext.Connection.ExecuteScalarAsync<long>(
+            "SELECT count(*) FROM outbox WHERE processed = false", transaction: _writeDbContext.Transaction);
+
     public async Task<bool> UpdateProcessedAsync(Guid id)
     {
         var affectedRows = await _writeDbContext.Connection.ExecuteAsync(

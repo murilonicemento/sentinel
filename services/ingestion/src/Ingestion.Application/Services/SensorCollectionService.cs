@@ -56,9 +56,30 @@ public class SensorCollectionService : ISensorCollectionService
         _logger = logger;
     }
 
-    public async Task<Guid> ProcessSensorCollection(Guid dataSourceId, Guid tenantId, DateTime collectedAt,
+    /// <summary>A collection submitted over HTTP: the data source's collection frequency applies.</summary>
+    public Task<Guid> ProcessSensorCollection(Guid dataSourceId, Guid tenantId, DateTime collectedAt,
         string payload,
-        List<SampleSensorDTO> samples, string domain, CancellationToken cancellationToken)
+        List<SampleSensorDTO> samples, string domain, CancellationToken cancellationToken) =>
+        ProcessAsync(dataSourceId, tenantId, collectedAt, payload, samples, domain, sourceEventId: null,
+            cancellationToken);
+
+    /// <summary>
+    /// A reading polled from an external source. The poll interval of the source, not the data source's collection
+    /// frequency, controls how often it arrives (one poll brings many events); the provider's event id is the
+    /// deduplication key, so a window polled again ingests nothing twice. The domain comes from the data source.
+    /// </summary>
+    public Task<Guid> ProcessPolledCollectionAsync(SensorCollectionDTO collection, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(collection.SourceEventId))
+            throw new ArgumentException("A polled collection requires the provider's event id.");
+
+        return ProcessAsync(collection.DataSourceId, collection.TenantId,
+            collection.CollectedAt ?? throw new ArgumentException("A polled collection requires its time."),
+            collection.Payload, collection.Samples, domain: null, collection.SourceEventId, cancellationToken);
+    }
+
+    private async Task<Guid> ProcessAsync(Guid dataSourceId, Guid tenantId, DateTime collectedAt, string payload,
+        List<SampleSensorDTO> samples, string? domain, string? sourceEventId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(payload))
             throw new ArgumentException("Payload can't be blank.");
@@ -85,7 +106,7 @@ public class SensorCollectionService : ISensorCollectionService
             JsonSerializer.Serialize(lastDataCollected)
         );
 
-        if (lastDataCollected != null)
+        if (lastDataCollected != null && sourceEventId is null)
         {
             var isFreqValid = CollectionFrequencyType.From(dataSource.CollectionFrequency)
                 .IsValidFrequency(lastDataCollected.CollectedAt);
@@ -93,7 +114,13 @@ public class SensorCollectionService : ISensorCollectionService
                 throw new ArgumentException($"Collection frequency mismatch: {dataSource.CollectionFrequency}");
         }
 
-        var dedupKey = $"ing:{tenantId}:{dataSourceId}:{collectedAt:yyyyMMddHHmmss}";
+        domain ??= dataSource.ResolveSensorDomain().ToString();
+
+        // Submitted collections keep the original key format (read by older versions); polled readings are keyed by
+        // the provider's event id, because many of them can share the same second.
+        var dedupKey = sourceEventId is null
+            ? $"ing:{tenantId}:{dataSourceId}:{collectedAt:yyyyMMddHHmmss}"
+            : $"ing:{tenantId}:{dataSourceId}:src:{sourceEventId}";
 
         if (!await _eventDeduplicator.TryBeginAsync(dedupKey, ProcessingLease))
         {

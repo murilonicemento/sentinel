@@ -127,6 +127,40 @@ public class SensorCollectionServiceTests
         Assert.NotEqual(sampleIds[0], sampleIds[1]);
     }
 
+    private SensorCollectionDTO Polled(string? sourceEventId) => new()
+    {
+        DataSourceId = _dataSource.Id,
+        TenantId = TenantId,
+        CollectedAt = CollectedAt,
+        SourceEventId = sourceEventId,
+        Payload = "{\"raw\":true}",
+        Samples = [new SampleSensorDTO { SensorValue = 60, Unit = "mm", Latitude = -23.5, Longitude = -46.6 }]
+    };
+
+    [Fact]
+    public async Task PolledReading_IgnoresTheCollectionFrequency_AndIsKeyedByTheProviderId()
+    {
+        _dataSource.DataCollections =
+            [new DataCollection(Guid.NewGuid(), _dataSource.Id, DateTime.UtcNow.AddMinutes(-5), "{}", TenantId)];
+        string? key = null;
+        _deduplicator.Setup(d => d.TryBeginAsync(It.IsAny<string>(), It.IsAny<TimeSpan>()))
+            .Callback<string, TimeSpan>((k, _) => key = k).ReturnsAsync(true);
+
+        await Assert.ThrowsAsync<ArgumentException>(ProcessAsync);
+        await Service().ProcessPolledCollectionAsync(Polled("us7000a"), CancellationToken.None);
+
+        Assert.Equal($"ing:{TenantId}:{_dataSource.Id}:src:us7000a", key);
+        Assert.Equal(1, _unitOfWork.Executions);
+    }
+
+    [Fact]
+    public async Task PolledReading_WithoutProviderId_IsRejected()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            Service().ProcessPolledCollectionAsync(Polled(null), CancellationToken.None));
+        _storage.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task DuplicateCollection_IsSkippedBeforeStoringAnything()
     {

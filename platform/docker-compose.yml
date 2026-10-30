@@ -40,8 +40,30 @@ services:
       - MinIO__AccessKey=${MINIO_ROOT_USER:-minioadmin}
       - MinIO__SecretKey=${MINIO_ROOT_PASSWORD:-minioadmin}
       - Geospatial__BaseUrl=http://geospatial:8080
+      - TenantsBilling__BaseUrl=http://tenants-billing:8080
+      # Polling (ADR-0005): assinaturas em platform/config/ingestion-polling.json; as chaves vêm do .env.
+      - Polling__Fire__Enabled=${POLLING_FIRE_ENABLED:-false}
+      - Polling__Fire__ApiKey=${POLLING_FIRMS_MAP_KEY:-}
+      - Polling__Earthquake__Enabled=${POLLING_EARTHQUAKE_ENABLED:-false}
+      - Polling__Flood__Enabled=${POLLING_FLOOD_ENABLED:-false}
+      - Polling__Flood__ApiKey=${POLLING_NOAA_TOKEN:-}
+      - Polling__Landslide__Enabled=${POLLING_LANDSLIDE_ENABLED:-false}
+      - Polling__Landslide__ApiKey=${POLLING_NOAA_TOKEN:-}
+      - Polling__TemperatureAnomaly__Enabled=${POLLING_TEMPERATURE_ANOMALY_ENABLED:-false}
+      - Polling__TemperatureAnomaly__ApiKey=${POLLING_NOAA_TOKEN:-}
+      - Polling__HumidityAnomaly__Enabled=${POLLING_HUMIDITY_ANOMALY_ENABLED:-false}
+      - Polling__HumidityAnomaly__ApiKey=${POLLING_NOAA_TOKEN:-}
+      - Polling__WindGust__Enabled=${POLLING_WIND_GUST_ENABLED:-false}
+      - Polling__WindGust__ApiKey=${POLLING_STORMGLASS_API_KEY:-}
+      - Polling__Rainfall__Enabled=${POLLING_RAINFALL_ENABLED:-false}
+      - Polling__Rainfall__ApiKey=${POLLING_STORMGLASS_API_KEY:-}
+      - Polling__PressureChange__Enabled=${POLLING_PRESSURE_CHANGE_ENABLED:-false}
+      - Polling__PressureChange__ApiKey=${POLLING_STORMGLASS_API_KEY:-}
       - Loki__Url=http://loki:3100
       - OpenTelemetry__OtlpEndpoint=http://tempo:4317
+    volumes:
+      # Assinaturas de polling (tenant, fonte de dados, área); sem segredos. Ver ADR-0005.
+      - ./config/ingestion-polling.json:/app/appsettings.Polling.json:ro
     ports:
       - "7001:8080"
     depends_on:

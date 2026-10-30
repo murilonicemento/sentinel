@@ -70,13 +70,14 @@ public class DataSource
             },
         };
 
-        if (!mapping.ContainsKey(MeasurementType))
+        var measurementType = ValueObjects.MeasurementType.From(MeasurementType).Value;
+        if (!mapping.ContainsKey(measurementType))
             throw new ArgumentException($"Invalid measurement type: {MeasurementType}");
 
-        return mapping[MeasurementType](value, baseline);
+        return mapping[measurementType](value, baseline);
     }
 
-    public SensorDomainEnum ResolveSensorDomain() => MeasurementType switch
+    public SensorDomainEnum ResolveSensorDomain() => ValueObjects.MeasurementType.From(MeasurementType).Value switch
     {
         "Temperature" or "Humidity" or "WindSpeed" or "Rainfall" or "Pressure" => SensorDomainEnum.Climatic,
         "Fire" or "Earthquake" => SensorDomainEnum.Disaster,

@@ -12,4 +12,6 @@ public interface ISensorCollectionService
         List<SampleSensorDTO> samples,
         string domain,
         CancellationToken cancellationToken);
+
+    public Task<Guid> ProcessPolledCollectionAsync(SensorCollectionDTO collection, CancellationToken cancellationToken);
 }

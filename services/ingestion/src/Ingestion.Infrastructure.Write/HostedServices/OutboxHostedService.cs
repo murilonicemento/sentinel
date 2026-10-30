@@ -22,6 +22,7 @@ public class OutboxHostedService : BackgroundService
     private static readonly ActivitySource Source = new(KafkaTracing.ActivitySourceName);
 
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly OutboxMetrics _metrics;
     private readonly IPublisher _kafkaPublisher;
     private readonly ILogger<OutboxHostedService> _logger;
     private readonly TimeSpan _interval;
@@ -30,10 +31,12 @@ public class OutboxHostedService : BackgroundService
         IServiceScopeFactory scopeFactory,
         IPublisher kafkaPublisher,
         IConfiguration configuration,
+        OutboxMetrics metrics,
         ILogger<OutboxHostedService> logger
     )
     {
         _scopeFactory = scopeFactory;
+        _metrics = metrics;
         _kafkaPublisher = kafkaPublisher;
         _logger = logger;
         _interval = TimeSpan.FromSeconds(configuration.GetValue("Outbox:IntervalSeconds", 10));
@@ -87,6 +90,8 @@ public class OutboxHostedService : BackgroundService
                 _logger.LogInformation("Outbox message {OutboxId} published to {Topic}", row.Id, row.OutboxType);
             }
         }, cancellationToken);
+
+        _metrics.Pending = await outbox.CountPendingAsync();
     }
 
     /// <summary>Continues the trace of the request that wrote the row, when it was recorded.</summary>
