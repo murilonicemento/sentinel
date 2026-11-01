@@ -191,7 +191,7 @@ public class SensorCollectionService : ISensorCollectionService
 
             var intensity = MeasurementType.From(dataSource.MeasurementType).CalculateIntensity(sample.SensorValue);
             var evt = new SensorEventDetected(collectionGuid, eventType, intensity, sample.Latitude, sample.Longitude,
-                collectedAt, DeterministicEventId.For(dedupKey, sampleIndex));
+                collectedAt, DeterministicEventId.For(dedupKey, sampleIndex), tenantId);
 
             _logger.LogInformation(
                 "Inserting climatic event to mongodb. Json event: {evt}",

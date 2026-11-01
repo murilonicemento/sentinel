@@ -145,6 +145,8 @@ public class SensorCollectionPipelineTests(IngestionStackFactory stack)
         }
 
         Assert.Equal(2, received.Count);
+        Assert.All(received, message => Assert.Equal(IngestionStackFactory.TenantA,
+            JsonDocument.Parse(message.Message.Value).RootElement.GetProperty("TenantId").GetGuid()));
         var traceId = ActivityContext.Parse(traceParent!, null).TraceId;
         Assert.All(received, message =>
         {
