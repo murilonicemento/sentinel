@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
+using ChannelsService.Application.Services;
 using ChannelsService.Domain.Events;
 using ChannelsService.Infrastructure.Messaging.Reliability;
 using Confluent.Kafka;
@@ -12,7 +14,8 @@ using Microsoft.Extensions.Logging;
 namespace ChannelsService.Infrastructure.HostedServices;
 
 /// <summary>
-/// Consumes <c>notification-events</c> with at-least-once delivery. The offset is committed only after the
+/// Consumes <c>notification-events</c> and alert-orchestrator's <c>alert-commands</c> (each trigger becomes a
+/// notification, X-24) with at-least-once delivery. The offset is committed only after the
 /// notification was delivered, recorded as a delivery failure on <c>notification-events-dlq</c>, or (when it cannot be
 /// processed at all) published to the consumer dead-letter topic. Redeliveries skip channels already delivered.
 /// </summary>
@@ -30,6 +33,7 @@ public sealed class NotificationConsumerHostedService : BackgroundService
     private readonly Func<ReliableMessageProcessor>? _processorFactory;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly string _topic;
+    private readonly string _alertCommandsTopic;
 
     public NotificationConsumerHostedService(
         IConfiguration configuration,
@@ -40,6 +44,7 @@ public sealed class NotificationConsumerHostedService : BackgroundService
         _scopeFactory = scopeFactory;
         _options = new ConsumerReliabilityOptions();
         _topic = configuration["Kafka:Topic"] ?? "notification-events";
+        _alertCommandsTopic = configuration["Kafka:AlertCommandsTopic"] ?? "alert-commands";
 
         var bootstrapServers = configuration["Kafka:BootstrapServers"];
         if (string.IsNullOrWhiteSpace(bootstrapServers)) return;
@@ -58,11 +63,12 @@ public sealed class NotificationConsumerHostedService : BackgroundService
     /// <summary>Used by tests to drive the loop with a fake consumer and dead-letter sink.</summary>
     public NotificationConsumerHostedService(IConsumer<Ignore, string> consumer, string topic,
         ReliableMessageProcessor processor, ConsumerReliabilityOptions options, IServiceScopeFactory scopeFactory,
-        ILogger<NotificationConsumerHostedService> logger)
+        ILogger<NotificationConsumerHostedService> logger, string alertCommandsTopic = "alert-commands")
     {
         _consumerFactory = () => consumer;
         _processorFactory = () => processor;
         _topic = topic;
+        _alertCommandsTopic = alertCommandsTopic;
         _options = options;
         _scopeFactory = scopeFactory;
         _logger = logger;
@@ -77,22 +83,44 @@ public sealed class NotificationConsumerHostedService : BackgroundService
             return Task.CompletedTask;
         }
 
-        return ReliableConsumerLoop.Start(_consumerFactory(), [_topic], _processorFactory(), HandleAsync, _options,
-            _logger, stoppingToken);
+        return ReliableConsumerLoop.Start(_consumerFactory(), [_topic, _alertCommandsTopic], _processorFactory(),
+            HandleAsync, _options, _logger, stoppingToken);
     }
 
     private async Task<MessageHandlingResult> HandleAsync(ConsumeResult<Ignore, string> result,
         CancellationToken cancellationToken)
     {
         NotificationEvent? notification;
-        try
+        if (result.Topic == _alertCommandsTopic)
         {
-            notification = JsonSerializer.Deserialize<NotificationEvent>(result.Message.Value, JsonOptions);
+            TriggerAlertCommandDTO? command;
+            try
+            {
+                command = JsonSerializer.Deserialize<TriggerAlertCommandDTO>(result.Message.Value, JsonOptions);
+            }
+            catch (JsonException)
+            {
+                return MessageHandlingResult.Reject(MessageErrorCodes.InvalidPayload,
+                    "The payload is not a valid TriggerAlertCommand JSON document.");
+            }
+
+            if (command is null || command.AlertWindowId == Guid.Empty)
+                return MessageHandlingResult.Reject(MessageErrorCodes.InvalidPayload,
+                    "The alert command is missing its AlertWindowId.");
+
+            notification = AlertCommandTranslator.ToNotification(command);
         }
-        catch (JsonException)
+        else
         {
-            return MessageHandlingResult.Reject(MessageErrorCodes.InvalidPayload,
-                "The payload is not a valid NotificationEvent JSON document.");
+            try
+            {
+                notification = JsonSerializer.Deserialize<NotificationEvent>(result.Message.Value, JsonOptions);
+            }
+            catch (JsonException)
+            {
+                return MessageHandlingResult.Reject(MessageErrorCodes.InvalidPayload,
+                    "The payload is not a valid NotificationEvent JSON document.");
+            }
         }
 
         if (notification is null || string.IsNullOrWhiteSpace(notification.EventId) ||

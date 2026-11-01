@@ -41,11 +41,11 @@ public sealed class NotificationConsumerHostedServiceTests
     };
 
     private static async Task<(RecordingSink Sink, Mock<INotificationDispatchService> Dispatch)> ConsumeOnceAsync(
-        string payload, Action<Mock<INotificationDispatchService>>? setup = null)
+        string payload, Action<Mock<INotificationDispatchService>>? setup = null, string topic = "notification-events")
     {
         var message = new ConsumeResult<Ignore, string>
         {
-            Topic = "notification-events",
+            Topic = topic,
             Partition = new Partition(0),
             Offset = new Offset(9),
             Message = new Message<Ignore, string> { Value = payload }
@@ -79,6 +79,58 @@ public sealed class NotificationConsumerHostedServiceTests
         await committed.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await hosted.StopAsync(CancellationToken.None);
         return (sink, dispatch);
+    }
+
+    // As alert-orchestrator serializes TriggerAlertCommand: PascalCase, the escalation level as a number.
+    private static string AlertCommand(Guid windowId, string? tenant) => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        AlertWindowId = windowId,
+        Region = "rj-capital",
+        RiskType = "flood",
+        RiskScore = 0.91,
+        SignalCount = 2,
+        SignalSources = new[] { "Sensor", "Sensor" },
+        TriggeredAt = DateTime.UtcNow,
+        EscalationLevel = 1,
+        TenantId = tenant,
+        Severity = "high",
+        Priority = "urgent"
+    });
+
+    [Fact]
+    public async Task AlertCommand_IsDeliveredAsANotificationOfTheWindowAndLevel()
+    {
+        var windowId = Guid.NewGuid();
+        NotificationEvent? dispatched = null;
+
+        var (sink, _) = await ConsumeOnceAsync(AlertCommand(windowId, "tenant-a"),
+            dispatch => dispatch.Setup(d => d.DispatchAsync(It.IsAny<NotificationEvent>(), It.IsAny<CancellationToken>()))
+                .Callback<NotificationEvent, CancellationToken>((n, _) => dispatched = n)
+                .ReturnsAsync(new DeliveryResultDTO { Success = true }),
+            topic: "alert-commands");
+
+        Assert.Empty(sink.Envelopes);
+        Assert.Equal($"alert:{windowId:N}:1", dispatched!.EventId);
+        Assert.Equal("tenant-a", dispatched.TenantId);
+        Assert.Equal("rj-capital", dispatched.Metadata!["region"]);
+    }
+
+    [Fact]
+    public async Task AlertCommandWithoutTenant_IsDeadLetteredAndCommitted()
+    {
+        var (sink, dispatch) = await ConsumeOnceAsync(AlertCommand(Guid.NewGuid(), null), topic: "alert-commands");
+
+        Assert.Equal(MessageErrorCodes.InvalidPayload, Assert.Single(sink.Envelopes).ErrorCode);
+        dispatch.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task AlertCommandWithoutWindow_IsDeadLetteredAndCommitted()
+    {
+        var (sink, dispatch) = await ConsumeOnceAsync(AlertCommand(Guid.Empty, "tenant-a"), topic: "alert-commands");
+
+        Assert.Equal(MessageErrorCodes.InvalidPayload, Assert.Single(sink.Envelopes).ErrorCode);
+        dispatch.VerifyNoOtherCalls();
     }
 
     [Fact]
