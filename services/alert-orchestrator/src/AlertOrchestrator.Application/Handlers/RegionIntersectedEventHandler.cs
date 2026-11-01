@@ -132,7 +132,8 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
                     window.Signals.Count,
                     window.Signals.Select(s => s.Source.ToString()).ToList(),
                     DateTime.UtcNow,
-                    window.CurrentEscalationLevel);
+                    window.CurrentEscalationLevel,
+                    TenantId: window.TenantId);
 
                 await _commandPublisher.PublishAsync(command, cancellationToken);
             }

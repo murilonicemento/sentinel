@@ -145,7 +145,9 @@ public class RiskUpdatedEventHandlerTests
         _windowRepository.Verify(x => x.AddAsync(It.IsAny<AlertWindow>(), It.IsAny<CancellationToken>()), Times.Once);
         _windowRepository.Verify(x => x.UpdateAsync(It.IsAny<AlertWindow>(), It.IsAny<CancellationToken>()), Times.Once);
         _eventPublisher.Verify(x => x.PublishAsync(It.Is<object>(o => o is AlertTriggeredEvent), It.IsAny<CancellationToken>()), Times.Once);
-        _commandPublisher.Verify(x => x.PublishAsync(It.IsAny<TriggerAlertCommand>(), It.IsAny<CancellationToken>()), Times.Once);
+        _commandPublisher.Verify(x => x.PublishAsync(
+            It.Is<TriggerAlertCommand>(c => c.TenantId == "tenant-1" && c.Region == "region-1"),
+            It.IsAny<CancellationToken>()), Times.Once);
         _idempotencyService.Verify(x => x.CompleteAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
     }
 

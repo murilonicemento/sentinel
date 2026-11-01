@@ -185,6 +185,54 @@ public class EventConsumerPollingTests
         _mediator.VerifyNoOtherCalls();
     }
 
+    // What risk-evaluation publishes (asserted on its side in RiskUpdatedContractTests).
+    private const string RiskEvaluationSample =
+        "{\"EventId\":\"8f3a5c1e-2b4d-4e6f-9a1b-3c5d7e9f1a2b\",\"Region\":\"rj-capital\",\"RiskType\":\"flood\"," +
+        "\"RiskScore\":0.84,\"TenantId\":\"6d3f1c8e-1a52-4b0e-9a59-2f0d6f1b9a01\"," +
+        "\"Timestamp\":\"2026-11-01T12:00:00Z\",\"Metadata\":{\"level\":\"Critical\"}}";
+
+    [Fact]
+    public async Task RiskUpdatedFromRiskEvaluation_IsHandled()
+    {
+        var message = MessageAt(9, RiskEvaluationSample);
+        var committed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        DeliverRepeatedly(message);
+        _consumer.Setup(c => c.Commit(message)).Callback(() =>
+        {
+            committed.TrySetResult();
+            _consumer.Setup(c => c.Consume(It.IsAny<TimeSpan>())).Returns(() => null!);
+        });
+
+        await RunUntilAsync(committed.Task);
+
+        Assert.Empty(_deadLetters.Envelopes);
+        _mediator.Verify(m => m.Publish(It.Is<RiskUpdatedEvent>(e =>
+            e.Region == "rj-capital" && e.RiskType == "flood" && e.RiskScore == 0.84 &&
+            e.TenantId == "6d3f1c8e-1a52-4b0e-9a59-2f0d6f1b9a01" && e.Metadata["level"] == "Critical"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task RiskUpdatedWithoutTenant_IsDeadLetteredAsInvalid(string? tenant)
+    {
+        var message = MessageAt(8, JsonSerializer.Serialize(new RiskUpdatedEvent(Guid.NewGuid(), "region-a", "flood",
+            0.8, tenant, DateTime.UtcNow, new Dictionary<string, string>())));
+        var committed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        DeliverRepeatedly(message);
+        _consumer.Setup(c => c.Commit(message)).Callback(() =>
+        {
+            committed.TrySetResult();
+            _consumer.Setup(c => c.Consume(It.IsAny<TimeSpan>())).Returns(() => null!);
+        });
+
+        await RunUntilAsync(committed.Task);
+
+        Assert.Equal(MessageErrorCodes.InvalidPayload, Assert.Single(_deadLetters.Envelopes.Distinct()).ErrorCode);
+        _mediator.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task TransientFailure_IsRetriedThenCommitted()
     {

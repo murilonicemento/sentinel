@@ -156,7 +156,8 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
                     window.Signals.Count,
                     window.Signals.Select(s => s.Source.ToString()).ToList(),
                     DateTime.UtcNow,
-                    window.CurrentEscalationLevel);
+                    window.CurrentEscalationLevel,
+                    TenantId: window.TenantId);
 
                 await _commandPublisher.PublishAsync(command, cancellationToken);
             }

@@ -95,7 +95,8 @@ public sealed class AlertEscalationWorker : BackgroundService
                     window.Signals.Count,
                     window.Signals.Select(s => s.Source.ToString()).ToList(),
                     DateTime.UtcNow,
-                    nextLevel.Value);
+                    nextLevel.Value,
+                    TenantId: window.TenantId);
 
                 await commandPublisher.PublishAsync(command, cancellationToken);
             }
