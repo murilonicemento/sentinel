@@ -21,11 +21,6 @@ public static class GeospatialOptionsExtensions
                                  !string.IsNullOrWhiteSpace(options.DeadLetterTopic),
                 "KafkaConsumerOptions:TopicName and KafkaConsumerOptions:DeadLetterTopic are required.")
             .ValidateOnStart();
-        services.AddOptions<KafkaProducerOptions>()
-            .Bind(configuration.GetSection("KafkaProducerOptions"))
-            .Validate(options => !string.IsNullOrWhiteSpace(options.RegionIntersectedTopic),
-                "KafkaProducerOptions:RegionIntersectedTopic is required.")
-            .ValidateOnStart();
         return services;
     }
 }

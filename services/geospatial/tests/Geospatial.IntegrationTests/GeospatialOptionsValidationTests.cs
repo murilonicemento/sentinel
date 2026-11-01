@@ -12,8 +12,7 @@ public class GeospatialOptionsValidationTests
     {
         ["Elasticsearch:Url"] = "http://elasticsearch:9200",
         ["KafkaConsumerOptions:TopicName"] = "sensor-event-detected",
-        ["KafkaConsumerOptions:DeadLetterTopic"] = "geospatial-dead-letter",
-        ["KafkaProducerOptions:RegionIntersectedTopic"] = "region-intersected"
+        ["KafkaConsumerOptions:DeadLetterTopic"] = "geospatial-dead-letter"
     };
 
     private static ServiceProvider Provider(string key, string? value)
@@ -37,7 +36,6 @@ public class GeospatialOptionsValidationTests
     [InlineData("Elasticsearch:Url", "not-a-url")]
     [InlineData("KafkaConsumerOptions:TopicName", "")]
     [InlineData("KafkaConsumerOptions:DeadLetterTopic", "")]
-    [InlineData("KafkaProducerOptions:RegionIntersectedTopic", "")]
     public void InvalidSettings_FailWithTheKeyName(string key, string value)
     {
         using var provider = Provider(key, value);

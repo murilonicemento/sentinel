@@ -92,8 +92,6 @@ public static class ServiceCollectionExtension
             return new ConsumerBuilder<Null, string>(config).Build();
         });
 
-        services.AddSingleton<Geospatial.Application.Interfaces.Messaging.IRegionIntersectedPublisher, Messaging.Publishers.RegionIntersectedPublisher>();
-
         var reliability = new ConsumerReliabilityOptions();
         services.AddSingleton(reliability);
         services.AddSingleton<IDeadLetterSink>(sp => new GeospatialDeadLetterSink(
