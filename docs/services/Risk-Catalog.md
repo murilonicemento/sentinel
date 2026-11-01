@@ -197,6 +197,6 @@ As rotas antigas `/api/event-types/*` e `/api/risk-model/*` estão depreciadas a
 
 **Publicação.** `POST /catalog-publications` publica `{ Version, Notes, PublishedAt, PublishedBy }` em `risk-catalog-published`. O risk-evaluation reage copiando a versão pelas listagens.
 
-**Validação geográfica.** Ao criar um parâmetro regional, o serviço chama o geospatial: `contains-point` para o centro e `intersects` para o polígono, contra os limites do Brasil. Usa a rota antiga (X-25).
+**Validação geográfica.** Ao criar um parâmetro regional, o serviço chama o geospatial: `contains-point` para o centro e `intersects` para o polígono, contra os limites do Brasil. Usa as rotas v1 (`/api/v1/geospatial/operations/*`, X-25).
 
 **Persistência.** PostgreSQL `risk_catalog` (`event_type`, `severity`, `severity_criterion`, `idf_curve`, `regional_parameter`, `risk_matrix`, `users`; migrations EF Core, seção do `2-schema.sql`) e Redis como cache de leitura de matrizes e curvas IDF (TTL de 1 hora).

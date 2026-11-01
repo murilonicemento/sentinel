@@ -248,4 +248,4 @@ O read model é gravado antes da transação. Se ela falhar, o evento aparece na
 
 **Persistência.** PostgreSQL `ingestion` (`tenant`, `data_source`, `event_type_permission`, `data_collection`, `sensor_sample`, `outbox`; esquema escrito à mão na seção `ingestion` do `2-schema.sql`), MongoDB (`climaticEvents` e `disasterEvents`, gravadas pelo fluxo e lidas pelo v1; `events` só atende as rotas antigas e nada grava nela), Redis (deduplicação) e MinIO (payload bruto).
 
-**Chamadas a outros serviços.** tenants-billing (`GET /api/v1/tenants-billing/tenants/{id}`, no cadastro da fonte de dados) e geospatial (`contains-point`, ainda pela rota antiga, X-25).
+**Chamadas a outros serviços.** tenants-billing (`GET /api/v1/tenants-billing/tenants/{id}`, no cadastro da fonte de dados) e geospatial (`POST /api/v1/geospatial/operations/contains-point`, X-25).

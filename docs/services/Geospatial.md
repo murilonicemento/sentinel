@@ -163,7 +163,7 @@ Estado verificado em 2026-10-29 no código de `services/geospatial`.
 | `POST /events/search-by-radius` | eventos indexados dentro de um raio (paginado) |
 | `POST /events/search-by-polygon` | eventos indexados dentro de um polígono (paginado) |
 
-As rotas antigas `/api/geospatial/*` estão depreciadas até 2027-01-23 (ADR-0007). **Ingestion e risk-catalog ainda chamam as rotas antigas** (`contains-point`, `within-radius`, `intersects`, `evaluate-batch` nos respectivos `GeospatialClient`) e precisam migrar antes do sunset (X-25).
+As rotas antigas `/api/geospatial/*` estão depreciadas até 2027-01-23 (ADR-0007). Ingestion e risk-catalog chamam as rotas v1 (`/operations/*`) desde 2026-11-01 e ainda aceitam o corpo da rota antiga (X-25). Nenhum consumidor interno conhecido usa mais `/api/geospatial/*`.
 
 **Mensageria.**
 

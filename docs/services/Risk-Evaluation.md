@@ -266,7 +266,7 @@ As seções anteriores descrevem o desenho. Esta descreve o que o código em `se
 | Rota | Papel | Resultado |
 |---|---|---|
 | `POST /evaluations` | Write | avalia um ponto e grava a avaliação |
-| `GET /evaluations?latitude=&longitude=&page=&pageSize=` | Read | histórico paginado de um ponto |
+| `GET /evaluations?latitude=&longitude=&page=&pageSize=` | Read | histórico paginado da célula de um grau inteiro |
 | `GET /evaluations/{id}` | Read | uma avaliação |
 | `PUT /model` | Admin | substitui o modelo de pesos (`INVALID_RISK_MODEL` em 400) |
 
@@ -296,11 +296,11 @@ Avaliações sem tenant, sem id de evento (como o `POST /evaluations`) ou fora d
 
 **Avaliação.** O score combina os pesos do modelo, o fator regional da versão do catálogo copiada (região que contém o ponto) e a matriz do catálogo, que pode subir o nível para o tipo de evento e a intensidade, nunca baixar. As avaliações leem só a cópia local do catálogo.
 
-**Defeito conhecido (RE-18).** O handler de `SensorEventDetected` converte latitude e longitude para inteiro (`(int)notification.Latitude`). O fator regional, a matriz e a região de `risk-updated` usam a posição original, mas o cache de scores recentes é por grau inteiro (um ponto reaproveita, por 5 minutos, o score de outro ponto no mesmo grau, cerca de 111 km), e a entidade, o histórico e `RiskEvaluatedEvent` guardam coordenadas inteiras.
+**Coordenadas (RE-18, corrigido em 2026-11-01).** A avaliação de um evento de sensor usa e grava a posição exata: a entidade no Mongo, o cache de scores recentes e `RiskEvaluatedEvent` / `HighRiskDetectedEvent` levam latitude e longitude em `double`. Avaliações gravadas antes guardam o grau inteiro e continuam legíveis. Os contratos HTTP não mudaram: recebem e devolvem graus inteiros (a resposta trunca a posição exata), e o histórico (`GET /evaluations?latitude=&longitude=`) devolve a célula do grau, isto é, as posições que truncam para aqueles graus, incluindo as avaliações antigas.
 
 **Persistência.**
 
 - MongoDB: `RiskEvaluations`, `RiskModels`, `RiskFactors`, `CatalogVersions` e `CatalogSnapshots` (com o `regionCode` de cada região desde o ADR-0008; uma versão anterior do serviço não lê essas cópias).
-- Redis: scores recentes por coordenada (prefixo `risk-evaluation:`) e as reservas de consumo.
+- Redis: scores recentes por posição exata em `risk:score:v2:{latitude}:{longitude}` (TTL de 5 minutos; as chaves antigas `risk:score:{grau}:{grau}` expiram sozinhas) e as reservas de consumo `risk-evaluation:consumed:v1:{key}`.
 
 **Chamadas a outros serviços.** Só o risk-catalog, com o papel `RiskCatalog.Read`, para copiar a versão publicada (ADR-0002, RE-15). O geospatial não é chamado.

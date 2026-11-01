@@ -10,7 +10,7 @@ The tables below were verified against the code and `platform/docker-compose.yml
 
 ### Public APIs and External Integrations
 
-Every service exposes its public contract under `/api/v1/<service>`; the older routes are frozen and deprecated until 2027-01-23 (`docs/adr/ADR-0007-api-versioning-and-deprecation.md`). Internal callers of a deprecated route must move to v1 before the sunset: ingestion and risk-catalog still call geospatial's `/api/geospatial/*` (X-25).
+Every service exposes its public contract under `/api/v1/<service>`; the older routes are frozen and deprecated until 2027-01-23 (`docs/adr/ADR-0007-api-versioning-and-deprecation.md`). Internal callers of a deprecated route must move to v1 before the sunset; no known internal caller uses a deprecated route since ingestion and risk-catalog moved to geospatial's v1 operations (X-25).
 
 | Service               | API or Integration                                   | Purpose                                                       | Authentication / Configuration                                                                     |
 | --------------------- | ---------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -44,14 +44,14 @@ The `risk_catalog`, `alert_orchestrator`, `channels` and `tenants_billing` secti
 **MongoDB 7**
 
 - **ingestion (read):** `climaticEvents` and `disasterEvents` (unique indexes on `EventId`), written by the pipeline and read by v1. The frozen legacy routes read `events`, which nothing writes.
-- **risk-evaluation:** `RiskEvaluations`, `RiskModels`, `RiskFactors`, `CatalogVersions` and `CatalogSnapshots`.
+- **risk-evaluation:** `RiskEvaluations` (exact `double` coordinates; documents stored before RE-18 hold whole-degree integers and stay readable), `RiskModels`, `RiskFactors`, `CatalogVersions` and `CatalogSnapshots`.
 - **audit-compliance:** `AuditComplianceDatabase` with `auditRecords` (append-only, unique index on `SourceService` + `EventId`), `auditExports`, and the GridFS bucket `auditExportFiles`. The custom role `auditComplianceApp` denies `update`/`remove` on `auditRecords`. Index and role definitions live in `platform/init-db/mongodb` and `MongoIndexInitializer`.
 
 **Redis 7**
 
 - **ingestion:** Deduplication claims `ing:{tenant}:{dataSource}:{yyyyMMddHHmmss}` (HTTP collections) and `ing:{tenant}:{dataSource}:src:{providerEventId}` (polled readings), with a lease while processing and a TTL after it.
 - **risk-catalog:** Read cache of risk matrices and IDF curves (TTL of 1 hour).
-- **risk-evaluation:** Recent scores using the `risk-evaluation:` prefix, and consumption claims `risk-evaluation:consumed:v1:{key}`.
+- **risk-evaluation:** Recent scores by exact position under `risk:score:v2:{latitude}:{longitude}` (TTL of 5 minutes; the older whole-degree keys `risk:score:{lat}:{lon}` expire on their own), and consumption claims `risk-evaluation:consumed:v1:{key}`.
 - **alert-orchestrator:** Idempotency claims `alert-orchestrator:idempotency:v2:{eventId}` and cooldown state keyed by `(region, riskType, tenantId)`.
 - **channels:** Tenant settings under `ChannelsService:TenantSettings:{tenantId}`, with a TTL of 300 seconds.
 - **reporting:** `reporting:events:{tenantId}` (TTL of 5 minutes) and `reporting:event:{tenantId}:{eventId}` (TTL of 10 minutes).
@@ -71,7 +71,7 @@ Producers and consumers were verified in the code. A topic with no producer or n
 | `sensor-event-detected`                                     | None                                                                    | geospatial                     | Same `SensorEventDetected` payload                                                                                                       |
 | `region-intersected`                                        | None (geospatial stopped publishing on HTTP `intersects`, ADR-0008)     | alert-orchestrator             | `RegionIntersectedEvent { EventId, Region, IntersectingRegion, RiskType, Severity, Timestamp }`; older messages hold a `GeospatialOperationEvent` and are dead-lettered |
 | `risk-catalog-published`                                    | risk-catalog                                                            | risk-evaluation                | `{ Version: int, Notes, PublishedAt, PublishedBy }`                                                                                      |
-| `risk-events` (`Kafka:Topic`)                               | risk-evaluation                                                         | None                           | `RiskEvaluatedEvent { EvaluationId, Latitude, Longitude, Score, Level, Timestamp }` and `HighRiskDetectedEvent` (integer coordinates, RE-18) |
+| `risk-events` (`Kafka:Topic`)                               | risk-evaluation                                                         | None                           | `RiskEvaluatedEvent { EvaluationId, Latitude, Longitude, Score, Level, Timestamp }` and `HighRiskDetectedEvent` (decimal coordinates since RE-18; older messages hold whole degrees) |
 | `risk-updated` (`Kafka:RiskUpdatedTopic`)                   | risk-evaluation (ADR-0008), keyed `{tenant}:{region}`                   | alert-orchestrator             | `RiskUpdatedEvent { EventId, Region, RiskType, RiskScore, TenantId, Timestamp, Metadata }`; `Region` is the catalog `regionCode`, `TenantId` is required |
 | `risk-evaluated`                                            | None                                                                    | None                           | Created by `kafka-init` only                                                                                                             |
 | `alert-orchestrator-events`                                 | alert-orchestrator                                                      | None                           | `AlertWindowOpened`, `AlertTriggered`, `AlertConfirmed`, `AlertEscalated`, `AlertClosed`, `AlertWindowExpired`                           |
