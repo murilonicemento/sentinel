@@ -44,6 +44,8 @@ public sealed class RiskEvaluationApiFactory : WebApplicationFactory<Program>
             services.AddSingleton(Mock.Of<IRecentScoresCache>());
             services.RemoveAll<IEventPublisher>();
             services.AddSingleton(Mock.Of<IEventPublisher>());
+            services.RemoveAll<IRiskUpdatedPublisher>();
+            services.AddSingleton(Mock.Of<IRiskUpdatedPublisher>());
         });
     }
 

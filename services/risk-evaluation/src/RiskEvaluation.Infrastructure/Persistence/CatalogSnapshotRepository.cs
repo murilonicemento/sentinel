@@ -47,7 +47,8 @@ public class CatalogSnapshotRepository : ICatalogSnapshotRepository
                 CenterLatitude = r.CenterLatitude,
                 CenterLongitude = r.CenterLongitude,
                 CoverageRadiusKm = r.CoverageRadiusKm,
-                Polygon = r.Polygon.Select(p => new[] { p.Latitude, p.Longitude }).ToList()
+                Polygon = r.Polygon.Select(p => new[] { p.Latitude, p.Longitude }).ToList(),
+                RegionCode = r.RegionCode
             }).ToList(),
             SeverityRules = snapshot.SeverityRules.Select(s => new SeverityRuleDocument
             {
@@ -68,13 +69,15 @@ public class CatalogSnapshotRepository : ICatalogSnapshotRepository
             Version,
             DateTime.SpecifyKind(CapturedAt, DateTimeKind.Utc),
             Regions.Select(r => new RegionalAdjustment(r.RegionId, r.Factor, r.CenterLatitude, r.CenterLongitude,
-                r.CoverageRadiusKm, r.Polygon.Select(p => new GeoCoordinate(p[0], p[1])).ToList())).ToList(),
+                r.CoverageRadiusKm, r.Polygon.Select(p => new GeoCoordinate(p[0], p[1])).ToList(), r.RegionCode))
+                .ToList(),
             SeverityRules.Select(s => new SeverityRule(s.EventTypeCode, s.SeverityLevel, s.MinValue, s.MaxValue))
                 .ToList(),
             MatrixRules.Select(m => new RiskMatrixRule(m.EventTypeCode, m.SeverityLevel,
                 Enum.Parse<RiskLevel>(m.RiskLevel))).ToList());
     }
 
+    [BsonIgnoreExtraElements]
     internal sealed class RegionDocument
     {
         [BsonGuidRepresentation(MongoDB.Bson.GuidRepresentation.Standard)]
@@ -87,6 +90,9 @@ public class CatalogSnapshotRepository : ICatalogSnapshotRepository
 
         /// <summary>Vertices as [latitude, longitude].</summary>
         public List<double[]> Polygon { get; set; } = [];
+
+        /// <summary>Absent in copies taken before risk-catalog exposed the region code.</summary>
+        public string? RegionCode { get; set; }
     }
 
     internal sealed class SeverityRuleDocument

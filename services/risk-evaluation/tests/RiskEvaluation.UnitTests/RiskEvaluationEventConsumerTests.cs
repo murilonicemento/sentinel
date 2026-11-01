@@ -74,6 +74,23 @@ public class RiskEvaluationEventConsumerTests
     });
 
     [Fact]
+    public async Task SensorEventFromIngestion_CarriesItsTenant()
+    {
+        // As ingestion's outbox serializes SensorEventDetected (PascalCase, TenantId since X-24).
+        const string payload =
+            "{\"CollectionId\":\"0b6f4c2e-5d1a-4e8b-9f3c-7a2d6e1b4c5f\",\"EventType\":\"Flood\",\"Intensity\":7.5," +
+            "\"Latitude\":-22.95,\"Longitude\":-43.25,\"CollectedAt\":\"2026-11-01T12:00:00Z\"," +
+            "\"EventId\":\"8f3a5c1e-2b4d-4e6f-9a1b-3c5d7e9f1a2b\",\"TenantId\":\"6d3f1c8e-1a52-4b0e-9a59-2f0d6f1b9a01\"}";
+
+        await ConsumeAsync(Message("disaster-event-detected", 1, payload));
+
+        _mediator.Verify(m => m.Publish(It.Is<SensorEventDetected>(e =>
+                e.TenantId == Guid.Parse("6d3f1c8e-1a52-4b0e-9a59-2f0d6f1b9a01") &&
+                e.EventId == Guid.Parse("8f3a5c1e-2b4d-4e6f-9a1b-3c5d7e9f1a2b")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task SensorEventRedeliveredWithTheSameEventId_IsEvaluatedOnce()
     {
         var payload = Sensor(Guid.NewGuid());

@@ -12,7 +12,8 @@ public interface IRiskEvaluationService
 
 /// <summary>
 /// What produced the evaluation: the precise position (the stored evaluation keeps whole degrees) and, for sensor
-/// events, the event type and intensity used to look up the catalog risk matrix.
+/// events, the event type and intensity used to look up the catalog risk matrix, the sensor event's id and its
+/// tenant. Only an evaluation with the event id and the tenant can raise an alert (<c>risk-updated</c>).
 /// </summary>
 public sealed record EvaluationSource(double Latitude, double Longitude, string? EventType = null,
-    double? Intensity = null);
+    double? Intensity = null, Guid? SourceEventId = null, string? TenantId = null);

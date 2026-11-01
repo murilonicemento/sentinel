@@ -20,6 +20,37 @@ public class RiskCatalogSnapshotTests
         Assert.Equal(1.0, snapshot.RegionalFactorAt(10, 10));
     }
 
+    [Fact]
+    public void RegionAt_IsTheContainingRegionWithTheHighestFactor()
+    {
+        var snapshot = new RiskCatalogSnapshot(1, DateTime.UtcNow,
+        [
+            Circle(1.3, -23.5, -46.6, 100) with { RegionCode = "sp-metro" },
+            Circle(1.6, -23.5, -46.6, 10) with { RegionCode = "sp-capital" }
+        ], [], []);
+
+        Assert.Equal("sp-capital", snapshot.RegionAt(-23.5, -46.6)!.Code);
+        Assert.Equal("sp-metro", snapshot.RegionAt(-23.0, -46.6)!.Code);
+        Assert.Null(snapshot.RegionAt(10, 10));
+    }
+
+    [Fact]
+    public void RegionAt_BreaksFactorTiesByRegionCode()
+    {
+        var snapshot = new RiskCatalogSnapshot(1, DateTime.UtcNow,
+            [Circle(1.5, 0, 0, 10) with { RegionCode = "b" }, Circle(1.5, 0, 0, 10) with { RegionCode = "a" }], [], []);
+
+        Assert.Equal("a", snapshot.RegionAt(0, 0)!.Code);
+    }
+
+    [Fact]
+    public void RegionCode_FallsBackToTheLegacyCodeInOlderCopies()
+    {
+        var id = Guid.Parse("3f2b6c1d-8e4a-4b7f-9c2d-1a5e7f9b3c4d");
+
+        Assert.Equal("legacy-3f2b6c1d8e4a4b7f9c2d1a5e7f9b3c4d", new RegionalAdjustment(id, 1, 0, 0, 1, []).Code);
+    }
+
     [Theory]
     [InlineData(5.0, 2.0)]
     [InlineData(0.1, 0.5)]

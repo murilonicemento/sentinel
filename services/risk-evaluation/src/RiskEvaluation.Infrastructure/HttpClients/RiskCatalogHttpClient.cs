@@ -34,7 +34,8 @@ public sealed class RiskCatalogHttpClient : IRiskCatalogClient
             _timeProvider.GetUtcNow().UtcDateTime,
             regions.Select(r => new RegionalAdjustment(r.RegionId, r.AdjustmentFactor, r.CenterLatitude,
                 r.CenterLongitude, r.CoverageRadiusKm,
-                r.RegionBounds?.Coordinates.Select(p => new GeoCoordinate(p.Latitude, p.Longitude)).ToList() ?? []))
+                r.RegionBounds?.Coordinates.Select(p => new GeoCoordinate(p.Latitude, p.Longitude)).ToList() ?? [],
+                r.RegionCode))
                 .ToList(),
             criteria.Select(c => new SeverityRule(c.EventTypeCode, c.SeverityLevel, c.MinValue, c.MaxValue)).ToList(),
             // Entries with a level this service does not know are ignored rather than failing the whole copy.
@@ -66,7 +67,7 @@ public sealed class RiskCatalogHttpClient : IRiskCatalogClient
     private sealed record PagedData<T>(List<T> Items, int TotalPages);
 
     private sealed record RegionDto(Guid RegionId, double AdjustmentFactor, double? CenterLatitude,
-        double? CenterLongitude, double? CoverageRadiusKm, PolygonDto? RegionBounds);
+        double? CenterLongitude, double? CoverageRadiusKm, PolygonDto? RegionBounds, string? RegionCode);
 
     private sealed record PolygonDto(List<PointDto> Coordinates);
 

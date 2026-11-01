@@ -108,4 +108,18 @@ public class RiskEvaluationStorageTests : IClassFixture<StorageFixture>
         Assert.Equal(1.5, latest.RegionalFactorAt(-23.2, -46.2));
         Assert.Equal(Domain.Enums.RiskLevel.Critical, latest.MatrixLevelFor("Flood", 6));
     }
+
+    [Fact]
+    public async Task CatalogSnapshots_KeepTheRegionCode()
+    {
+        // Own database: the latest version is global, and the other snapshot test relies on it.
+        var repository = new CatalogSnapshotRepository(
+            _fixture.Database.Client.GetDatabase($"snapshots-{Guid.NewGuid():N}"));
+        await repository.SaveAsync(new RiskCatalogSnapshot(90, DateTime.UtcNow,
+            [new RegionalAdjustment(Guid.NewGuid(), 1.2, -22.9, -43.2, 50, [], "rj-capital")], [], []));
+
+        var latest = await repository.GetLatestAsync();
+
+        Assert.Equal("rj-capital", latest!.RegionAt(-22.9, -43.2)!.Code);
+    }
 }

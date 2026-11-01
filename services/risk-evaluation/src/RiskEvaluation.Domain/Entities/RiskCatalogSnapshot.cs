@@ -36,9 +36,19 @@ public sealed class RiskCatalogSnapshot
     /// </summary>
     public double RegionalFactorAt(double latitude, double longitude)
     {
-        var factors = Regions.Where(r => r.Contains(latitude, longitude)).Select(r => r.Factor).ToList();
-        return factors.Count == 0 ? 1.0 : Math.Clamp(factors.Max(), MinRegionalFactor, MaxRegionalFactor);
+        var region = RegionAt(latitude, longitude);
+        return region is null ? 1.0 : Math.Clamp(region.Factor, MinRegionalFactor, MaxRegionalFactor);
     }
+
+    /// <summary>
+    /// The region whose factor applies to the point: the highest factor among the regions that contain it, ties broken
+    /// by region code so the choice is stable. Null when no region contains the point.
+    /// </summary>
+    public RegionalAdjustment? RegionAt(double latitude, double longitude) =>
+        Regions.Where(r => r.Contains(latitude, longitude))
+            .OrderByDescending(r => r.Factor)
+            .ThenBy(r => r.Code, StringComparer.Ordinal)
+            .FirstOrDefault();
 
     /// <summary>
     /// Risk level the catalog assigns to an event of this type and intensity: intensity → severity by the criteria
@@ -60,16 +70,23 @@ public sealed class RiskCatalogSnapshot
     }
 }
 
-/// <summary>A catalog region: a polygon when it has at least three vertices, otherwise a circle around its center.</summary>
+/// <summary>
+/// A catalog region: a polygon when it has at least three vertices, otherwise a circle around its center.
+/// <paramref name="RegionCode"/> is null in copies taken before risk-catalog exposed it (RC-14).
+/// </summary>
 public sealed record RegionalAdjustment(
     Guid RegionId,
     double Factor,
     double? CenterLatitude,
     double? CenterLongitude,
     double? CoverageRadiusKm,
-    IReadOnlyList<GeoCoordinate> Polygon)
+    IReadOnlyList<GeoCoordinate> Polygon,
+    string? RegionCode = null)
 {
     private const double EarthRadiusKm = 6371.0;
+
+    /// <summary>The region's identity; a copy without the code falls back to the code risk-catalog gave legacy rows.</summary>
+    public string Code => string.IsNullOrWhiteSpace(RegionCode) ? $"legacy-{RegionId:N}" : RegionCode;
 
     public bool Contains(double latitude, double longitude)
     {

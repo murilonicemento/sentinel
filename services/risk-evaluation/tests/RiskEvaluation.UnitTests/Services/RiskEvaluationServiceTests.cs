@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Moq;
+using RiskEvaluation.Application.Contracts;
 using RiskEvaluation.Application.DTOs;
 using RiskEvaluation.Application.Services;
 using RiskEvaluation.Domain.Entities;
@@ -21,6 +22,7 @@ public class RiskEvaluationServiceTests
 
     private readonly Mock<IRiskEvaluationRepository> _repositoryMock;
     private readonly Mock<IEventPublisher> _eventPublisherMock;
+    private readonly Mock<IRiskUpdatedPublisher> _riskUpdatedPublisherMock = new();
     private readonly Mock<IRecentScoresCache> _cacheMock;
     private readonly Mock<ICatalogSnapshotRepository> _catalogSnapshotsMock = new();
     private readonly Mock<ILogger<RiskEvaluationService>> _loggerMock;
@@ -39,6 +41,7 @@ public class RiskEvaluationServiceTests
         _service = new RiskEvaluationService(
             _repositoryMock.Object,
             _eventPublisherMock.Object,
+            _riskUpdatedPublisherMock.Object,
             new RiskCalculationService(),
             _cacheMock.Object,
             _catalogSnapshotsMock.Object,
@@ -280,7 +283,7 @@ public class RiskEvaluationServiceTests
         7,
         DateTime.UtcNow,
         [
-            new RegionalAdjustment(Guid.NewGuid(), 1.2, -22.9, -43.2, 50, []),
+            new RegionalAdjustment(Guid.NewGuid(), 1.2, -22.9, -43.2, 50, [], "rj-capital"),
             new RegionalAdjustment(Guid.NewGuid(), 0.5, null, null, null,
                 [new GeoCoordinate(-23, -47), new GeoCoordinate(-23, -46), new GeoCoordinate(-24, -46), new GeoCoordinate(-24, -47)])
         ],
@@ -352,5 +355,76 @@ public class RiskEvaluationServiceTests
 
         Assert.Equal(0.1, result.Score);
         Assert.Equal(RiskLevel.Critical, result.Level);
+    }
+
+    private static readonly Guid SensorEventId = Guid.Parse("8f3a5c1e-2b4d-4e6f-9a1b-3c5d7e9f1a2b");
+    private const string Tenant = "6d3f1c8e-1a52-4b0e-9a59-2f0d6f1b9a01";
+
+    [Fact]
+    public async Task EvaluateRiskAsync_SensorEventInsideARegion_PublishesRiskUpdatedForTheRegionAndTenant()
+    {
+        _catalogSnapshotsMock.Setup(x => x.GetLatestAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
+        SetupNoCacheAndNoGeospatialContext(-22, -43);
+        RiskUpdatedEvent? published = null;
+        _riskUpdatedPublisherMock.Setup(x => x.PublishAsync(It.IsAny<RiskUpdatedEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<RiskUpdatedEvent, CancellationToken>((e, _) => published = e);
+
+        var result = await _service.EvaluateRiskAsync(-22, -43, MaxMetrics(),
+            new RiskEvents { Flood = DetectedAtMaxIntensity() },
+            new EvaluationSource(-22.95, -43.25, "Flood", 10, SensorEventId, Tenant));
+
+        Assert.NotNull(published);
+        Assert.Equal(SensorEventId, published.EventId);
+        Assert.Equal("rj-capital", published.Region);
+        Assert.Equal("flood", published.RiskType);
+        Assert.Equal(Tenant, published.TenantId);
+        Assert.Equal(result.Score, published.RiskScore);
+        Assert.Equal("-22.95", published.Metadata["latitude"]);
+        Assert.Equal("7", published.Metadata["catalogVersion"]);
+        Assert.False(published.Metadata.ContainsKey("source"));
+    }
+
+    [Fact]
+    public async Task EvaluateRiskAsync_WithCachedScore_StillPublishesRiskUpdated()
+    {
+        _catalogSnapshotsMock.Setup(x => x.GetLatestAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
+        _cacheMock.Setup(x => x.GetAsync(-22, -43, It.IsAny<CancellationToken>())).ReturnsAsync(
+            new RiskScoreCacheEntry { Score = 0.9, Level = "Critical", CalculatedAt = DateTime.UtcNow });
+
+        await _service.EvaluateRiskAsync(-22, -43, new RiskMetrics(), new RiskEvents(),
+            new EvaluationSource(-22.95, -43.25, "Flood", 10, SensorEventId, Tenant));
+
+        _riskUpdatedPublisherMock.Verify(x => x.PublishAsync(
+            It.Is<RiskUpdatedEvent>(e => e.RiskScore == 0.9 && e.Region == "rj-capital"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(false, Tenant)]
+    public async Task EvaluateRiskAsync_WithoutTheEventIdOrTheTenant_PublishesNoRiskUpdated(bool withEventId,
+        string? tenant)
+    {
+        _catalogSnapshotsMock.Setup(x => x.GetLatestAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
+        SetupNoCacheAndNoGeospatialContext(-22, -43);
+
+        await _service.EvaluateRiskAsync(-22, -43, MaxMetrics(), new RiskEvents { Flood = DetectedAtMaxIntensity() },
+            new EvaluationSource(-22.95, -43.25, "Flood", 10, withEventId ? SensorEventId : null, tenant));
+
+        _riskUpdatedPublisherMock.Verify(x => x.PublishAsync(It.IsAny<RiskUpdatedEvent>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task EvaluateRiskAsync_OutsideEveryRegion_PublishesNoRiskUpdated()
+    {
+        _catalogSnapshotsMock.Setup(x => x.GetLatestAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
+        SetupNoCacheAndNoGeospatialContext(-10, -40);
+
+        await _service.EvaluateRiskAsync(-10, -40, MaxMetrics(), new RiskEvents { Flood = DetectedAtMaxIntensity() },
+            new EvaluationSource(-10, -40, "Flood", 10, SensorEventId, Tenant));
+
+        _riskUpdatedPublisherMock.Verify(x => x.PublishAsync(It.IsAny<RiskUpdatedEvent>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 }

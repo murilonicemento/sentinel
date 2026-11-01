@@ -13,4 +13,7 @@ public class SensorEventDetected : INotification
     public double Latitude { get; set; }
     public double Longitude { get; set; }
     public DateTime CollectedAt { get; set; }
+
+    /// <summary>Tenant of the collection; absent in events published before ingestion added it.</summary>
+    public Guid? TenantId { get; set; }
 }

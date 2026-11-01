@@ -48,4 +48,32 @@ public class SensorEventDetectedHandlerTests
 
         Assert.Equal(new EvaluationSource(-23.55, -46.63, "Flood", 7.5), source);
     }
+
+    [Fact]
+    public async Task SensorEvent_PassesItsIdAndTenantForTheAlertPipeline()
+    {
+        EvaluationSource? source = null;
+        var service = new Mock<IRiskEvaluationService>();
+        service.Setup(s => s.EvaluateRiskAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<RiskMetrics>(),
+                It.IsAny<RiskEvents>(), It.IsAny<EvaluationSource?>()))
+            .Callback<int, int, RiskMetrics, RiskEvents, EvaluationSource?>((_, _, _, _, s) => source = s)
+            .ReturnsAsync((RiskEvaluationEntity)null!);
+        var eventId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+
+        await new SensorEventDetectedHandler(service.Object).Handle(
+            new SensorEventDetected
+            {
+                EventId = eventId,
+                TenantId = tenantId,
+                EventType = "Flood",
+                Intensity = 7.5,
+                Latitude = -23.55,
+                Longitude = -46.63
+            },
+            CancellationToken.None);
+
+        Assert.Equal(eventId, source!.SourceEventId);
+        Assert.Equal(tenantId.ToString(), source.TenantId);
+    }
 }

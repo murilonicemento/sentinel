@@ -84,6 +84,11 @@ public static class ServiceCollectionExtension
 
             return new KafkaEventPublisher(bootstrapServers!, topic!, logger);
         });
+        services.AddSingleton<IRiskUpdatedPublisher>(sp => new KafkaRiskUpdatedPublisher(
+            configuration["Kafka:BootstrapServers"]
+            ?? throw new InvalidOperationException("Configuration 'Kafka:BootstrapServers' is required."),
+            configuration["Kafka:RiskUpdatedTopic"] ?? "risk-updated",
+            sp.GetRequiredService<ILogger<KafkaRiskUpdatedPublisher>>()));
 
         // Message Consumer
         var bootstrapServers = configuration["Kafka:BootstrapServers"]

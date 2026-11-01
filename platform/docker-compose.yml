@@ -170,6 +170,7 @@ services:
       - ConnectionStrings__Redis=redis:6379
       - Kafka__BootstrapServers=kafka:9092
       - Kafka__Topic=risk-events
+      - Kafka__RiskUpdatedTopic=risk-updated
       - Kafka__GroupId=risk-evaluation-group
       - Loki__Url=http://loki:3100
       - OpenTelemetry__OtlpEndpoint=http://tempo:4317
@@ -480,6 +481,7 @@ services:
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic climatic-event-detected --partitions 1 --replication-factor 1
 
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-evaluated --partitions 1 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-events --partitions 1 --replication-factor 1
 
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic sensor-event-detected --partitions 1 --replication-factor 1
 

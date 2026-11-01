@@ -1,7 +1,10 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging;
+using RiskEvaluation.Application.Contracts;
 using RiskEvaluation.Application.Interfaces;
 using RiskEvaluation.Application.Interfaces.Messaging;
 using RiskEvaluation.Application.Interfaces.Services;
+using RiskEvaluation.Domain.Entities;
 using RiskEvaluation.Domain.Enums;
 using RiskEvaluation.Domain.Events;
 using RiskEvaluation.Domain.Interfaces;
@@ -14,6 +17,7 @@ public class RiskEvaluationService : IRiskEvaluationService
 {
     private readonly IRiskEvaluationRepository _repository;
     private readonly IEventPublisher _eventPublisher;
+    private readonly IRiskUpdatedPublisher _riskUpdatedPublisher;
     private readonly RiskCalculationService _calculationService;
     private readonly IRecentScoresCache _cache;
     private readonly ICatalogSnapshotRepository _catalogSnapshots;
@@ -22,6 +26,7 @@ public class RiskEvaluationService : IRiskEvaluationService
     public RiskEvaluationService(
         IRiskEvaluationRepository repository,
         IEventPublisher eventPublisher,
+        IRiskUpdatedPublisher riskUpdatedPublisher,
         RiskCalculationService calculationService,
         IRecentScoresCache cache,
         ICatalogSnapshotRepository catalogSnapshots,
@@ -29,6 +34,7 @@ public class RiskEvaluationService : IRiskEvaluationService
     {
         _repository = repository;
         _eventPublisher = eventPublisher;
+        _riskUpdatedPublisher = riskUpdatedPublisher;
         _calculationService = calculationService;
         _cache = cache;
         _catalogSnapshots = catalogSnapshots;
@@ -53,6 +59,7 @@ public class RiskEvaluationService : IRiskEvaluationService
             var cachedLevel = Floor(Enum.Parse<RiskLevel>(cached.Level), matrixLevel);
             var cachedEvaluation = new RiskEvaluationEntity(latitude, longitude, cached.Score, cachedLevel);
             await _repository.AddAsync(cachedEvaluation);
+            await PublishRiskUpdatedAsync(cachedEvaluation, catalog, source);
             return cachedEvaluation;
         }
 
@@ -89,6 +96,7 @@ public class RiskEvaluationService : IRiskEvaluationService
             evaluation.Timestamp);
 
         await _eventPublisher.PublishAsync(riskEvaluatedEvent);
+        await PublishRiskUpdatedAsync(evaluation, catalog, source);
 
         if (level != RiskLevel.High && level != RiskLevel.Critical) return evaluation;
 
@@ -103,6 +111,41 @@ public class RiskEvaluationService : IRiskEvaluationService
         await _eventPublisher.PublishAsync(highRiskEvent);
 
         return evaluation;
+    }
+
+    /// <summary>
+    /// Hands the evaluation to alert-orchestrator. An alert window belongs to a tenant and a catalog region, so an
+    /// evaluation without the sensor event's id and tenant, or outside every region of the catalog copy, raises none.
+    /// </summary>
+    private async Task PublishRiskUpdatedAsync(RiskEvaluationEntity evaluation, RiskCatalogSnapshot? catalog,
+        EvaluationSource? source)
+    {
+        if (source is not { SourceEventId: { } eventId, EventType: { Length: > 0 } eventType } ||
+            string.IsNullOrWhiteSpace(source.TenantId)) return;
+
+        var region = catalog?.RegionAt(source.Latitude, source.Longitude);
+        if (region is null)
+        {
+            _logger.LogInformation(
+                "Sensor event {EventId} is outside every region of the catalog copy; no risk-updated published",
+                eventId);
+            return;
+        }
+
+        var metadata = new Dictionary<string, string>
+        {
+            ["evaluationId"] = evaluation.Id.ToString(),
+            ["level"] = evaluation.Level.ToString(),
+            ["eventType"] = eventType,
+            ["latitude"] = source.Latitude.ToString(CultureInfo.InvariantCulture),
+            ["longitude"] = source.Longitude.ToString(CultureInfo.InvariantCulture),
+            ["catalogVersion"] = catalog!.Version.ToString(CultureInfo.InvariantCulture)
+        };
+        if (source.Intensity is { } intensity)
+            metadata["intensity"] = intensity.ToString(CultureInfo.InvariantCulture);
+
+        await _riskUpdatedPublisher.PublishAsync(new RiskUpdatedEvent(eventId, region.Code,
+            eventType.ToLowerInvariant(), evaluation.Score, source.TenantId, evaluation.Timestamp, metadata));
     }
 
     // The catalog matrix can raise the level for an event type and intensity, never lower it.
