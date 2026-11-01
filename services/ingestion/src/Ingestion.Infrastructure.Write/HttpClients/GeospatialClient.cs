@@ -34,16 +34,12 @@ public class GeospatialClient : IGeospatialClient
         try
         {
             var response = await _httpClient.PostAsJsonAsync(
-                "api/geospatial/contains-point",
+                "api/v1/geospatial/operations/contains-point",
                 request,
                 _jsonOptions,
                 cancellationToken);
 
-            response.EnsureSuccessStatusCode();
-
-            var result = await response.Content.ReadFromJsonAsync<ContainsPointResponse>(
-                _jsonOptions,
-                cancellationToken);
+            var result = await ReadResultAsync<ContainsPointResponse>(response, cancellationToken);
 
             return result?.Contains ?? false;
         }
@@ -70,18 +66,14 @@ public class GeospatialClient : IGeospatialClient
         try
         {
             var response = await _httpClient.PostAsJsonAsync(
-                "api/geospatial/within-radius",
+                "api/v1/geospatial/operations/within-radius",
                 request,
                 _jsonOptions,
                 cancellationToken);
 
-            response.EnsureSuccessStatusCode();
+            var result = await ReadResultAsync<WithinRadiusResponse>(response, cancellationToken);
 
-            var result = await response.Content.ReadFromJsonAsync<WithinRadiusResponse>(
-                _jsonOptions,
-                cancellationToken);
-
-            return (result?.WithinRadius ?? false, result?.Distance ?? 0);
+            return (result?.WithinRadius ?? false, result?.DistanceMeters ?? result?.Distance ?? 0);
         }
         catch (Exception ex)
         {
@@ -102,16 +94,12 @@ public class GeospatialClient : IGeospatialClient
         try
         {
             var response = await _httpClient.PostAsJsonAsync(
-                "api/geospatial/intersects",
+                "api/v1/geospatial/operations/intersects",
                 request,
                 _jsonOptions,
                 cancellationToken);
 
-            response.EnsureSuccessStatusCode();
-
-            var result = await response.Content.ReadFromJsonAsync<IntersectsResponse>(
-                _jsonOptions,
-                cancellationToken);
+            var result = await ReadResultAsync<IntersectsResponse>(response, cancellationToken);
 
             return result?.Intersects ?? false;
         }
@@ -133,18 +121,14 @@ public class GeospatialClient : IGeospatialClient
         try
         {
             var response = await _httpClient.PostAsJsonAsync(
-                "api/geospatial/distance",
+                "api/v1/geospatial/operations/distance",
                 request,
                 _jsonOptions,
                 cancellationToken);
 
-            response.EnsureSuccessStatusCode();
+            var result = await ReadResultAsync<DistanceResponse>(response, cancellationToken);
 
-            var result = await response.Content.ReadFromJsonAsync<DistanceResponse>(
-                _jsonOptions,
-                cancellationToken);
-
-            return result?.Distance ?? 0;
+            return result?.DistanceMeters ?? result?.Distance ?? 0;
         }
         catch (Exception ex)
         {
@@ -159,16 +143,12 @@ public class GeospatialClient : IGeospatialClient
         try
         {
             var response = await _httpClient.PostAsJsonAsync(
-                "api/geospatial/evaluate-batch",
+                "api/v1/geospatial/operations/evaluate-batch",
                 request,
                 _jsonOptions,
                 cancellationToken);
 
-            response.EnsureSuccessStatusCode();
-
-            var result = await response.Content.ReadFromJsonAsync<BatchResponseDTO>(
-                _jsonOptions,
-                cancellationToken);
+            var result = await ReadResultAsync<BatchResponseDTO>(response, cancellationToken);
 
             return result ?? new BatchResponseDTO();
         }
@@ -179,11 +159,31 @@ public class GeospatialClient : IGeospatialClient
         }
     }
 
+    /// <summary>
+    /// Reads a geospatial result. The calls go to <c>/api/v1/geospatial/operations</c>, which wraps the result in the
+    /// <c>ResponseBaseDTO</c> envelope; a bare body (the deprecated <c>/api/geospatial</c> routes) is read too, so a
+    /// geospatial rollback does not break this caller (ADR-0007 §4, X-25).
+    /// </summary>
+    private async Task<T?> ReadResultAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        response.EnsureSuccessStatusCode();
+
+        using var document = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        var body = document.RootElement;
+        var result = body.ValueKind == JsonValueKind.Object
+            ? body.EnumerateObject().FirstOrDefault(p => p.NameEquals("data") || p.NameEquals("Data")).Value
+            : default;
+
+        return (result.ValueKind == JsonValueKind.Undefined ? body : result).Deserialize<T>(_jsonOptions);
+    }
+
     private record ContainsPointResponse(bool Contains);
 
-    private record WithinRadiusResponse(bool WithinRadius, double Distance);
+    // v1 names the distance DistanceMeters; the frozen route named it Distance.
+    private record WithinRadiusResponse(bool WithinRadius, double? DistanceMeters, double? Distance);
 
     private record IntersectsResponse(bool Intersects);
 
-    private record DistanceResponse(double Distance);
+    private record DistanceResponse(double? DistanceMeters, double? Distance);
 }
