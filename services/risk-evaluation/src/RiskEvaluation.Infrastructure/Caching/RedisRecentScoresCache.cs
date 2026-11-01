@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RiskEvaluation.Domain.Interfaces;
@@ -22,7 +23,7 @@ public class RedisRecentScoresCache : IRecentScoresCache
         _logger = logger;
     }
 
-    public async Task<RiskScoreCacheEntry?> GetAsync(int latitude, int longitude, CancellationToken cancellationToken = default)
+    public async Task<RiskScoreCacheEntry?> GetAsync(double latitude, double longitude, CancellationToken cancellationToken = default)
     {
         var key = BuildKey(latitude, longitude);
         var value = await _redis.StringGetAsync(key);
@@ -44,7 +45,7 @@ public class RedisRecentScoresCache : IRecentScoresCache
         }
     }
 
-    public async Task SetAsync(int latitude, int longitude, RiskScoreCacheEntry entry, TimeSpan? expiration = null, CancellationToken cancellationToken = default)
+    public async Task SetAsync(double latitude, double longitude, RiskScoreCacheEntry entry, TimeSpan? expiration = null, CancellationToken cancellationToken = default)
     {
         var key = BuildKey(latitude, longitude);
         var value = JsonSerializer.Serialize(entry);
@@ -66,5 +67,8 @@ public class RedisRecentScoresCache : IRecentScoresCache
         return removed;
     }
 
-    private static string BuildKey(int latitude, int longitude) => $"{KeyPrefix}{latitude}:{longitude}";
+    // v2: exact position (the v1 keys, by whole degree, expire within DefaultExpiration). InvalidateAllAsync matches
+    // KeyPrefix, so it removes both formats.
+    private static string BuildKey(double latitude, double longitude) =>
+        string.Create(CultureInfo.InvariantCulture, $"{KeyPrefix}v2:{latitude:R}:{longitude:R}");
 }

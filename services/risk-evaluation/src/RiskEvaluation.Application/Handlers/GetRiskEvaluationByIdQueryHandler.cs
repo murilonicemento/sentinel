@@ -30,8 +30,8 @@ public class GetRiskEvaluationByIdQueryHandler : IRequestHandler<GetRiskEvaluati
         return new RiskEvaluationDto
         {
             Id = evaluation.Id,
-            Latitude = evaluation.Latitude,
-            Longitude = evaluation.Longitude,
+            Latitude = ContractCoordinates.Degree(evaluation.Latitude),
+            Longitude = ContractCoordinates.Degree(evaluation.Longitude),
             Score = evaluation.Score,
             Level = evaluation.Level.ToString(),
             Timestamp = evaluation.Timestamp

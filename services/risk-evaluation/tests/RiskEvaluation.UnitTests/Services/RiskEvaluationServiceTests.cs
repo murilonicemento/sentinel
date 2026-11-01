@@ -427,4 +427,23 @@ public class RiskEvaluationServiceTests
         _riskUpdatedPublisherMock.Verify(x => x.PublishAsync(It.IsAny<RiskUpdatedEvent>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    /// <summary>RE-18: the stored evaluation, the cache entry and risk-events keep the exact position.</summary>
+    [Fact]
+    public async Task EvaluateRiskAsync_KeepsTheExactPositionEverywhere()
+    {
+        _cacheMock.Setup(x => x.GetAsync(-22.95, -43.25, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((RiskScoreCacheEntry?)null);
+        RiskEvaluatedEvent? published = null;
+        _eventPublisherMock.Setup(x => x.PublishAsync(It.IsAny<RiskEvaluatedEvent>()))
+            .Callback<RiskEvaluatedEvent>(e => published = e);
+
+        var result = await _service.EvaluateRiskAsync(-22.95, -43.25, MaxMetrics(), new RiskEvents(),
+            new EvaluationSource(-22.95, -43.25));
+
+        Assert.Equal((-22.95, -43.25), (result.Latitude, result.Longitude));
+        Assert.Equal((-22.95, -43.25), (published!.Latitude, published.Longitude));
+        _cacheMock.Verify(x => x.SetAsync(-22.95, -43.25, It.IsAny<RiskScoreCacheEntry>(), It.IsAny<TimeSpan?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

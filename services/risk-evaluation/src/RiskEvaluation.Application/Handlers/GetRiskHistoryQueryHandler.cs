@@ -30,8 +30,8 @@ public class GetRiskHistoryQueryHandler : IRequestHandler<GetRiskHistoryQuery, L
         return evaluations.Select(e => new RiskEvaluationDto
         {
             Id = e.Id,
-            Latitude = e.Latitude,
-            Longitude = e.Longitude,
+            Latitude = ContractCoordinates.Degree(e.Latitude),
+            Longitude = ContractCoordinates.Degree(e.Longitude),
             Score = e.Score,
             Level = e.Level.ToString(),
             Timestamp = e.Timestamp

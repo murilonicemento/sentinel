@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using RiskEvaluation.Domain.Entities;
 using RiskEvaluation.Domain.Interfaces;
@@ -24,6 +25,9 @@ public sealed class StorageFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        // Program.cs registers it at startup; the repositories here are built without the host.
+        MongoDB.Bson.Serialization.BsonSerializer.TryRegisterSerializer(
+            new MongoDB.Bson.Serialization.Serializers.GuidSerializer(GuidRepresentation.Standard));
         await Task.WhenAll(_mongo.StartAsync(), _redis.StartAsync());
         Database = new MongoClient(_mongo.GetConnectionString()).GetDatabase("RiskEvaluationDatabase");
         Redis = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString() + ",allowAdmin=true");
@@ -76,6 +80,71 @@ public class RiskEvaluationStorageTests : IClassFixture<StorageFixture>
         Assert.True(removed >= 2);
         Assert.Null(await cache.GetAsync(-23, -46));
         Assert.True(await database.KeyExistsAsync("risk-evaluation:consumed:v1:other"));
+    }
+
+    /// <summary>RE-18: two points in the same whole degree no longer share a cached score.</summary>
+    [Fact]
+    public async Task RecentScores_AreCachedByExactPosition()
+    {
+        var cache = new RedisRecentScoresCache(_fixture.Redis, NullLogger<RedisRecentScoresCache>.Instance);
+        await cache.SetAsync(-12.95, -38.45, new RiskScoreCacheEntry { Score = 0.8, Level = "High" });
+
+        Assert.Equal(0.8, (await cache.GetAsync(-12.95, -38.45))!.Score);
+        Assert.Null(await cache.GetAsync(-12.10, -38.90));
+    }
+
+    private RiskEvaluationRepository Evaluations(out IMongoCollection<MongoDB.Bson.BsonDocument> raw)
+    {
+        // Own database: the cell queries below count every evaluation they find.
+        var database = _fixture.Database.Client.GetDatabase($"evaluations-{Guid.NewGuid():N}");
+        raw = database.GetCollection<MongoDB.Bson.BsonDocument>("RiskEvaluations");
+        return new RiskEvaluationRepository(database, NullLogger<RiskEvaluationRepository>.Instance);
+    }
+
+    [Fact]
+    public async Task Evaluations_KeepTheExactPosition()
+    {
+        var repository = Evaluations(out _);
+        var evaluation = new RiskEvaluationEntity(-22.95, -43.25, 0.7, Domain.Enums.RiskLevel.High);
+        await repository.AddAsync(evaluation);
+
+        var stored = await repository.GetByIdAsync(evaluation.Id);
+
+        Assert.Equal((-22.95, -43.25), (stored!.Latitude, stored.Longitude));
+    }
+
+    /// <summary>
+    /// The history groups by whole-degree cell (truncated toward zero) and still finds the evaluations stored before
+    /// RE-18, whose coordinates are integers.
+    /// </summary>
+    [Fact]
+    public async Task History_ReturnsTheWholeDegreeCellIncludingOldIntegerDocuments()
+    {
+        var repository = Evaluations(out var raw);
+        var old = new RiskEvaluationEntity(0, 0, 0.3, Domain.Enums.RiskLevel.Low).ToBsonDocument();
+        old["Latitude"] = -22;
+        old["Longitude"] = -43;
+        await raw.InsertOneAsync(old);
+        await repository.AddAsync(new RiskEvaluationEntity(-22.95, -43.25, 0.7, Domain.Enums.RiskLevel.High));
+        await repository.AddAsync(new RiskEvaluationEntity(-23.01, -43.25, 0.7, Domain.Enums.RiskLevel.High));
+        await repository.AddAsync(new RiskEvaluationEntity(-21.99, -43.25, 0.7, Domain.Enums.RiskLevel.High));
+
+        var cell = await repository.GetByLocationAsync(-22, -43);
+
+        Assert.Equal([-22.95, -22.0], cell.Select(e => e.Latitude).OrderBy(l => l));
+    }
+
+    [Theory]
+    [InlineData(0.5, 0, 0)]
+    [InlineData(-0.5, 0, 0)]
+    [InlineData(5.99, 5, 0)]
+    [InlineData(-5.01, -5, 0)]
+    public async Task History_CellMatchesTheTruncatedDegree(double latitude, int cellLatitude, int cellLongitude)
+    {
+        var repository = Evaluations(out _);
+        await repository.AddAsync(new RiskEvaluationEntity(latitude, 0.25, 0.5, Domain.Enums.RiskLevel.Medium));
+
+        Assert.Single(await repository.GetByLocationAsync(cellLatitude, cellLongitude));
     }
 
     [Fact]

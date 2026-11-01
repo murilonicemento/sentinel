@@ -42,8 +42,8 @@ public class RiskEvaluationService : IRiskEvaluationService
     }
 
     public async Task<RiskEvaluationEntity> EvaluateRiskAsync(
-        int latitude,
-        int longitude,
+        double latitude,
+        double longitude,
         RiskMetrics metrics,
         RiskEvents events,
         EvaluationSource? source = null)

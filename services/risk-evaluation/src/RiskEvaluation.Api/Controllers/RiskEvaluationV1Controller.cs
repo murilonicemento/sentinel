@@ -23,8 +23,8 @@ public class RiskEvaluationV1Controller : ControllerBase
     }
 
     /// <summary>
-    /// Evaluates the risk of a location. Coordinates are whole degrees (latitude -90..90, longitude -180..180), the
-    /// precision currently stored by the service.
+    /// Evaluates the risk of a location. The HTTP contract takes and returns whole degrees (latitude -90..90,
+    /// longitude -180..180); evaluations of sensor events keep the exact position internally (RE-18).
     /// </summary>
     [HttpPost("evaluations")]
     [Authorize(Policy = RiskEvaluationPolicies.Write)]
@@ -44,7 +44,10 @@ public class RiskEvaluationV1Controller : ControllerBase
         return Created($"/{BasePath}/evaluations/{result.Id}", Envelope(StatusCodes.Status201Created, result));
     }
 
-    /// <summary>Lists the evaluations of a location, newest first and then by id.</summary>
+    /// <summary>
+    /// Lists the evaluations of a whole-degree cell (the positions that truncate to these degrees), newest first and
+    /// then by id.
+    /// </summary>
     [HttpGet("evaluations")]
     [Authorize(Policy = RiskEvaluationPolicies.Read)]
     [ProducesResponseType<ResponseBaseDTO<PagedResultDTO<RiskEvaluationDto>>>(StatusCodes.Status200OK)]

@@ -33,8 +33,8 @@ public class EvaluateRiskCommandHandler : IRequestHandler<EvaluateRiskCommand, E
             return new EvaluateRiskResponse
             {
                 Id = evaluation.Id,
-                Latitude = evaluation.Latitude,
-                Longitude = evaluation.Longitude,
+                Latitude = ContractCoordinates.Degree(evaluation.Latitude),
+                Longitude = ContractCoordinates.Degree(evaluation.Longitude),
                 Score = evaluation.Score,
                 Level = evaluation.Level.ToString(),
                 Timestamp = evaluation.Timestamp,

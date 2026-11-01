@@ -20,9 +20,9 @@ public class SensorEventDetectedHandlerTests
     {
         RiskMetrics? captured = null;
         var service = new Mock<IRiskEvaluationService>();
-        service.Setup(s => s.EvaluateRiskAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<RiskMetrics>(),
+        service.Setup(s => s.EvaluateRiskAsync(It.IsAny<double>(), It.IsAny<double>(), It.IsAny<RiskMetrics>(),
                 It.IsAny<RiskEvents>(), It.IsAny<EvaluationSource?>()))
-            .Callback<int, int, RiskMetrics, RiskEvents, EvaluationSource?>((_, _, metrics, _, _) => captured = metrics)
+            .Callback<double, double, RiskMetrics, RiskEvents, EvaluationSource?>((_, _, metrics, _, _) => captured = metrics)
             .ReturnsAsync((RiskEvaluationEntity)null!);
 
         await new SensorEventDetectedHandler(service.Object).Handle(
@@ -37,9 +37,9 @@ public class SensorEventDetectedHandlerTests
     {
         EvaluationSource? source = null;
         var service = new Mock<IRiskEvaluationService>();
-        service.Setup(s => s.EvaluateRiskAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<RiskMetrics>(),
+        service.Setup(s => s.EvaluateRiskAsync(It.IsAny<double>(), It.IsAny<double>(), It.IsAny<RiskMetrics>(),
                 It.IsAny<RiskEvents>(), It.IsAny<EvaluationSource?>()))
-            .Callback<int, int, RiskMetrics, RiskEvents, EvaluationSource?>((_, _, _, _, s) => source = s)
+            .Callback<double, double, RiskMetrics, RiskEvents, EvaluationSource?>((_, _, _, _, s) => source = s)
             .ReturnsAsync((RiskEvaluationEntity)null!);
 
         await new SensorEventDetectedHandler(service.Object).Handle(
@@ -49,14 +49,32 @@ public class SensorEventDetectedHandlerTests
         Assert.Equal(new EvaluationSource(-23.55, -46.63, "Flood", 7.5), source);
     }
 
+    /// <summary>RE-18: the evaluation runs on the event's exact position, not on its whole degrees.</summary>
+    [Fact]
+    public async Task SensorEvent_IsEvaluatedAtItsExactPosition()
+    {
+        (double Latitude, double Longitude)? position = null;
+        var service = new Mock<IRiskEvaluationService>();
+        service.Setup(s => s.EvaluateRiskAsync(It.IsAny<double>(), It.IsAny<double>(), It.IsAny<RiskMetrics>(),
+                It.IsAny<RiskEvents>(), It.IsAny<EvaluationSource?>()))
+            .Callback<double, double, RiskMetrics, RiskEvents, EvaluationSource?>((lat, lon, _, _, _) => position = (lat, lon))
+            .ReturnsAsync((RiskEvaluationEntity)null!);
+
+        await new SensorEventDetectedHandler(service.Object).Handle(
+            new SensorEventDetected { EventType = "Flood", Intensity = 7.5, Latitude = -23.55, Longitude = -46.63 },
+            CancellationToken.None);
+
+        Assert.Equal((-23.55, -46.63), position);
+    }
+
     [Fact]
     public async Task SensorEvent_PassesItsIdAndTenantForTheAlertPipeline()
     {
         EvaluationSource? source = null;
         var service = new Mock<IRiskEvaluationService>();
-        service.Setup(s => s.EvaluateRiskAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<RiskMetrics>(),
+        service.Setup(s => s.EvaluateRiskAsync(It.IsAny<double>(), It.IsAny<double>(), It.IsAny<RiskMetrics>(),
                 It.IsAny<RiskEvents>(), It.IsAny<EvaluationSource?>()))
-            .Callback<int, int, RiskMetrics, RiskEvents, EvaluationSource?>((_, _, _, _, s) => source = s)
+            .Callback<double, double, RiskMetrics, RiskEvents, EvaluationSource?>((_, _, _, _, s) => source = s)
             .ReturnsAsync((RiskEvaluationEntity)null!);
         var eventId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();

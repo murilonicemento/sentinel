@@ -15,14 +15,12 @@ public class SensorEventDetectedHandler : INotificationHandler<SensorEventDetect
 
     public async Task Handle(SensorEventDetected notification, CancellationToken cancellationToken)
     {
-        var latitude = (int)notification.Latitude;
-        var longitude = (int)notification.Longitude;
         var metrics = MapEventTypeToRiskMetrics(notification.EventType, notification.Intensity);
         var events = MapEventTypeToRiskEvents(notification.EventType, notification.Intensity);
 
         await _riskEvaluationService.EvaluateRiskAsync(
-            latitude,
-            longitude,
+            notification.Latitude,
+            notification.Longitude,
             metrics,
             events,
             new EvaluationSource(notification.Latitude, notification.Longitude, notification.EventType,
