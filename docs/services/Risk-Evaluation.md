@@ -276,20 +276,31 @@ As rotas antigas `/api/risk-evaluation/*` estão depreciadas até 2027-01-23 (AD
 
 | Tópico | Papel | Conteúdo |
 |---|---|---|
-| `disaster-event-detected`, `climatic-event-detected` | consumidos | `SensorEventDetected` do ingestion; cada mensagem é processada uma vez (`risk-evaluation:consumed:v1:{key}` no Redis) |
+| `disaster-event-detected`, `climatic-event-detected` | consumidos | `SensorEventDetected` do ingestion, com `TenantId` desde o ADR-0008; cada mensagem é processada uma vez (`risk-evaluation:consumed:v1:{key}` no Redis) |
 | `risk-catalog-published` | consumido | nova versão do catálogo: copia regiões, critérios de severidade e matriz pelas listagens v1 do risk-catalog para `CatalogSnapshots` |
 | `risk-events` (`Kafka:Topic`) | publicado | `RiskEvaluatedEvent { EvaluationId, Latitude, Longitude, Score, Level, Timestamp }` e, para nível alto ou crítico, `HighRiskDetectedEvent` com os mesmos campos |
+| `risk-updated` (`Kafka:RiskUpdatedTopic`) | publicado | `RiskUpdatedEvent { EventId, Region, RiskType, RiskScore, TenantId, Timestamp, Metadata }` para o alert-orchestrator (ADR-0008) |
 | `risk-evaluation-dead-letter` | publicado | mensagens inválidas ou que esgotaram as tentativas (ADR-0003) |
 
-`risk-events` não é criado pelo `kafka-init` do compose; existe porque o broker cria tópicos automaticamente. Nenhum serviço o consome: o alert-orchestrator lê `risk-updated`, com outro formato (`RiskUpdatedEvent`, com região, tipo de risco e tenant), que nenhum serviço publica (X-24).
+Cada avaliação de um evento de sensor com tenant, dentro de uma região da cópia do catálogo, publica `risk-updated`:
+
+- `EventId` é o id do evento do sensor, então uma reentrega publica o mesmo id;
+- `Region` é o `regionCode` da região que contém o ponto (a de maior fator; o empate é desfeito pelo código; cópias antigas sem código usam `legacy-<id>`);
+- `RiskType` é o tipo do evento em minúsculas;
+- `Metadata` leva o id e o nível da avaliação, o tipo de evento, a posição original, a intensidade e a versão do catálogo;
+- a chave da mensagem é `{tenant}:{região}`.
+
+Avaliações sem tenant, sem id de evento (como o `POST /evaluations`) ou fora de todas as regiões não publicam `risk-updated`. O cache de scores recentes também publica: a avaliação que reaproveita o score do cache gera o evento do mesmo jeito.
+
+`risk-events` continua sendo publicado, agora criado pelo `kafka-init`, e nenhum serviço o consome (X-24).
 
 **Avaliação.** O score combina os pesos do modelo, o fator regional da versão do catálogo copiada (região que contém o ponto) e a matriz do catálogo, que pode subir o nível para o tipo de evento e a intensidade, nunca baixar. As avaliações leem só a cópia local do catálogo.
 
-**Defeito conhecido (RE-18).** O handler de `SensorEventDetected` converte latitude e longitude para inteiro (`(int)notification.Latitude`) antes de avaliar, e a entidade e os eventos guardam as coordenadas como `int`. Com isso, o fator regional é procurado no grau inteiro truncado (uma célula de cerca de 111 km), e o histórico e o evento publicado perdem a posição real.
+**Defeito conhecido (RE-18).** O handler de `SensorEventDetected` converte latitude e longitude para inteiro (`(int)notification.Latitude`). O fator regional, a matriz e a região de `risk-updated` usam a posição original, mas o cache de scores recentes é por grau inteiro (um ponto reaproveita, por 5 minutos, o score de outro ponto no mesmo grau, cerca de 111 km), e a entidade, o histórico e `RiskEvaluatedEvent` guardam coordenadas inteiras.
 
 **Persistência.**
 
-- MongoDB: `RiskEvaluations`, `RiskModels`, `RiskFactors`, `CatalogVersions` e `CatalogSnapshots`.
+- MongoDB: `RiskEvaluations`, `RiskModels`, `RiskFactors`, `CatalogVersions` e `CatalogSnapshots` (com o `regionCode` de cada região desde o ADR-0008; uma versão anterior do serviço não lê essas cópias).
 - Redis: scores recentes por coordenada (prefixo `risk-evaluation:`) e as reservas de consumo.
 
 **Chamadas a outros serviços.** Só o risk-catalog, com o papel `RiskCatalog.Read`, para copiar a versão publicada (ADR-0002, RE-15). O geospatial não é chamado.

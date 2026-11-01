@@ -244,7 +244,7 @@ As rotas antigas `/api/ingestion/*` estão depreciadas até 2027-01-23 (ADR-0007
 
 O read model é gravado antes da transação. Se ela falhar, o evento aparece na leitura antes de ser publicado; a nova tentativa da mesma coleta usa os mesmos ids e completa a gravação.
 
-**Mensageria.** O outbox publica `SensorEventDetected { CollectionId, EventType, Intensity, Latitude, Longitude, CollectedAt, EventId }` em `climatic-event-detected` ou `disaster-event-detected`. O ingestion **não publica `sensor-event-detected`**, o tópico que o geospatial consome, e o evento não leva o tenant (X-24).
+**Mensageria.** O outbox publica `SensorEventDetected { CollectionId, EventType, Intensity, Latitude, Longitude, CollectedAt, EventId, TenantId }` em `climatic-event-detected` ou `disaster-event-detected`. `TenantId` entrou em 2026-11-01 (ADR-0008); linhas do outbox gravadas antes saem sem ele. O ingestion **não publica `sensor-event-detected`**, o tópico que o geospatial consome (X-24).
 
 **Persistência.** PostgreSQL `ingestion` (`tenant`, `data_source`, `event_type_permission`, `data_collection`, `sensor_sample`, `outbox`; esquema escrito à mão na seção `ingestion` do `2-schema.sql`), MongoDB (`climaticEvents` e `disasterEvents`, gravadas pelo fluxo e lidas pelo v1; `events` só atende as rotas antigas e nada grava nela), Redis (deduplicação) e MinIO (payload bruto).
 

@@ -170,10 +170,9 @@ As rotas antigas `/api/geospatial/*` estão depreciadas até 2027-01-23 (ADR-000
 | Tópico | Papel | Conteúdo |
 |---|---|---|
 | `sensor-event-detected` | consumido | `SensorEventDetected`; cada evento com coordenadas válidas é indexado em `geospatial-events`. Nenhum serviço publica nesse tópico ainda (X-24) |
-| `region-intersected` | publicado | `GeospatialOperationEvent` em camelCase, toda vez que `intersects` retorna verdadeiro |
 | `geospatial-dead-letter` | publicado | mensagens inválidas ou que esgotaram as tentativas (ADR-0003) |
 
-O `region-intersected` publicado hoje vem de chamadas HTTP de `intersects`, que o risk-catalog faz para validar o polígono de uma região contra os limites do Brasil. O conteúdo não é o `RegionIntersectedEvent` que o alert-orchestrator consome (X-24).
+O geospatial não publica em `region-intersected`. Até 2026-11-01, cada `intersects` HTTP verdadeiro publicava um `GeospatialOperationEvent` nesse tópico, mas uma interseção pedida por HTTP é um cálculo, não uma detecção (ADR-0008). A operação continua indexada em `geospatial-events`.
 
 **Persistência.** Elasticsearch, índice `geospatial-events` (operações executadas e eventos consumidos). É dado derivado: o serviço não é fonte de verdade de eventos.
 

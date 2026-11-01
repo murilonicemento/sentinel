@@ -33,10 +33,11 @@ As rotas antigas `/api/notifications` e `/api/dlq/reprocess` estão depreciadas 
 | Tópico | Papel | Conteúdo |
 |---|---|---|
 | `notification-events` | consumido (grupo `channels-service-group`); também publicado pelo reprocessamento | `NotificationEvent` em JSON |
+| `alert-commands` (`Kafka:AlertCommandsTopic`) | consumido | `TriggerAlertCommand` do alert-orchestrator, transformado em `NotificationEvent` (ADR-0008) |
 | `notification-events-dlq` | publicado | notificação que nenhum canal entregou, com o erro |
 | `channels-dead-letter` | publicado | mensagem que o consumidor não conseguiu processar (ADR-0003) |
 
-Nenhum outro serviço publica em `notification-events` ainda. O alert-orchestrator publica comandos em `alert-commands`, que o channels não consome (X-24).
+Cada `TriggerAlertCommand` vira uma notificação com `EventId` `alert:{janela}:{nível}`: uma reentrega do mesmo comando não reenvia pelos canais que já entregaram, e cada escalonamento é entregue de novo. A prioridade é `High` no nível 1 e `Critical` a partir do 2. Título e corpo vêm do comando ou de um texto padrão com tipo de risco, região, score e nível; os canais vêm do comando ou, sem eles, da configuração do tenant. Comando sem tenant ou sem janela vai para `channels-dead-letter`.
 
 ## Modelo de domínio
 
@@ -122,7 +123,7 @@ Cada provedor tem `Resilience` própria: `TimeoutSeconds` e circuit breaker (`Ci
 
 ## Configuração
 
-- `Kafka:BootstrapServers`, `Kafka:ConsumerGroupId`, `Kafka:Topic`, `Kafka:DeadLetterTopic`, `Kafka:ConsumerDeadLetterTopic`
+- `Kafka:BootstrapServers`, `Kafka:ConsumerGroupId`, `Kafka:Topic`, `Kafka:AlertCommandsTopic`, `Kafka:DeadLetterTopic`, `Kafka:ConsumerDeadLetterTopic`
 - `ConnectionStrings:ChannelsServiceDatabase`
 - `Redis:Configuration`, `Redis:TenantSettingsCacheTtlSeconds`
 - `ChannelsService:DefaultTenantSettings`, `ChannelsService:Tenants:{tenantId}`, `ChannelsService:Providers:*`
@@ -132,5 +133,4 @@ Os valores locais estão em `ChannelsService.Api/appsettings.json`, e o compose 
 
 ## Próximos passos
 
-- Ligar o alert-orchestrator ao channels: hoje nada publica em `notification-events` fora do próprio channels (X-24).
 - Revisar se um canal habilitado fora de `FallbackOrder` deve mesmo ficar de fora quando o fallback está ligado.

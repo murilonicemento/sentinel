@@ -120,12 +120,12 @@ As rotas antigas `/api/alert-windows/*` estão depreciadas até 2027-01-23 (ADR-
 
 | Tópico | Evento | Tratamento |
 |---|---|---|
-| `risk-updated` | `RiskUpdatedEvent { EventId, Region, RiskType, RiskScore, TenantId, Timestamp, Metadata }` | confere no tenants-billing se o tenant está ativo, compara o score com o limiar do tipo de risco e abre ou alimenta a janela de alerta da região |
-| `region-intersected` | `RegionIntersectedEvent { EventId, Region, IntersectingRegion, RiskType, Severity, Timestamp }` | conta como sinal na janela aberta da região |
+| `risk-updated` | `RiskUpdatedEvent { EventId, Region, RiskType, RiskScore, TenantId, Timestamp, Metadata }`, publicado pelo risk-evaluation (`Region` é o `regionCode` do catálogo) | exige o tenant (sem ele, vai para o DLQ), confere no tenants-billing se ele está ativo, compara o score com o limiar do tipo de risco e abre ou alimenta a janela de alerta da região |
+| `region-intersected` | `RegionIntersectedEvent { EventId, Region, IntersectingRegion, RiskType, Severity, Timestamp }` | conta como sinal na janela aberta da região; nenhum serviço publica nesse tópico desde o ADR-0008 |
 
 Cada evento é processado uma vez, com a reserva atômica `alert-orchestrator:idempotency:v2:{eventId}` no Redis. O consumidor segue o ADR-0003, com DLQ em `alert-orchestrator-dead-letter`.
 
-**Regras.** Os limiares, a duração da janela, o quorum (mínimo de sinais, fontes distintas, exigência de sensor e de satélite) e os intervalos de escalonamento são fixos no código, por tipo de risco (`InMemoryConfigurationPort`: flood, wildfire, earthquake, landslide, storm, heatwave e um padrão). Ainda não vêm do risk-catalog nem variam por tenant. O cooldown por `(região, tipo de risco, tenant)` fica no Redis.
+**Regras.** Os limiares, a duração da janela, o quorum (mínimo de sinais, fontes distintas, exigência de sensor e de satélite) e os intervalos de escalonamento são fixos no código, por tipo de risco (`InMemoryConfigurationPort`: flood, wildfire, earthquake, landslide, storm, heatwave e um padrão). Ainda não vêm do risk-catalog nem variam por tenant. Como todo sinal vem de `risk-updated` e conta como `SENSOR`, nenhuma regra exige satélite nem fontes distintas: o quorum é o número mínimo de sinais de risco na janela (ADR-0008). O cooldown por `(região, tipo de risco, tenant)` fica no Redis.
 
 **Workers.** `AlertEscalationWorker` sobe o nível das janelas disparadas e ainda não confirmadas, conforme o tempo desde o disparo, e republica o `TriggerAlertCommand` com o novo nível; `AlertWindowExpirationWorker` expira as janelas vencidas.
 
@@ -134,8 +134,8 @@ Cada evento é processado uma vez, com a reserva atômica `alert-orchestrator:id
 | Tópico | Conteúdo |
 |---|---|
 | `alert-orchestrator-events` | `AlertWindowOpened`, `AlertTriggered`, `AlertConfirmed`, `AlertEscalated`, `AlertClosed`, `AlertWindowExpired` |
-| `alert-commands` | `TriggerAlertCommand` (disparo e cada escalonamento) |
+| `alert-commands` | `TriggerAlertCommand` (disparo e cada escalonamento), com o `TenantId` da janela; consumido pelo channels |
 
 **Persistência.** PostgreSQL `alert_orchestrator` (`alert_windows`, `alert_signals`; migrations EF Core, seção do `2-schema.sql`) e Redis (idempotência e cooldown). Com `Database:UsePostgreSql` / `Cache:UseRedis` desligados, os repositórios ficam em memória.
 
-**Lacunas de integração (X-24).** Nenhum serviço publica em `risk-updated`; o risk-evaluation publica `RiskEvaluatedEvent` em `risk-events`. `region-intersected` depende do geospatial, que não recebe `sensor-event-detected` de ninguém. `alert-orchestrator-events` e `alert-commands` não têm consumidor: o channels lê `notification-events`. Por isso, no ambiente atual, nenhum alerta chega a ser disparado de ponta a ponta.
+**Integração (ADR-0008, X-24).** O caminho risk-evaluation → `risk-updated` → janela → `alert-commands` → channels está ligado. Continuam sem produtor `region-intersected` e sem consumidor `alert-orchestrator-events`.
