@@ -89,3 +89,9 @@ risk-evaluation deixou de chamar outros serviços (RE-14): a única chamada usad
 ## Atualização (2026-10-27, RE-15)
 
 risk-evaluation voltou a chamar o risk-catalog, apenas para copiar a versão publicada do catálogo (listagens paginadas de regiões, critérios de severidade e matriz). O token de serviço volta com um único papel, `RiskCatalog.Read`, e só o risk-catalog confia nele; o geospatial continua sem essa entrada.
+
+## Atualização (2026-10-29, D-5 e Fase 9)
+
+Este ADR é a resposta à decisão D-5 do relatório de validação: emissor `sentinel` e audiência `sentinel` (`Jwt:Issuer` / `Jwt:Audience` nos `appsettings.json` de cada serviço), modelo de opções do audit-compliance e chave fornecida fora dos arquivos versionados. Não há provedor de identidade, então quem emite os tokens de usuário continua em aberto (primeira decisão pendente acima).
+
+Desde a Fase 7, o `api-gateway` aplica limitação de taxa por IP de origem, em janela fixa (GW-03, `RateLimiting:PermitLimit` / `WindowSeconds`). Ele continua sem validar tokens. Das pendências acima, sai a limitação de taxa no gateway e fica a autenticação nele.

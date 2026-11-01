@@ -25,7 +25,7 @@ O Ingestion Service é responsável por:
 - Validar a integridade e consistência dos dados recebidos
 - Normalizar os dados para um formato padrão (**EventoClimaticoDTO**)
 - Realizar deduplicação de eventos utilizando Redis com TTL configurável
-- Publicar eventos normalizados em um barramento de mensageria (Kafka ou RabbitMQ)
+- Publicar eventos normalizados no Kafka, pelo outbox transacional
 - Persistir o payload original para fins de auditoria e reprocessamento
 - Atualizar o **Read Model** no MongoDB
 - Expor consultas otimizadas para consumo por dashboards e serviços downstream
@@ -92,7 +92,7 @@ O fluxo de dados segue as seguintes etapas:
 
 | Componente           | Tecnologia                |
 | -------------------- | ------------------------- |
-| Mensageria           | Kafka ou RabbitMQ         |
+| Mensageria           | Kafka                     |
 | Cache / Deduplicação | Redis                     |
 | Read Model           | MongoDB                   |
 | Armazenamento bruto  | S3 ou MinIO               |
@@ -147,11 +147,8 @@ services/ingestion/
 │  │   ├─ Commands/
 │  │   ├─ Events/
 │  │   └─ Queries/
-│  ├─ Ingestion.Infrastructure/
-│  │   ├─ Redis/
-│  │   ├─ Kafka/
-│  │   ├─ Outbox/
-│  │   └─ MongoReadStore/
+│  ├─ Ingestion.Infrastructure.Write/   # PostgreSQL (Dapper), outbox, Kafka, Redis, MinIO, polling
+│  ├─ Ingestion.Infrastructure.Read/    # MongoDB (read model)
 │  └─ Ingestion.Api/
 ├─ tests/
 │  ├─ Ingestion.UnitTests/
@@ -219,3 +216,36 @@ Para ligar uma fonte:
 3. No `platform/.env`, ligue a fonte (`POLLING_<FONTE>_ENABLED=true`) e informe a chave do provedor.
 
 Uma fonte ligada com configuração inválida impede o serviço de subir, com a chave nomeada. Leituras rejeitadas pela fonte de dados (unidade, permissão) aparecem na métrica `ingestion_polling_readings_total{result="rejected"}` e no alerta "Leituras de polling rejeitadas" (ADR-0006).
+
+---
+
+## **11. Estado da implementação (verificado em 2026-10-29)**
+
+**API.** Base `/api/v1/ingestion`, contrato comum de `docs/compliance/services-validation.md` §4.2 e autenticação JWT (ADR-0002). O `tenantId` do corpo precisa estar nas claims `tenant_id`; se não estiver, a resposta é 403 `TENANT_ACCESS_DENIED`.
+
+| Rota | Papel | Resultado |
+|---|---|---|
+| `GET /detected-events` | Read | eventos detectados, paginados, só dos tenants da identidade |
+| `GET /detected-events/statistics` | Read | totais, distribuição por tipo e intensidade, com filtro de datas |
+| `POST /data-sources` | Write | cadastra uma fonte de dados com suas permissões de evento |
+| `POST /sensor-collections` | Write | registra uma coleta; o domínio (climático ou desastre) vem do tipo de medição da fonte |
+| `POST /climatic-collections`, `POST /disaster-collections` | Write | registra uma coleta de domínio fixo |
+
+As rotas antigas `/api/ingestion/*` estão depreciadas até 2027-01-23 (ADR-0007).
+
+**Fluxo de uma coleta.**
+
+1. Carrega a fonte de dados do tenant, que precisa estar ativo na tabela local `tenant`, com as 2 coletas mais recentes (regra de frequência, ING-23). O tenants-billing é consultado no cadastro da fonte de dados, não a cada coleta.
+2. Valida as unidades e, só nos envios HTTP, a frequência da fonte (ADR-0005).
+3. Reserva a chave de deduplicação no Redis.
+4. Grava o payload bruto no MinIO (`raw/{collectionId}.json`, bucket `sentinel-ingestion-service`).
+5. Para cada amostra: valida a coordenada no geospatial, deriva o tipo de evento e confere a permissão da fonte. Grava o evento no read model (MongoDB) e prepara a linha do outbox.
+6. Grava a coleta, as amostras e o outbox numa única transação. O `OutboxHostedService` publica depois.
+
+O read model é gravado antes da transação. Se ela falhar, o evento aparece na leitura antes de ser publicado; a nova tentativa da mesma coleta usa os mesmos ids e completa a gravação.
+
+**Mensageria.** O outbox publica `SensorEventDetected { CollectionId, EventType, Intensity, Latitude, Longitude, CollectedAt, EventId }` em `climatic-event-detected` ou `disaster-event-detected`. O ingestion **não publica `sensor-event-detected`**, o tópico que o geospatial consome, e o evento não leva o tenant (X-24).
+
+**Persistência.** PostgreSQL `ingestion` (`tenant`, `data_source`, `event_type_permission`, `data_collection`, `sensor_sample`, `outbox`; esquema escrito à mão na seção `ingestion` do `2-schema.sql`), MongoDB (`climaticEvents` e `disasterEvents`, gravadas pelo fluxo e lidas pelo v1; `events` só atende as rotas antigas e nada grava nela), Redis (deduplicação) e MinIO (payload bruto).
+
+**Chamadas a outros serviços.** tenants-billing (`GET /api/v1/tenants-billing/tenants/{id}`, no cadastro da fonte de dados) e geospatial (`contains-point`, ainda pela rota antiga, X-25).

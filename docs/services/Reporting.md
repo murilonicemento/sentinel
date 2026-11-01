@@ -209,3 +209,41 @@ O serviço deve suportar:
 - Múltiplas instâncias simultâneas
 
 Como o serviço atua apenas como **Read Model**, sua escalabilidade deve ocorrer de forma independente dos microsserviços transacionais.
+
+---
+
+## 6.12 Estado da implementação (verificado em 2026-10-29)
+
+As seções anteriores descrevem o desenho. Esta descreve o que o código em `services/reporting` faz hoje, e substitui o antigo `docs/reporting-service-status.md`, que nunca existiu (REP-07).
+
+**API.** Base `/api/v1/reporting`, contrato comum de `docs/compliance/services-validation.md` §4.2 e autenticação JWT (ADR-0002). O `tenantId` da rota ou do corpo precisa estar nas claims `tenant_id`; se não estiver, a resposta é 403 `TENANT_ACCESS_DENIED`.
+
+| Rota | Papel | Resultado |
+|---|---|---|
+| `GET /tenants/{tenantId}/summary` | Read | resumo do painel do tenant |
+| `GET /tenants/{tenantId}/analytics` | Read | consulta analítica com filtros (`startDate` não pode ser depois de `endDate`) |
+| `GET /tenants/{tenantId}/exports` | Read | exportação dos eventos do tenant em CSV (padrão) ou JSON |
+| `GET /tenants/{tenantId}/processing-status` | Read | situação do processamento do tenant |
+| `POST /events` | Write | `202`: grava um evento de relatório |
+| `POST /events/envelope` | Write | `202`: processa um `ReportingEventEnvelope` pelo mesmo caminho do consumidor Kafka |
+| `POST /events/replay` | Admin | `202`: publica o payload no tópico de replay |
+
+As rotas antigas `/api/reporting/*` estão depreciadas até 2027-01-23 (ADR-0007).
+
+**Mensageria.**
+
+| Tópico | Papel |
+|---|---|
+| `reporting-events` | consumido: `ReportingEventEnvelope { EventId, EventType, TenantId, Region, Severity, Channel, RiskScore, Status, Timestamp, Source }` |
+| `reporting-events-dead-letter` | publicado quando o envelope é inválido ou o processamento falha; também consumido: falhas terminais são só registradas, as demais são republicadas no replay |
+| `reporting-events-replay` | publicado pelo consumidor do DLQ e pelo `POST /events/replay`. **Nenhum consumidor lê este tópico**, então o replay não reprocessa nada (REP-09) |
+
+Nenhum serviço publica em `reporting-events` ainda. Os eventos da seção 6.8 (`AlertTriggered`, `NotificationSent`...) existem nos serviços de origem, mas em outros tópicos e formatos (X-24). Até haver produtor, os dados chegam só pela API.
+
+**Persistência.**
+
+- Elasticsearch, índice `reporting-events` (`Elasticsearch:IndexName`), fonte das consultas.
+- Redis: lista de eventos por tenant em `reporting:events:{tenantId}` (TTL de 5 min) e evento individual em `reporting:event:{tenantId}:{eventId}` (TTL de 10 min).
+- PostgreSQL não é usado.
+
+`Elasticsearch:Uri`, `Redis:Configuration` e `Kafka:BootstrapServers` são obrigatórios: sem eles, o serviço não sobe. Os health checks de prontidão verificam Elasticsearch e Redis.

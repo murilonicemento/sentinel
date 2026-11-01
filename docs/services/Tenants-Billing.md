@@ -272,11 +272,38 @@ O serviço deve expor métricas e logs com tenant awareness.
 7. A mudança de plano ou suspensão é publicada como evento
 8. Outros serviços ajustam automaticamente seu comportamento
 
-## 15. Próximos Passos
+## 15. Estado da implementação (verificado em 2026-10-29)
 
-1. Definir contratos de eventos com outros serviços
-2. Implementar middleware de tenant resolution
-3. Criar mecanismo de quota em Redis
-4. Implementar camada de persistence em PostgreSQL
-5. Criar endpoints administrativos para tenants e planos
-6. Preparar a base para billing e monetização
+As seções anteriores descrevem o desenho. Esta descreve o que o código em `services/tenants-billing` faz hoje.
+
+**API.** Base `/api/v1/tenants-billing`, contrato comum de `docs/compliance/services-validation.md` §4.2 e autenticação JWT (ADR-0002):
+
+| Rota | Papel | Resultado |
+|---|---|---|
+| `POST /tenants` | Write | cria o tenant (`TENANT_ALREADY_EXISTS` em 409, `PLAN_NOT_FOUND` em 422) |
+| `GET /tenants/{tenantId}` | Read | tenant com `status` em texto (`TENANT_NOT_FOUND` em 404); é a rota que os `TenantBillingGateway` de ingestion, alert-orchestrator e channels consultam com token de serviço |
+| `POST /tenants/{tenantId}/usage` | Write | registra uso do tenant |
+| `POST /plans` | Write | cria um plano |
+
+As rotas antigas `/api/v1/tenants/*` e `/api/v1/plans` estão depreciadas até 2027-01-23 (ADR-0007). A rota antiga devolve `status` numérico; os gateways aceitam os dois formatos (TB-09).
+
+Não há rota para suspender, reativar ou cancelar um tenant. `SuspendTenantAsync` existe na aplicação, mas nada a chama; os estados implementados são `Active`, `Suspended` e `Canceled`.
+
+**Uso e quotas.** O uso se acumula por tenant e mês civil no fuso do tenant (fuso vazio ou inválido usa `America/Sao_Paulo`). Cada `SourceEventId` conta uma vez. O status de quota é o maior percentual dos quatro recursos (eventos, alertas, requisições de API, uso de canais) contra os limites do plano e os percentuais de soft e hard limit, e não regride dentro do período. Nenhum outro serviço bloqueia operações pelo status de quota: os gateways só conferem se o tenant está ativo.
+
+**Mensageria.**
+
+| Tópico | Papel | Conteúdo |
+|---|---|---|
+| `tenant-usage-events` | consumido | `TenantUsageEvent { TenantId, EventsConsumed, AlertsTriggered, ApiRequests, ChannelUsage }`; nenhum serviço publica nesse tópico ainda (X-24) |
+| `tenant-usage-events-dlq` | publicado e consumido | falhas do consumo de uso; o consumidor do DLQ republica as recuperáveis no replay |
+| `tenant-usage-events-replay` | consumido | lido pelo consumidor de uso junto com o tópico principal |
+| `tenants-billing-events` | publicado | `TenantCreated`, `PlanCreated`, `PlanPolicyUpdated`, `TenantQuotaSoftLimitReached`, `TenantQuotaHardLimitReached` (e `TenantSuspended`, sem rota que o dispare); nenhum serviço consome esse tópico ainda |
+
+**Persistência.** PostgreSQL `tenants_billing`: `tenants`, `plans`, `tenant_usage` e `recorded_usage_events` (migrations EF Core, seção do `2-schema.sql`). Redis não é usado.
+
+**Próximos passos.**
+
+1. Rotas para mudar o status do tenant e para listar tenants e planos.
+2. Produtores de `tenant-usage-events` nos serviços que geram consumo (X-24).
+3. Decidir se os outros serviços devem consultar o status de quota antes de operar.

@@ -149,6 +149,32 @@ O serviço é responsável por:
 
 ## **11. Status**
 
-- Serviço definido
-- Responsabilidades claramente delimitadas
-- Arquitetura preparada para expansão conforme novos requisitos geoespaciais surgirem
+Estado verificado em 2026-10-29 no código de `services/geospatial`.
+
+**API.** Base `/api/v1/geospatial`, papel `Geospatial.Read` em todas as operações (ADR-0002), contrato comum de `docs/compliance/services-validation.md` §4.2. As operações são cálculos sobre a entrada e não dependem de tenant:
+
+| Rota | Operação |
+|---|---|
+| `POST /operations/contains-point` | ponto dentro do polígono |
+| `POST /operations/within-radius` | ponto dentro do raio de um centro |
+| `POST /operations/intersects` | interseção de dois polígonos |
+| `POST /operations/distance` | distância entre dois pontos |
+| `POST /operations/evaluate-batch` | lote das operações acima |
+| `POST /events/search-by-radius` | eventos indexados dentro de um raio (paginado) |
+| `POST /events/search-by-polygon` | eventos indexados dentro de um polígono (paginado) |
+
+As rotas antigas `/api/geospatial/*` estão depreciadas até 2027-01-23 (ADR-0007). **Ingestion e risk-catalog ainda chamam as rotas antigas** (`contains-point`, `within-radius`, `intersects`, `evaluate-batch` nos respectivos `GeospatialClient`) e precisam migrar antes do sunset (X-25).
+
+**Mensageria.**
+
+| Tópico | Papel | Conteúdo |
+|---|---|---|
+| `sensor-event-detected` | consumido | `SensorEventDetected`; cada evento com coordenadas válidas é indexado em `geospatial-events`. Nenhum serviço publica nesse tópico ainda (X-24) |
+| `region-intersected` | publicado | `GeospatialOperationEvent` em camelCase, toda vez que `intersects` retorna verdadeiro |
+| `geospatial-dead-letter` | publicado | mensagens inválidas ou que esgotaram as tentativas (ADR-0003) |
+
+O `region-intersected` publicado hoje vem de chamadas HTTP de `intersects`, que o risk-catalog faz para validar o polígono de uma região contra os limites do Brasil. O conteúdo não é o `RegionIntersectedEvent` que o alert-orchestrator consome (X-24).
+
+**Persistência.** Elasticsearch, índice `geospatial-events` (operações executadas e eventos consumidos). É dado derivado: o serviço não é fonte de verdade de eventos.
+
+**Chamadores.** ingestion e risk-catalog, com token de serviço próprio listado em `Jwt:TrustedServices` (ADR-0002).

@@ -3,14 +3,14 @@
 ## Objetivo
 
 O `Channels Service` é um microserviço de orquestração de entrega de notificações multi-canal.
-Ele é responsável por receber eventos de notificação, resolver a configuração de tenant, selecionar provedores e garantir entrega resiliente.
+Ele recebe eventos de notificação, resolve a configuração do tenant, seleciona provedores e garante entrega resiliente.
 
 ## Responsabilidades
 
 - Receber notificações via API e via evento Kafka.
 - Resolver configuração tenant-aware para canais habilitados, prioridade e fallback.
 - Executar envio em múltiplos canais através de provedores abstratos.
-- Aplicar políticas de retry, fallback e dead-letter quando necessário.
+- Aplicar políticas de retry, fallback e dead-letter.
 - Persistir tentativas de entrega e status de cada canal.
 - Emitir logs estruturados e métricas para observabilidade.
 
@@ -18,17 +18,25 @@ Ele é responsável por receber eventos de notificação, resolver a configuraç
 
 ### API
 
-`POST /api/v1/notifications`
+Base `/api/v1/channels`. Envelope `ResponseBaseDTO` no sucesso e Problem Details nos erros, conforme `docs/compliance/services-validation.md` §4.2. Autenticação JWT (ADR-0002), com papéis `Channels.Read`, `Channels.Write` e `Channels.Admin`. O tenant da notificação precisa estar nas claims `tenant_id`; se não estiver, a resposta é 403 `TENANT_ACCESS_DENIED`.
 
-- Payload: `NotificationEvent`
-- Resposta:
-  - `200 OK` quando qualquer canal for entregue com sucesso
-  - `500 Internal Server Error` quando todas as tentativas falharem
+| Método e rota | Papel | Respostas |
+|---|---|---|
+| `POST /notifications` | Write | `200` com o resultado da entrega quando ao menos um canal entrega; `400`; `403`; `502` `NOTIFICATION_DELIVERY_FAILED` quando nenhum canal entrega (a notificação vai para o DLQ) |
+| `GET /notifications/{eventId}/attempts` | Read | `200` com as tentativas paginadas (`page`/`pageSize`), restritas aos tenants da identidade; `400` |
+| `POST /dead-letters/reprocess` | Write | `202`: republica a notificação em `notification-events`; `400`; `403` |
 
-### Evento Kafka
+As rotas antigas `/api/notifications` e `/api/dlq/reprocess` estão depreciadas até 2027-01-23 (ADR-0007).
 
-- Tópico padrão: `notification-events`
-- Payload JSON compatível com `NotificationEvent`
+### Eventos Kafka
+
+| Tópico | Papel | Conteúdo |
+|---|---|---|
+| `notification-events` | consumido (grupo `channels-service-group`); também publicado pelo reprocessamento | `NotificationEvent` em JSON |
+| `notification-events-dlq` | publicado | notificação que nenhum canal entregou, com o erro |
+| `channels-dead-letter` | publicado | mensagem que o consumidor não conseguiu processar (ADR-0003) |
+
+Nenhum outro serviço publica em `notification-events` ainda. O alert-orchestrator publica comandos em `alert-commands`, que o channels não consome (X-24).
 
 ## Modelo de domínio
 
@@ -52,7 +60,7 @@ Ele é responsável por receber eventos de notificação, resolver a configuraç
 - tenantId
 - channel
 - provider
-- status
+- status (`Sent`, `Retried`, `Failed`)
 - attemptCount
 - errorMessage
 - timestamp
@@ -66,46 +74,63 @@ Ele é responsável por receber eventos de notificação, resolver a configuraç
 ## Comportamento de entrega
 
 1. Receber `NotificationEvent`.
-2. Resolver configurações do tenant com `ITenantChannelSettingsProvider`.
-3. Determinar canais candidatos:
+2. Confirmar no tenants-billing que o tenant está ativo (`GET /api/v1/tenants-billing/tenants/{id}`). Tenant inativo ou desconhecido não recebe envio e conta como falha de entrega.
+3. Resolver as configurações do tenant (`ITenantChannelSettingsProvider`).
+4. Determinar os canais candidatos:
    - se `notification.Channels` estiver preenchido, usa essa lista filtrada pelos canais habilitados;
-   - caso contrário, usa canais habilitados do tenant;
-   - se `FallbackOrder` existir, aplica essa ordem;
-   - caso contrário, aplica `PriorityOrder`.
-4. Para cada canal no fluxo:
-   - buscar `IChannelProvider` apropriado;
-   - enviar com política de retry;
-   - persistir cada tentativa;
-   - encerrar no primeiro envio bem-sucedido (ou continuar após falha se fallback habilitado).
-5. Retornar sucesso se algum canal for entregue.
-6. Se todas as tentativas falharem, registrar erro final e retornar falha.
+   - caso contrário, usa os canais habilitados do tenant;
+   - se o tenant tiver `FallbackOrder` e a notificação tiver `fallbackEnabled`, usa a ordem de `FallbackOrder`, e um candidato que não esteja nela fica de fora;
+   - caso contrário, ordena por `PriorityOrder`.
+5. Para cada canal, na ordem:
+   - pular o canal que já entregou esta notificação (uma reentrega não reenvia um SMS já enviado);
+   - enviar pelo provedor do canal, com retry (`MaxRetries` é o total de tentativas do canal);
+   - persistir cada tentativa.
+
+   Todos os canais candidatos são tentados; a entrega não para no primeiro sucesso.
+6. A entrega é bem-sucedida quando ao menos um canal entrega. Se nenhum entregar, a notificação vai para `notification-events-dlq`.
+
+## Provedores
+
+| Canal | Provedor | Configuração (`ChannelsService:Providers:<Canal>`) |
+|---|---|---|
+| Email | SendGrid | `Options:ApiKey`, `FromEmail`, `FromName` |
+| Sms | Twilio | `Options:AccountSid`, `AuthToken`, `FromNumber` |
+| WhatsApp | Twilio WhatsApp | `Options:AccountSid`, `AuthToken`, `FromNumber` |
+| Push | HTTP | `Options:Endpoint`, `ApiKey`, `DefaultTarget` |
+| Siren | HTTP | `Options:Endpoint`, `ApiKey`, `DefaultDeviceId` |
+| MQTT | broker MQTT | `Options:Broker`, `Port`, `Topic`, `ClientId` |
+
+Cada provedor tem `Resilience` própria: `TimeoutSeconds` e circuit breaker (`CircuitBreakerFailureThreshold`, `CircuitBreakerDurationSeconds`, `CircuitBreakerSamplingDurationSeconds`). As credenciais vêm de `platform/.env` no compose ou de User Secrets, nunca do `appsettings.json`.
 
 ## Resiliência
 
-- Retry com backoff exponencial e jitter.
-- Circuit breaker ou timeout podem ser adicionados posteriormente.
-- DLQ para eventos que não obtiverem entrega após todas as tentativas.
+- Retry com backoff exponencial e jitter, limitado a 3 tentativas por canal.
+- Timeout e circuit breaker por provedor.
+- DLQ (`notification-events-dlq`) para notificações que nenhum canal entregou, com reprocessamento pela API.
+- O consumidor segue o ADR-0003: commit só depois de tratar ou enviar ao `channels-dead-letter`.
+
+## Persistência
+
+- PostgreSQL, banco `channels`, tabela `delivery_attempts` (migrations EF Core; seção `channels` do `platform/init-db/postgres/2-schema.sql`).
+- Redis: configuração de canais por tenant em `ChannelsService:TenantSettings:{tenantId}`, com TTL de `Redis:TenantSettingsCacheTtlSeconds` (padrão 300 s). Sem entrada no cache, vale `ChannelsService:Tenants:{tenantId}` e, na falta dela, `ChannelsService:DefaultTenantSettings`; o valor resolvido é guardado no cache. Com o Redis indisponível, a configuração é lida direto dos arquivos.
 
 ## Observabilidade
 
-- Métricas e tracing via OpenTelemetry.
-- Logs estruturados com Serilog.
-- Health check em `/health`.
+- Serilog, OpenTelemetry e `/metrics` conforme o ADR-0004; health checks em `/health/live`, `/health/ready` e `/health`.
+- Métricas de tentativa e de latência por canal e provedor, mais as do kit de consumo (`sentinel_messages_handled_total`).
+- Dashboard em `platform/observability/grafana/provisioning/dashboards/channels-service`, e o alerta "Falhas de entrega de notificações" (ADR-0006).
 
 ## Configuração
 
-- `Kafka:BootstrapServers`
-- `Kafka:Topic`
-- `Kafka:ConsumerGroupId`
-- `ChannelsService:DefaultTenantSettings`
-- `ChannelsService:Tenants:{tenantId}`
+- `Kafka:BootstrapServers`, `Kafka:ConsumerGroupId`, `Kafka:Topic`, `Kafka:DeadLetterTopic`, `Kafka:ConsumerDeadLetterTopic`
+- `ConnectionStrings:ChannelsServiceDatabase`
+- `Redis:Configuration`, `Redis:TenantSettingsCacheTtlSeconds`
+- `ChannelsService:DefaultTenantSettings`, `ChannelsService:Tenants:{tenantId}`, `ChannelsService:Providers:*`
+- `Jwt:*`, `ServiceToken:*` (papel `TenantsBilling.Read`) e `Services:TenantsBillingBaseUrl`
 
-## Implementação atual e próximos passos
+Os valores locais estão em `ChannelsService.Api/appsettings.json`, e o compose os sobrescreve.
 
-- Implementado fluxo de entrega básico, providers simulados e consumidor Kafka.
-- Ainda a evoluir:
-  - persistência real em PostgreSQL;
-  - cache de tenant config;
-  - provedores reais (Twilio, SendGrid, WhatsApp Business, MQTT);
-  - DLQ explícito;
-  - políticas de circuit breaker e timeout.
+## Próximos passos
+
+- Ligar o alert-orchestrator ao channels: hoje nada publica em `notification-events` fora do próprio channels (X-24).
+- Revisar se um canal habilitado fora de `FallbackOrder` deve mesmo ficar de fora quando o fallback está ligado.
