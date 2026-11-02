@@ -21,7 +21,7 @@ Especificação: `docs/services/Compliance-Audit.md`. Decisões: `docs/adr/ADR-0
 
 ## Não implementado / pendente
 
-- **Nenhum serviço de origem publica eventos de auditoria ainda.** Cada serviço precisa publicar o envelope v1 em `audit-events`, de preferência via Transactional Outbox.
+- **Só o tenants-billing publica eventos de auditoria** (`TenantCreated` e `TenantUpdated`, ADR-0011), direto no Kafka depois de gravar, sem outbox. Os outros serviços ainda não publicam.
 - Retenção, arquivamento e eliminação de registros (aguardam definição de política).
 - Encadeamento de hashes, assinaturas ou armazenamento imutável contra adulteração privilegiada.
 - Autenticação dos produtores no Kafka (SASL/ACL).

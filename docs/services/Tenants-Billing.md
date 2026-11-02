@@ -301,6 +301,7 @@ As rotas antigas `/api/v1/tenants/*` e `/api/v1/plans` estão depreciadas até 2
 | `tenant-usage-events` | consumido | `TenantUsageEvent { TenantId, EventsConsumed, AlertsTriggered, ApiRequests, ChannelUsage, EventId }`. Publicado por ingestion (eventos de cada coleta), alert-orchestrator (janela disparada) e channels (canal entregue), com `EventId` determinístico (ADR-0009). Nenhum serviço reporta `ApiRequests`. Um tenant desconhecido vai ao DLQ |
 | `tenant-usage-events-dlq` | publicado e consumido | falhas do consumo de uso; o consumidor do DLQ republica as recuperáveis no replay |
 | `tenant-usage-events-replay` | consumido | lido pelo consumidor de uso junto com o tópico principal |
+| `audit-events` (`Kafka:AuditTopic`) | publicado | envelope v1 do audit-compliance: `TenantCreated` na criação e `TenantUpdated` em cada mudança de status, com o `sub` do token como ator e o estado antes/depois, chave igual ao tenant (ADR-0011). A criação de plano não é auditada |
 | `tenants-billing-events` | publicado | `TenantCreated`, `PlanCreated`, `PlanPolicyUpdated`, `TenantQuotaSoftLimitReached`, `TenantQuotaHardLimitReached`, `TenantSuspended`, `TenantReactivated` e `TenantCanceled` (`{ Id, Name, Status }`, publicados por `PATCH /tenants/{tenantId}/status`); nenhum serviço consome esse tópico ainda |
 
 **Persistência.** PostgreSQL `tenants_billing`: `tenants`, `plans`, `tenant_usage` e `recorded_usage_events` (migrations EF Core, seção do `2-schema.sql`). Redis não é usado.
