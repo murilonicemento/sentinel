@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  CONFIGURATION: Release
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET (global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            Directory.Packages.props
+            **/*.csproj
+
+      - name: Restore
+        run: dotnet restore Sentinel.sln
+
+      - name: Build
+        run: dotnet build Sentinel.sln --configuration "$CONFIGURATION" --no-restore -warnaserror
+
+      - name: Verify formatting
+        run: dotnet format whitespace Sentinel.sln --verify-no-changes --no-restore
+
+  test:
+    name: Test
+    needs: build
+    runs-on: ubuntu-24.04
+    # Integration tests start PostgreSQL, MongoDB, Redis, Kafka and MinIO with Testcontainers on the runner's Docker.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET (global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            Directory.Packages.props
+            **/*.csproj
+
+      - name: Restore
+        run: dotnet restore Sentinel.sln
+
+      - name: Build
+        run: dotnet build Sentinel.sln --configuration "$CONFIGURATION" --no-restore
+
+      - name: Test
+        run: >-
+          dotnet test Sentinel.sln
+          --configuration "$CONFIGURATION"
+          --no-build
+          --logger "trx;LogFilePrefix=results"
+          --results-directory TestResults
+          --collect "XPlat Code Coverage"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/**
+          if-no-files-found: warn
+          retention-days: 14
