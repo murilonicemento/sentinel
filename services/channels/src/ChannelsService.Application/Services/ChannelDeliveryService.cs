@@ -20,6 +20,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
     private readonly ILogger<ChannelDeliveryService> _logger;
     private readonly ITenantBillingGateway _tenantBillingGateway;
     private readonly ITenantUsagePublisher _usagePublisher;
+    private readonly IReportingEventPublisher _reportingPublisher;
 
     public ChannelDeliveryService(
         IEnumerable<IChannelProvider> providers,
@@ -30,7 +31,8 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
         IChannelMetrics metrics,
         ILogger<ChannelDeliveryService> logger,
         ITenantBillingGateway tenantBillingGateway,
-        ITenantUsagePublisher usagePublisher)
+        ITenantUsagePublisher usagePublisher,
+        IReportingEventPublisher reportingPublisher)
     {
         _providers = providers;
         _deliveryRepository = deliveryRepository;
@@ -41,6 +43,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
         _logger = logger;
         _tenantBillingGateway = tenantBillingGateway;
         _usagePublisher = usagePublisher;
+        _reportingPublisher = reportingPublisher;
     }
 
     public async Task<DeliveryResultDTO> DeliverAsync(NotificationEvent notification, CancellationToken cancellationToken)
@@ -105,9 +108,9 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                 _logger.LogInformation("Event {EventId} was already delivered on channel {Channel}; skipping",
                     notification.EventId, channel);
                 successfulProviders.Add(deliveredBy);
-                // Reported again in case the earlier attempt delivered but failed before reporting; the usage id
-                // is the same, so tenants-billing counts the channel once.
-                await ReportChannelUsageAsync(notification, channel, cancellationToken);
+                // Reported again in case the earlier attempt delivered but failed before reporting; the ids are the
+                // same, so tenants-billing and reporting count the channel once.
+                await ReportDeliveryAsync(notification, channel, delivered: true, cancellationToken);
                 continue;
             }
 
@@ -116,6 +119,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
             {
                 _logger.LogWarning("No provider registered for channel {Channel}.", channel);
                 failedChannels.Add(channel.ToString());
+                await ReportDeliveryAsync(notification, channel, delivered: false, cancellationToken);
                 continue;
             }
 
@@ -164,7 +168,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                     notification.EventId,
                     channel,
                     attemptResult.ProviderName);
-                await ReportChannelUsageAsync(notification, channel, cancellationToken);
+                await ReportDeliveryAsync(notification, channel, delivered: true, cancellationToken);
             }
             else
             {
@@ -175,6 +179,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                     attemptNumber,
                     attemptResult.Error);
                 failedChannels.Add(channel.ToString());
+                await ReportDeliveryAsync(notification, channel, delivered: false, cancellationToken);
             }
         }
 
@@ -198,21 +203,29 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
     }
 
     /// <summary>
-    /// Counts a delivered channel for the notification's tenant (X-24). A failure propagates, so the notification is
-    /// retried: the channel is not resent, only reported again.
+    /// Reports a channel's outcome: a delivered channel counts as tenant usage (ADR-0009) and both outcomes go to
+    /// reporting as NotificationSent or NotificationFailed (X-24). A failure propagates, so the notification is
+    /// retried: a delivered channel is not resent, only reported again with the same ids.
     /// </summary>
-    private async Task ReportChannelUsageAsync(NotificationEvent notification, ChannelTypeEnum channel,
+    private async Task ReportDeliveryAsync(NotificationEvent notification, ChannelTypeEnum channel, bool delivered,
         CancellationToken cancellationToken)
     {
-        var usage = TenantUsageEventDTO.ForDeliveredChannel(notification.TenantId, notification.EventId, channel);
-        if (usage is null)
+        if (delivered)
         {
-            _logger.LogWarning(
-                "Notification {EventId} has no tenant id or event id; its delivery on {Channel} is not reported as usage",
-                notification.EventId, channel);
-            return;
+            var usage = TenantUsageEventDTO.ForDeliveredChannel(notification.TenantId, notification.EventId, channel);
+            if (usage is null)
+                _logger.LogWarning(
+                    "Notification {EventId} has no tenant id or event id; its delivery on {Channel} is not reported as usage",
+                    notification.EventId, channel);
+            else
+                await _usagePublisher.PublishAsync(usage, cancellationToken);
         }
 
-        await _usagePublisher.PublishAsync(usage, cancellationToken);
+        var reportingEvent = ReportingEventEnvelopeDTO.ForDelivery(notification, channel, delivered, DateTime.UtcNow);
+        if (reportingEvent is null)
+            _logger.LogWarning("Notification {EventId} has no tenant or event id; its outcome on {Channel} is not sent " +
+                               "to reporting", notification.EventId, channel);
+        else
+            await _reportingPublisher.PublishAsync(reportingEvent, cancellationToken);
     }
 }

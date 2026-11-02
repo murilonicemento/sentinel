@@ -41,7 +41,8 @@ public sealed class ChannelDeliveryServiceTests
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
             new StubTenantBillingGateway(isActive: true),
-            new RecordingUsagePublisher());
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -90,7 +91,8 @@ public sealed class ChannelDeliveryServiceTests
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
             new StubTenantBillingGateway(isActive: true),
-            new RecordingUsagePublisher());
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -138,7 +140,8 @@ public sealed class ChannelDeliveryServiceTests
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
             new StubTenantBillingGateway(isActive: true),
-            new RecordingUsagePublisher());
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -189,7 +192,8 @@ public sealed class ChannelDeliveryServiceTests
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
             new StubTenantBillingGateway(isActive: true),
-            new RecordingUsagePublisher());
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -228,7 +232,8 @@ public sealed class ChannelDeliveryServiceTests
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
             new StubTenantBillingGateway(isActive: false),
-            new RecordingUsagePublisher());
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -266,7 +271,8 @@ public sealed class ChannelDeliveryServiceTests
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
             new StubTenantBillingGateway(isActive: true),
-            new RecordingUsagePublisher());
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
 
         await Service().DeliverAsync(notification, CancellationToken.None);
         var second = await Service().DeliverAsync(notification, CancellationToken.None);
@@ -280,7 +286,7 @@ public sealed class ChannelDeliveryServiceTests
     private static readonly string UsageTenant = Guid.NewGuid().ToString();
 
     private (Func<RecordingUsagePublisher, ChannelDeliveryService> Service, NotificationEvent Notification,
-        TestChannelProvider Sms, TestChannelProvider Email) UsageScenario()
+        TestChannelProvider Sms, TestChannelProvider Email) UsageScenario(RecordingReportingPublisher? reporting = null)
     {
         var notification = new NotificationEvent
         {
@@ -308,7 +314,8 @@ public sealed class ChannelDeliveryServiceTests
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
             new StubTenantBillingGateway(isActive: true),
-            usage), notification, sms, email);
+            usage,
+            reporting ?? new RecordingReportingPublisher()), notification, sms, email);
     }
 
     [Fact]
@@ -359,6 +366,58 @@ public sealed class ChannelDeliveryServiceTests
     public void ChannelUsage_WithoutATenantIdOrEventId_IsNotReported(string tenantId, string eventId)
     {
         Assert.Null(TenantUsageEventDTO.ForDeliveredChannel(tenantId, eventId, ChannelTypeEnum.Sms));
+    }
+
+    [Fact]
+    public async Task DeliverAsync_SendsTheOutcomeOfEachChannelToReporting()
+    {
+        var reporting = new RecordingReportingPublisher();
+        var (service, notification, _, _) = UsageScenario(reporting);
+        notification.PriorityEnum = NotificationPriorityEnum.Critical;
+        notification.Metadata = new Dictionary<string, string> { ["region"] = "rj-capital", ["riskScore"] = "0.84" };
+
+        await service(new RecordingUsagePublisher()).DeliverAsync(notification, CancellationToken.None);
+
+        Assert.Equal(["NotificationSent", "NotificationFailed"], reporting.Published.Select(e => e.EventType));
+        var sent = reporting.Published[0];
+        Assert.Equal(("sms", "SUCCESS", "CRITICAL", "rj-capital", 0.84, UsageTenant, "channels"),
+            (sent.Channel, sent.Status, sent.Severity, sent.Region, sent.RiskScore, sent.TenantId, sent.Source));
+        Assert.Equal(("email", "FAILED"), (reporting.Published[1].Channel, reporting.Published[1].Status));
+    }
+
+    [Fact]
+    public async Task DeliverAsync_WhenRedelivered_SendsTheSameReportingIds()
+    {
+        var reporting = new RecordingReportingPublisher();
+        var (service, notification, _, _) = UsageScenario(reporting);
+
+        await service(new RecordingUsagePublisher()).DeliverAsync(notification, CancellationToken.None);
+        await service(new RecordingUsagePublisher()).DeliverAsync(notification, CancellationToken.None);
+
+        Assert.Equal(4, reporting.Published.Count);
+        Assert.Equal(2, reporting.Published.Select(e => e.EventId).Distinct().Count());
+    }
+
+    [Fact]
+    public void ReportingEvent_WithoutRegionOrScore_UsesUnknownAndZero()
+    {
+        var reportingEvent = ReportingEventEnvelopeDTO.ForDelivery(
+            new NotificationEvent { EventId = "evt-1", TenantId = "tenant-1", Metadata = new() { ["riskScore"] = "7" } },
+            ChannelTypeEnum.WhatsApp, delivered: true, DateTime.UtcNow)!;
+
+        Assert.Equal(("unknown", 0d, "whatsapp", "MEDIUM"),
+            (reportingEvent.Region, reportingEvent.RiskScore, reportingEvent.Channel, reportingEvent.Severity));
+    }
+
+    private sealed class RecordingReportingPublisher : IReportingEventPublisher
+    {
+        public List<ReportingEventEnvelopeDTO> Published { get; } = new();
+
+        public Task PublishAsync(ReportingEventEnvelopeDTO reportingEvent, CancellationToken cancellationToken)
+        {
+            Published.Add(reportingEvent);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class RecordingUsagePublisher(bool fail = false) : ITenantUsagePublisher

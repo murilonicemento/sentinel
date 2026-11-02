@@ -89,6 +89,7 @@ public static class ServiceCollectionExtensions
             })
             .AddSingleton<INotificationPublisher, KafkaNotificationPublisher>()
             .AddSingleton<ITenantUsagePublisher, KafkaTenantUsagePublisher>()
+            .AddSingleton<IReportingEventPublisher, KafkaReportingEventPublisher>()
             .AddSingleton<IDeadLetterPublisher, KafkaDeadLetterPublisher>();
 
     private static IServiceCollection AddServices(this IServiceCollection services, IConfiguration configuration)
