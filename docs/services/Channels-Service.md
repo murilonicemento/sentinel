@@ -36,8 +36,11 @@ As rotas antigas `/api/notifications` e `/api/dlq/reprocess` estão depreciadas 
 | `alert-commands` (`Kafka:AlertCommandsTopic`) | consumido | `TriggerAlertCommand` do alert-orchestrator, transformado em `NotificationEvent` (ADR-0008) |
 | `notification-events-dlq` | publicado | notificação que nenhum canal entregou, com o erro |
 | `channels-dead-letter` | publicado | mensagem que o consumidor não conseguiu processar (ADR-0003) |
+| `tenant-usage-events` (`Kafka:TenantUsageTopic`) | publicado | `TenantUsageEvent` com `ChannelUsage: 1` por canal entregue (ADR-0009) |
 
 Cada `TriggerAlertCommand` vira uma notificação com `EventId` `alert:{janela}:{nível}`: uma reentrega do mesmo comando não reenvia pelos canais que já entregaram, e cada escalonamento é entregue de novo. A prioridade é `High` no nível 1 e `Critical` a partir do 2. Título e corpo vêm do comando ou de um texto padrão com tipo de risco, região, score e nível; os canais vêm do comando ou, sem eles, da configuração do tenant. Comando sem tenant ou sem janela vai para `channels-dead-letter`.
+
+Cada canal entregue gera um uso com `EventId` derivado do tenant, da notificação e do canal. Numa reentrega, o canal já entregue não é reenviado, mas o uso é reportado de novo com o mesmo id, e o tenants-billing o conta uma vez. Uma falha ao reportar faz a entrega falhar, para que a notificação seja tentada de novo. Notificação sem tenant em forma de GUID não gera uso.
 
 ## Modelo de domínio
 

@@ -135,7 +135,8 @@ Cada evento é processado uma vez, com a reserva atômica `alert-orchestrator:id
 |---|---|
 | `alert-orchestrator-events` | `AlertWindowOpened`, `AlertTriggered`, `AlertConfirmed`, `AlertEscalated`, `AlertClosed`, `AlertWindowExpired` |
 | `alert-commands` | `TriggerAlertCommand` (disparo e cada escalonamento), com o `TenantId` da janela; consumido pelo channels |
+| `tenant-usage-events` (`Kafka:Topics:TenantUsage`) | `TenantUsageEvent` com `AlertsTriggered: 1` a cada janela disparada, `EventId` derivado da janela; escalonamentos não contam de novo. Janela sem tenant em forma de GUID não gera uso (ADR-0009) |
 
 **Persistência.** PostgreSQL `alert_orchestrator` (`alert_windows`, `alert_signals`; migrations EF Core, seção do `2-schema.sql`) e Redis (idempotência e cooldown). Com `Database:UsePostgreSql` / `Cache:UseRedis` desligados, os repositórios ficam em memória.
 
-**Integração (ADR-0008, X-24).** O caminho risk-evaluation → `risk-updated` → janela → `alert-commands` → channels está ligado. Continuam sem produtor `region-intersected` e sem consumidor `alert-orchestrator-events`.
+**Integração (ADR-0008, X-24).** O caminho risk-evaluation → `risk-updated` → janela → `alert-commands` → channels está ligado. Continuam sem produtor `region-intersected` e sem consumidor `alert-orchestrator-events`. O uso é publicado depois de gravar a janela disparada; se a publicação falhar, a nova tentativa não publica de novo, como já acontecia com o comando (ADR-0009).

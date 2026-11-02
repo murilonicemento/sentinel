@@ -298,7 +298,7 @@ As rotas antigas `/api/v1/tenants/*` e `/api/v1/plans` estão depreciadas até 2
 
 | Tópico | Papel | Conteúdo |
 |---|---|---|
-| `tenant-usage-events` | consumido | `TenantUsageEvent { TenantId, EventsConsumed, AlertsTriggered, ApiRequests, ChannelUsage }`; nenhum serviço publica nesse tópico ainda (X-24) |
+| `tenant-usage-events` | consumido | `TenantUsageEvent { TenantId, EventsConsumed, AlertsTriggered, ApiRequests, ChannelUsage, EventId }`. Publicado por ingestion (eventos de cada coleta), alert-orchestrator (janela disparada) e channels (canal entregue), com `EventId` determinístico (ADR-0009). Nenhum serviço reporta `ApiRequests`. Um tenant desconhecido vai ao DLQ |
 | `tenant-usage-events-dlq` | publicado e consumido | falhas do consumo de uso; o consumidor do DLQ republica as recuperáveis no replay |
 | `tenant-usage-events-replay` | consumido | lido pelo consumidor de uso junto com o tópico principal |
 | `tenants-billing-events` | publicado | `TenantCreated`, `PlanCreated`, `PlanPolicyUpdated`, `TenantQuotaSoftLimitReached`, `TenantQuotaHardLimitReached`, `TenantSuspended`, `TenantReactivated` e `TenantCanceled` (`{ Id, Name, Status }`, publicados por `PATCH /tenants/{tenantId}/status`); nenhum serviço consome esse tópico ainda |
@@ -307,5 +307,5 @@ As rotas antigas `/api/v1/tenants/*` e `/api/v1/plans` estão depreciadas até 2
 
 **Próximos passos.**
 
-1. Produtores de `tenant-usage-events` nos serviços que geram consumo (X-24).
+1. Reportar `ApiRequests` (ADR-0009 deixa em aberto).
 2. Decidir se os outros serviços devem consultar o status de quota antes de operar.

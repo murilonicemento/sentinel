@@ -246,6 +246,8 @@ O read model é gravado antes da transação. Se ela falhar, o evento aparece na
 
 **Mensageria.** O outbox publica `SensorEventDetected { CollectionId, EventType, Intensity, Latitude, Longitude, CollectedAt, EventId, TenantId }` em `climatic-event-detected` ou `disaster-event-detected`. `TenantId` entrou em 2026-11-01 (ADR-0008); linhas do outbox gravadas antes saem sem ele. O ingestion **não publica `sensor-event-detected`**, o tópico que o geospatial consome (X-24).
 
+Cada coleta que publica eventos grava também, na mesma transação, uma linha do outbox para `tenant-usage-events`: `TenantUsageEvent { TenantId, EventsConsumed, AlertsTriggered: 0, ApiRequests: 0, ChannelUsage: 0, EventId }`, com `EventsConsumed` igual ao número de eventos da coleta e `EventId` derivado da chave da coleta, então uma coleta repetida conta uma vez no tenants-billing (ADR-0009, 2026-11-02).
+
 **Persistência.** PostgreSQL `ingestion` (`tenant`, `data_source`, `event_type_permission`, `data_collection`, `sensor_sample`, `outbox`; esquema escrito à mão na seção `ingestion` do `2-schema.sql`), MongoDB (`climaticEvents` e `disasterEvents`, gravadas pelo fluxo e lidas pelo v1; `events` só atende as rotas antigas e nada grava nela), Redis (deduplicação) e MinIO (payload bruto).
 
 **Chamadas a outros serviços.** tenants-billing (`GET /api/v1/tenants-billing/tenants/{id}`, no cadastro da fonte de dados) e geospatial (`POST /api/v1/geospatial/operations/contains-point`, X-25).
