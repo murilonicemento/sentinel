@@ -169,7 +169,7 @@ As rotas antigas `/api/geospatial/*` estão depreciadas até 2027-01-23 (ADR-000
 
 | Tópico | Papel | Conteúdo |
 |---|---|---|
-| `sensor-event-detected` | consumido | `SensorEventDetected`; cada evento com coordenadas válidas é indexado em `geospatial-events`. Nenhum serviço publica nesse tópico ainda (X-24) |
+| `disaster-event-detected`, `climatic-event-detected` (`KafkaConsumerOptions:Topics`) | consumido | `SensorEventDetected` do outbox do ingestion; cada evento com coordenadas válidas é indexado em `geospatial-events` com `OperationType` `sensor-event-detected` (ADR-0012). O tópico `sensor-event-detected`, que ninguém publicava, está depreciado |
 | `geospatial-dead-letter` | publicado | mensagens inválidas ou que esgotaram as tentativas (ADR-0003) |
 
 O geospatial não publica em `region-intersected`. Até 2026-11-01, cada `intersects` HTTP verdadeiro publicava um `GeospatialOperationEvent` nesse tópico, mas uma interseção pedida por HTTP é um cálculo, não uma detecção (ADR-0008). A operação continua indexada em `geospatial-events`.

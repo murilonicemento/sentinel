@@ -121,7 +121,7 @@ As rotas antigas `/api/alert-windows/*` estão depreciadas até 2027-01-23 (ADR-
 | Tópico | Evento | Tratamento |
 |---|---|---|
 | `risk-updated` | `RiskUpdatedEvent { EventId, Region, RiskType, RiskScore, TenantId, Timestamp, Metadata }`, publicado pelo risk-evaluation (`Region` é o `regionCode` do catálogo) | exige o tenant (sem ele, vai para o DLQ), confere no tenants-billing se ele está ativo, compara o score com o limiar do tipo de risco e abre ou alimenta a janela de alerta da região |
-| `region-intersected` | `RegionIntersectedEvent { EventId, Region, IntersectingRegion, RiskType, Severity, Timestamp }` | conta como sinal na janela aberta da região; nenhum serviço publica nesse tópico desde o ADR-0008 |
+| `region-intersected` | `RegionIntersectedEvent { EventId, Region, IntersectingRegion, RiskType, Severity, Timestamp }` | conta como sinal na janela aberta da região; nenhum serviço publica nesse tópico desde o ADR-0008. **Depreciado** (sunset 2027-01-31, ADR-0012): o consumidor avisa no log ao subir e será removido |
 
 Cada evento é processado uma vez, com a reserva atômica `alert-orchestrator:idempotency:v2:{eventId}` no Redis. O consumidor segue o ADR-0003, com DLQ em `alert-orchestrator-dead-letter`.
 
@@ -140,4 +140,4 @@ Cada evento é processado uma vez, com a reserva atômica `alert-orchestrator:id
 
 **Persistência.** PostgreSQL `alert_orchestrator` (`alert_windows`, `alert_signals`; migrations EF Core, seção do `2-schema.sql`) e Redis (idempotência e cooldown). Com `Database:UsePostgreSql` / `Cache:UseRedis` desligados, os repositórios ficam em memória.
 
-**Integração (ADR-0008, X-24).** O caminho risk-evaluation → `risk-updated` → janela → `alert-commands` → channels está ligado. Continuam sem produtor `region-intersected` e sem consumidor `alert-orchestrator-events`. O uso é publicado depois de gravar a janela disparada; se a publicação falhar, a nova tentativa não publica de novo, como já acontecia com o comando (ADR-0009). O mesmo vale para o `AlertTriggered` do reporting (ADR-0010). `TriggeredAlertReporter` publica os dois.
+**Integração (ADR-0008, X-24).** O caminho risk-evaluation → `risk-updated` → janela → `alert-commands` → channels está ligado. `region-intersected` está depreciado e `alert-orchestrator-events` é um tópico de saída, sem consumidor interno por decisão (ADR-0012). O uso é publicado depois de gravar a janela disparada; se a publicação falhar, a nova tentativa não publica de novo, como já acontecia com o comando (ADR-0009). O mesmo vale para o `AlertTriggered` do reporting (ADR-0010). `TriggeredAlertReporter` publica os dois.

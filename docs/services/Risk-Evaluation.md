@@ -292,7 +292,7 @@ Cada avaliação de um evento de sensor com tenant, dentro de uma região da có
 
 Avaliações sem tenant, sem id de evento (como o `POST /evaluations`) ou fora de todas as regiões não publicam `risk-updated`. O cache de scores recentes também publica: a avaliação que reaproveita o score do cache gera o evento do mesmo jeito.
 
-`risk-events` continua sendo publicado, agora criado pelo `kafka-init`, e nenhum serviço o consome (X-24).
+`risk-events` está **depreciado** (ADR-0012): repete o que `risk-updated` leva e não tem consumidor conhecido. Continua sendo publicado até 2027-01-31, com um aviso no log ao subir. `Kafka:PublishRiskEvents=false` (`RISK_EVALUATION_PUBLISH_RISK_EVENTS` no compose) para de publicar antes disso.
 
 **Avaliação.** O score combina os pesos do modelo, o fator regional da versão do catálogo copiada (região que contém o ponto) e a matriz do catálogo, que pode subir o nível para o tipo de evento e a intensidade, nunca baixar. As avaliações leem só a cópia local do catálogo.
 

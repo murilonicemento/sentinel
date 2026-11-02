@@ -244,7 +244,7 @@ As rotas antigas `/api/ingestion/*` estão depreciadas até 2027-01-23 (ADR-0007
 
 O read model é gravado antes da transação. Se ela falhar, o evento aparece na leitura antes de ser publicado; a nova tentativa da mesma coleta usa os mesmos ids e completa a gravação.
 
-**Mensageria.** O outbox publica `SensorEventDetected { CollectionId, EventType, Intensity, Latitude, Longitude, CollectedAt, EventId, TenantId }` em `climatic-event-detected` ou `disaster-event-detected`. `TenantId` entrou em 2026-11-01 (ADR-0008); linhas do outbox gravadas antes saem sem ele. O ingestion **não publica `sensor-event-detected`**, o tópico que o geospatial consome (X-24).
+**Mensageria.** O outbox publica `SensorEventDetected { CollectionId, EventType, Intensity, Latitude, Longitude, CollectedAt, EventId, TenantId }` em `climatic-event-detected` ou `disaster-event-detected`. `TenantId` entrou em 2026-11-01 (ADR-0008); linhas do outbox gravadas antes saem sem ele. O geospatial e o risk-evaluation consomem esses dois tópicos. O ingestion não publica `sensor-event-detected`, que está depreciado (ADR-0012).
 
 Cada coleta que publica eventos grava também, na mesma transação, uma linha do outbox para `tenant-usage-events`: `TenantUsageEvent { TenantId, EventsConsumed, AlertsTriggered: 0, ApiRequests: 0, ChannelUsage: 0, EventId }`, com `EventsConsumed` igual ao número de eventos da coleta e `EventId` derivado da chave da coleta, então uma coleta repetida conta uma vez no tenants-billing (ADR-0009, 2026-11-02).
 
