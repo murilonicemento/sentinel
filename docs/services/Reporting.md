@@ -238,7 +238,7 @@ As rotas antigas `/api/reporting/*` estão depreciadas até 2027-01-23 (ADR-0007
 | `reporting-events-dead-letter` | publicado quando o envelope é inválido ou o processamento falha, com o tópico de origem; também consumido: falhas terminais são só registradas, as demais são republicadas no replay. Uma falha que veio do próprio replay é terminal |
 | `reporting-events-replay` | publicado pelo consumidor do DLQ e pelo `POST /events/replay` (`{ sourceTopic, reprocessedBy, replayRequested, requestedAtUtc, originalPayload }`); consumido pelo mesmo consumidor de `reporting-events`, que processa o `originalPayload` (REP-09, resolvido em 2026-11-02). A gravação é idempotente por `event_id`, então reprocessar um evento já gravado não o duplica |
 
-Nenhum serviço publica em `reporting-events` ainda. Os eventos da seção 6.8 (`AlertTriggered`, `NotificationSent`...) existem nos serviços de origem, mas em outros tópicos e formatos (X-24). Até haver produtor, os dados chegam só pela API.
+Desde 2026-11-02 (ADR-0010), o alert-orchestrator publica `AlertTriggered` a cada janela disparada e o channels publica `NotificationSent` ou `NotificationFailed` para cada canal tentado. Os dois usam `EventId` determinístico, e o reporting grava cada `event_id` uma vez. `Channel` aceita `sms`, `email`, `push`, `webhook`, `whatsapp`, `mqtt`, `siren` e, para eventos que não são entrega, `none`; uma notificação com `none` é rejeitada. `RiskUpdated` e os eventos de sensor da seção 6.8 não são publicados.
 
 **Persistência.**
 
