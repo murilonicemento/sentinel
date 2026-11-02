@@ -170,6 +170,7 @@ services:
       - ConnectionStrings__Redis=redis:6379
       - Kafka__BootstrapServers=kafka:9092
       - Kafka__Topic=risk-events
+      - Kafka__PublishRiskEvents=${RISK_EVALUATION_PUBLISH_RISK_EVENTS:-true}
       - Kafka__RiskUpdatedTopic=risk-updated
       - Kafka__GroupId=risk-evaluation-group
       - Loki__Url=http://loki:3100

@@ -23,6 +23,9 @@ namespace RiskEvaluation.Infrastructure;
 
 public static class ServiceCollectionExtension
 {
+    /// <summary>Last day <c>risk-events</c> is published by default (deprecated on 2026-11-02, X-24).</summary>
+    public const string RiskEventsSunset = "2027-01-31";
+
     public static IServiceCollection AddInfrastructureServiceCollection(this IServiceCollection services, IConfiguration configuration)
     {
         // MongoDB
@@ -76,14 +79,21 @@ public static class ServiceCollectionExtension
         services.AddScoped<RiskCalculationService>();
 
         // Messaging
-        services.AddSingleton<IEventPublisher>(sp =>
-        {
-            var bootstrapServers = configuration["Kafka:BootstrapServers"];
-            var topic = configuration["Kafka:Topic"];
-            var logger = sp.GetRequiredService<ILogger<KafkaEventPublisher>>();
+        // risk-events is deprecated (sunset 2027-01-31, X-24): it has no consumer and risk-updated carries what
+        // alert-orchestrator needs. It is still published until Kafka:PublishRiskEvents is set to false.
+        if (configuration.GetValue("Kafka:PublishRiskEvents", true))
+            services.AddSingleton<IEventPublisher>(sp =>
+            {
+                var bootstrapServers = configuration["Kafka:BootstrapServers"];
+                var topic = configuration["Kafka:Topic"];
+                var logger = sp.GetRequiredService<ILogger<KafkaEventPublisher>>();
+                logger.LogWarning("Topic {Topic} is deprecated and stops being published after {Sunset}; set " +
+                                  "Kafka:PublishRiskEvents=false to stop now", topic, RiskEventsSunset);
 
-            return new KafkaEventPublisher(bootstrapServers!, topic!, logger);
-        });
+                return new KafkaEventPublisher(bootstrapServers!, topic!, logger);
+            });
+        else
+            services.AddSingleton<IEventPublisher, DisabledEventPublisher>();
         services.AddSingleton<IRiskUpdatedPublisher>(sp => new KafkaRiskUpdatedPublisher(
             configuration["Kafka:BootstrapServers"]
             ?? throw new InvalidOperationException("Configuration 'Kafka:BootstrapServers' is required."),
