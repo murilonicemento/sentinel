@@ -26,13 +26,24 @@ public sealed class ReportingEventNormalizer : IReportingEventNormalizer
         "CRITICAL"
     };
 
+    /// <summary>Event without a delivery channel, such as AlertTriggered.</summary>
+    public const string NoChannel = "none";
+
+    // whatsapp, mqtt and siren are channels service channels; "none" marks events that are not deliveries (X-24).
     private static readonly HashSet<string> AllowedChannels = new(StringComparer.OrdinalIgnoreCase)
     {
         "sms",
         "email",
         "push",
-        "webhook"
+        "webhook",
+        "whatsapp",
+        "mqtt",
+        "siren",
+        NoChannel
     };
+
+    private static readonly HashSet<string> DeliveryChannels = new(AllowedChannels.Where(c => c != NoChannel),
+        StringComparer.OrdinalIgnoreCase);
 
     private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -63,9 +74,9 @@ public sealed class ReportingEventNormalizer : IReportingEventNormalizer
         if (string.Equals(eventType, "NotificationSent", StringComparison.OrdinalIgnoreCase)
             || string.Equals(eventType, "NotificationFailed", StringComparison.OrdinalIgnoreCase))
         {
-            if (!string.IsNullOrWhiteSpace(channel) && !AllowedChannels.Contains(channel.ToLowerInvariant()))
+            if (!string.IsNullOrWhiteSpace(channel) && !DeliveryChannels.Contains(channel))
             {
-                errors.Add("Notification events must use one of sms, email, push, webhook.");
+                errors.Add("Notification events must use one of sms, email, push, webhook, whatsapp, mqtt, siren.");
             }
         }
     }
@@ -118,7 +129,7 @@ public sealed class ReportingEventNormalizer : IReportingEventNormalizer
         }
         else if (!AllowedChannels.Contains(envelope.Channel.Trim().ToLowerInvariant()))
         {
-            errors.Add("Channel must be one of sms, email, push, webhook.");
+            errors.Add("Channel must be one of sms, email, push, webhook, whatsapp, mqtt, siren, none.");
         }
 
         if (string.IsNullOrWhiteSpace(envelope.Status))
