@@ -1,4 +1,6 @@
 using System.Net.Http.Headers;
+using Confluent.Kafka;
+using Confluent.Kafka.Admin;
 using Ingestion.Api;
 using Ingestion.Application.Interfaces.Services;
 using Ingestion.IntegrationTests.V1;
@@ -60,6 +62,19 @@ public sealed class IngestionStackFactory : WebApplicationFactory<Program>, IAsy
             _minio.StartAsync());
         await ApplyIngestionSchemaAsync();
         await CreateReadModelIndexesAsync();
+        await CreateTopicsAsync();
+    }
+
+    /// <summary>
+    /// The topics the outbox relay publishes to, created up front as kafka-init does: a test that subscribes before
+    /// the first publication would otherwise get "Unknown topic or partition".
+    /// </summary>
+    private async Task CreateTopicsAsync()
+    {
+        using var admin = new AdminClientBuilder(new AdminClientConfig { BootstrapServers = KafkaBootstrapServers })
+            .Build();
+        await admin.CreateTopicsAsync(new[] { "climatic-event-detected", "disaster-event-detected", "tenant-usage-events" }
+            .Select(topic => new TopicSpecification { Name = topic, NumPartitions = 1, ReplicationFactor = 1 }));
     }
 
     async Task IAsyncLifetime.DisposeAsync()
