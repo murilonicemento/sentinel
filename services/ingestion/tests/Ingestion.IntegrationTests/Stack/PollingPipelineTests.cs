@@ -26,7 +26,8 @@ public class PollingPipelineTests(IngestionStackFactory stack)
 
         Assert.Equal(IngestionStackFactory.PolledEarthquakes.Length, stored);
         Assert.Equal(2L, await stack.ScalarAsync<long>(
-            "SELECT count(*) FROM outbox o JOIN data_collection c ON c.id = o.aggregate_id WHERE c.data_source_id = @p",
+            "SELECT count(*) FROM outbox o JOIN data_collection c ON c.id = o.aggregate_id " +
+            "WHERE c.data_source_id = @p AND o.outbox_type <> 'tenant-usage-events'",
             IngestionStackFactory.EarthquakeDataSource));
     }
 }

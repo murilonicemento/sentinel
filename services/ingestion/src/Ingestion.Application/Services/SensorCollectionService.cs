@@ -206,6 +206,15 @@ public class SensorCollectionService : ISensorCollectionService
                 $"{domain.ToLower()}-event-detected", JsonSerializer.Serialize(evt)));
         }
 
+        // The tenant's usage travels in the same transaction, so it is counted exactly when the events are published.
+        if (outboxMessages.Count > 0)
+        {
+            var usage = new TenantUsageEvent(tenantId, outboxMessages.Count, 0, 0, 0,
+                DeterministicEventId.For($"{dedupKey}/usage", 0));
+            outboxMessages.Add(new OutboxMessage(usage.EventId, collectionGuid, TenantUsageEvent.Topic,
+                JsonSerializer.Serialize(usage)));
+        }
+
         // Transactional outbox: the collection, its samples and the events to publish are committed together.
         await _unitOfWork.ExecuteAsync(async _ =>
         {

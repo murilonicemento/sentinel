@@ -66,7 +66,11 @@ public class SensorCollectionPipelineTests(IngestionStackFactory stack)
         Assert.Equal(2L, await stack.ScalarAsync<long>(
             "SELECT count(*) FROM sensor_sample WHERE data_collection_id = @p", collectionId));
         Assert.Equal(2L, await stack.ScalarAsync<long>(
-            "SELECT count(*) FROM outbox WHERE aggregate_id = @p", collectionId));
+            "SELECT count(*) FROM outbox WHERE aggregate_id = @p AND outbox_type = 'climatic-event-detected'",
+            collectionId));
+        Assert.Equal(1L, await stack.ScalarAsync<long>(
+            "SELECT count(*) FROM outbox WHERE aggregate_id = @p AND outbox_type = 'tenant-usage-events'",
+            collectionId));
         Assert.NotNull(await stack.ScalarAsync<string>(
             "SELECT trace_parent FROM outbox WHERE aggregate_id = @p LIMIT 1", collectionId));
     }
@@ -84,7 +88,7 @@ public class SensorCollectionPipelineTests(IngestionStackFactory stack)
 
         Assert.Equal(1L, await stack.ScalarAsync<long>(
             "SELECT count(*) FROM data_collection WHERE data_source_id = @p", dataSourceId));
-        Assert.Equal(2L, await stack.ScalarAsync<long>(
+        Assert.Equal(3L, await stack.ScalarAsync<long>(
             "SELECT count(*) FROM outbox o JOIN data_collection c ON c.id = o.aggregate_id WHERE c.data_source_id = @p",
             dataSourceId));
     }
@@ -167,6 +171,45 @@ public class SensorCollectionPipelineTests(IngestionStackFactory stack)
         Assert.True(again?.Message is null ||
                     JsonDocument.Parse(again.Message.Value).RootElement.GetProperty("CollectionId").GetGuid() !=
                     collectionId);
+    }
+
+    /// <summary>X-24: the relay publishes the collection's usage to tenants-billing in its own contract.</summary>
+    [Fact]
+    public async Task Relay_PublishesTheCollectionsUsageToTenantsBilling()
+    {
+        var dataSourceId = await CreateRainDataSourceAsync();
+        using var consumer = new ConsumerBuilder<Ignore, string>(new ConsumerConfig
+        {
+            BootstrapServers = stack.KafkaBootstrapServers,
+            GroupId = $"ingestion-usage-tests-{Guid.NewGuid():N}",
+            AutoOffsetReset = AutoOffsetReset.Earliest
+        }).Build();
+        consumer.Subscribe("tenant-usage-events");
+
+        (await stack.ClientFor("Ingestion.Write", IngestionStackFactory.TenantA)
+                .PostAsJsonAsync("/api/ingestion/sensor-collection", Collection(dataSourceId, CollectedAt())))
+            .EnsureSuccessStatusCode();
+        var collectionId = await stack.ScalarAsync<Guid>(
+            "SELECT id FROM data_collection WHERE data_source_id = @p", dataSourceId);
+        var usageId = await stack.ScalarAsync<Guid>(
+            "SELECT id FROM outbox WHERE aggregate_id = @p AND outbox_type = 'tenant-usage-events'", collectionId);
+
+        JsonElement? usage = null;
+        var deadline = Stopwatch.StartNew();
+        while (usage is null && deadline.Elapsed < RelayTimeout)
+        {
+            var result = consumer.Consume(TimeSpan.FromSeconds(1));
+            if (result?.Message is null) continue;
+            var root = JsonDocument.Parse(result.Message.Value).RootElement;
+            if (root.GetProperty("EventId").GetGuid() == usageId) usage = root;
+        }
+
+        Assert.NotNull(usage);
+        Assert.Equal(IngestionStackFactory.TenantA, usage.Value.GetProperty("TenantId").GetGuid());
+        Assert.Equal(2, usage.Value.GetProperty("EventsConsumed").GetInt32());
+        Assert.Equal(0, usage.Value.GetProperty("AlertsTriggered").GetInt32());
+        Assert.Equal(0, usage.Value.GetProperty("ApiRequests").GetInt32());
+        Assert.Equal(0, usage.Value.GetProperty("ChannelUsage").GetInt32());
     }
 
     [Fact]

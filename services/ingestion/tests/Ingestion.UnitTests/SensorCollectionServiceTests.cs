@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ingestion.Application.DTO;
+using Ingestion.Application.Events;
 using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.Providers;
 using Ingestion.Application.Interfaces.Repositories;
@@ -66,7 +67,7 @@ public class SensorCollectionServiceTests
         var published = new List<Guid>();
         _readModel.Setup(r => r.AddAsync(It.IsAny<DetectedEventDTO>(), It.IsAny<CancellationToken>()))
             .Callback<DetectedEventDTO, CancellationToken>((e, _) => projected.Add(e.EventId));
-        _outbox.Setup(o => o.RegisterAsync(It.IsAny<OutboxMessage>()))
+        _outbox.Setup(o => o.RegisterAsync(It.Is<OutboxMessage>(m => m.OutboxType != TenantUsageEvent.Topic)))
             .Callback<OutboxMessage>(m => published.Add(JsonDocument.Parse(m.Payload).RootElement
                 .GetProperty("EventId").GetGuid()))
             .ReturnsAsync(Guid.NewGuid());
@@ -106,6 +107,43 @@ public class SensorCollectionServiceTests
         Assert.Equal(2, samples.Count);
         Assert.All(samples, sample => Assert.Equal(collection.Id, sample.DataCollectionId));
         Assert.Equal(eventIds, outboxIds);
+        Assert.Equal(3, outboxIds.Count);
+    }
+
+    [Fact]
+    public async Task Collection_CountsItsEventsAsTenantUsageOnceAcrossRetries()
+    {
+        var usages = new List<OutboxMessage>();
+        _outbox.Setup(o => o.RegisterAsync(It.Is<OutboxMessage>(m => m.OutboxType == TenantUsageEvent.Topic)))
+            .Callback<OutboxMessage>(usages.Add)
+            .ReturnsAsync(Guid.NewGuid());
+
+        await ProcessAsync();
+        await ProcessAsync();
+
+        Assert.Equal(2, usages.Count);
+        Assert.Equal(usages[0].Id, usages[1].Id);
+        var usage = JsonSerializer.Deserialize<TenantUsageEvent>(usages[0].Payload)!;
+        Assert.Equal(new TenantUsageEvent(TenantId, 2, 0, 0, 0, usages[0].Id), usage);
+    }
+
+    [Fact]
+    public async Task CollectionWithoutEvents_RecordsNoUsage()
+    {
+        var geospatial = new Mock<IGeospatialValidationService>();
+        geospatial.Setup(g => g.ValidateCoordinatesAsync(It.IsAny<double>(), It.IsAny<double>(),
+            It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        var dataSources = new Mock<IDataSourceRepository>();
+        dataSources.Setup(r => r.GetByIdAndTenantId(_dataSource.Id, TenantId)).Returns(_dataSource);
+        var service = new SensorCollectionService(dataSources.Object, _collections.Object, _samples.Object,
+            _unitOfWork, _deduplicator.Object, _storage.Object, _outbox.Object, _readModel.Object, geospatial.Object,
+            NullLogger<SensorCollectionService>.Instance);
+
+        await service.ProcessSensorCollection(_dataSource.Id, TenantId, CollectedAt, "{\"raw\":true}",
+            [new SampleSensorDTO { SensorValue = 60, Unit = "mm", Latitude = 0, Longitude = 0 }], "Climatic",
+            CancellationToken.None);
+
+        _outbox.Verify(o => o.RegisterAsync(It.IsAny<OutboxMessage>()), Times.Never);
     }
 
     [Fact]
