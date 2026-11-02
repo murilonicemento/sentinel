@@ -40,7 +40,9 @@ public sealed class ChannelDeliveryServiceTests
             new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms }),
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
-            new StubTenantBillingGateway(isActive: true));
+            new StubTenantBillingGateway(isActive: true),
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -88,7 +90,9 @@ public sealed class ChannelDeliveryServiceTests
             new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }),
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
-            new StubTenantBillingGateway(isActive: true));
+            new StubTenantBillingGateway(isActive: true),
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -135,7 +139,9 @@ public sealed class ChannelDeliveryServiceTests
             new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }),
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
-            new StubTenantBillingGateway(isActive: true));
+            new StubTenantBillingGateway(isActive: true),
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -185,7 +191,9 @@ public sealed class ChannelDeliveryServiceTests
             new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }),
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
-            new StubTenantBillingGateway(isActive: true));
+            new StubTenantBillingGateway(isActive: true),
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
@@ -223,13 +231,205 @@ public sealed class ChannelDeliveryServiceTests
             new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms }),
             new NoOpChannelMetrics(),
             NullLogger<ChannelDeliveryService>.Instance,
-            new StubTenantBillingGateway(isActive: false));
+            new StubTenantBillingGateway(isActive: false),
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
 
         var result = await service.DeliverAsync(notification, CancellationToken.None);
 
         Assert.False(result.Success);
         Assert.Contains("not active or not authorized", result.Error);
         Assert.Empty(repository.Attempts);
+    }
+
+    [Fact]
+    public async Task DeliverAsync_WhenRedelivered_DoesNotResendOnChannelsAlreadyDelivered()
+    {
+        var notification = new NotificationEvent
+        {
+            EventId = "evt-redelivered",
+            TenantId = "tenant-1",
+            Message = new NotificationMessage { Title = "t", Body = "b" },
+            Channels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }
+        };
+        var settings = new TenantChannelDTO
+        {
+            TenantId = "tenant-1",
+            EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email },
+            PriorityOrder = new Dictionary<ChannelTypeEnum, int> { [ChannelTypeEnum.Sms] = 1, [ChannelTypeEnum.Email] = 2 },
+            MaxRetries = new Dictionary<ChannelTypeEnum, int>()
+        };
+        var sms = new TestChannelProvider(ChannelTypeEnum.Sms, true, "sms-provider");
+        var email = new TestChannelProvider(ChannelTypeEnum.Email, false, "email-provider");
+        var repository = new InMemoryDeliveryRepository();
+        ChannelDeliveryService Service() => new(
+            new IChannelProvider[] { sms, email },
+            repository,
+            new StubTenantChannelSettingsProvider(settings),
+            new NoOpRetryPolicyEngine(),
+            new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }),
+            new NoOpChannelMetrics(),
+            NullLogger<ChannelDeliveryService>.Instance,
+            new StubTenantBillingGateway(isActive: true),
+            new RecordingUsagePublisher(),
+            new RecordingReportingPublisher());
+
+        await Service().DeliverAsync(notification, CancellationToken.None);
+        var second = await Service().DeliverAsync(notification, CancellationToken.None);
+
+        Assert.True(second.Success);
+        Assert.Equal(1, sms.Sends);
+        // The channel that failed is attempted again.
+        Assert.Equal(2, email.Sends);
+    }
+
+    private static readonly string UsageTenant = Guid.NewGuid().ToString();
+
+    private (Func<RecordingUsagePublisher, ChannelDeliveryService> Service, NotificationEvent Notification,
+        TestChannelProvider Sms, TestChannelProvider Email) UsageScenario(RecordingReportingPublisher? reporting = null)
+    {
+        var notification = new NotificationEvent
+        {
+            EventId = $"evt-{Guid.NewGuid():N}",
+            TenantId = UsageTenant,
+            Message = new NotificationMessage { Title = "t", Body = "b" },
+            Channels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }
+        };
+        var settings = new TenantChannelDTO
+        {
+            TenantId = UsageTenant,
+            EnabledChannels = new List<ChannelTypeEnum> { ChannelTypeEnum.Sms, ChannelTypeEnum.Email },
+            PriorityOrder = new Dictionary<ChannelTypeEnum, int> { [ChannelTypeEnum.Sms] = 1, [ChannelTypeEnum.Email] = 2 },
+            MaxRetries = new Dictionary<ChannelTypeEnum, int>()
+        };
+        var sms = new TestChannelProvider(ChannelTypeEnum.Sms, true, "sms-provider");
+        var email = new TestChannelProvider(ChannelTypeEnum.Email, false, "email-provider");
+        var repository = new InMemoryDeliveryRepository();
+        return (usage => new ChannelDeliveryService(
+            new IChannelProvider[] { sms, email },
+            repository,
+            new StubTenantChannelSettingsProvider(settings),
+            new NoOpRetryPolicyEngine(),
+            new StubFallbackExecutor(new[] { ChannelTypeEnum.Sms, ChannelTypeEnum.Email }),
+            new NoOpChannelMetrics(),
+            NullLogger<ChannelDeliveryService>.Instance,
+            new StubTenantBillingGateway(isActive: true),
+            usage,
+            reporting ?? new RecordingReportingPublisher()), notification, sms, email);
+    }
+
+    [Fact]
+    public async Task DeliverAsync_ReportsOneUnitOfChannelUsagePerDeliveredChannel()
+    {
+        var (service, notification, _, _) = UsageScenario();
+        var usage = new RecordingUsagePublisher();
+
+        await service(usage).DeliverAsync(notification, CancellationToken.None);
+
+        var reported = Assert.Single(usage.Published);
+        Assert.Equal(new TenantUsageEventDTO(Guid.Parse(UsageTenant), 0, 0, 0, 1, reported.EventId), reported);
+        Assert.Equal(TenantUsageEventDTO.ForDeliveredChannel(UsageTenant, notification.EventId, ChannelTypeEnum.Sms),
+            reported);
+    }
+
+    [Fact]
+    public async Task DeliverAsync_WhenRedelivered_ReportsTheDeliveredChannelWithTheSameUsageId()
+    {
+        var (service, notification, sms, _) = UsageScenario();
+        var usage = new RecordingUsagePublisher();
+
+        await service(usage).DeliverAsync(notification, CancellationToken.None);
+        await service(usage).DeliverAsync(notification, CancellationToken.None);
+
+        Assert.Equal(1, sms.Sends);
+        Assert.Equal(2, usage.Published.Count);
+        Assert.Single(usage.Published.Select(u => u.EventId).Distinct());
+    }
+
+    [Fact]
+    public async Task DeliverAsync_WhenReportingFails_FailsAndTheRetryReportsWithoutResending()
+    {
+        var (service, notification, sms, _) = UsageScenario();
+
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            service(new RecordingUsagePublisher(fail: true)).DeliverAsync(notification, CancellationToken.None));
+        var usage = new RecordingUsagePublisher();
+        await service(usage).DeliverAsync(notification, CancellationToken.None);
+
+        Assert.Equal(1, sms.Sends);
+        Assert.Single(usage.Published);
+    }
+
+    [Theory]
+    [InlineData("tenant-1", "evt-1")]
+    [InlineData("6d3f1c8e-2b4a-4f1e-9c7d-1a2b3c4d5e6f", "")]
+    public void ChannelUsage_WithoutATenantIdOrEventId_IsNotReported(string tenantId, string eventId)
+    {
+        Assert.Null(TenantUsageEventDTO.ForDeliveredChannel(tenantId, eventId, ChannelTypeEnum.Sms));
+    }
+
+    [Fact]
+    public async Task DeliverAsync_SendsTheOutcomeOfEachChannelToReporting()
+    {
+        var reporting = new RecordingReportingPublisher();
+        var (service, notification, _, _) = UsageScenario(reporting);
+        notification.PriorityEnum = NotificationPriorityEnum.Critical;
+        notification.Metadata = new Dictionary<string, string> { ["region"] = "rj-capital", ["riskScore"] = "0.84" };
+
+        await service(new RecordingUsagePublisher()).DeliverAsync(notification, CancellationToken.None);
+
+        Assert.Equal(["NotificationSent", "NotificationFailed"], reporting.Published.Select(e => e.EventType));
+        var sent = reporting.Published[0];
+        Assert.Equal(("sms", "SUCCESS", "CRITICAL", "rj-capital", 0.84, UsageTenant, "channels"),
+            (sent.Channel, sent.Status, sent.Severity, sent.Region, sent.RiskScore, sent.TenantId, sent.Source));
+        Assert.Equal(("email", "FAILED"), (reporting.Published[1].Channel, reporting.Published[1].Status));
+    }
+
+    [Fact]
+    public async Task DeliverAsync_WhenRedelivered_SendsTheSameReportingIds()
+    {
+        var reporting = new RecordingReportingPublisher();
+        var (service, notification, _, _) = UsageScenario(reporting);
+
+        await service(new RecordingUsagePublisher()).DeliverAsync(notification, CancellationToken.None);
+        await service(new RecordingUsagePublisher()).DeliverAsync(notification, CancellationToken.None);
+
+        Assert.Equal(4, reporting.Published.Count);
+        Assert.Equal(2, reporting.Published.Select(e => e.EventId).Distinct().Count());
+    }
+
+    [Fact]
+    public void ReportingEvent_WithoutRegionOrScore_UsesUnknownAndZero()
+    {
+        var reportingEvent = ReportingEventEnvelopeDTO.ForDelivery(
+            new NotificationEvent { EventId = "evt-1", TenantId = "tenant-1", Metadata = new() { ["riskScore"] = "7" } },
+            ChannelTypeEnum.WhatsApp, delivered: true, DateTime.UtcNow)!;
+
+        Assert.Equal(("unknown", 0d, "whatsapp", "MEDIUM"),
+            (reportingEvent.Region, reportingEvent.RiskScore, reportingEvent.Channel, reportingEvent.Severity));
+    }
+
+    private sealed class RecordingReportingPublisher : IReportingEventPublisher
+    {
+        public List<ReportingEventEnvelopeDTO> Published { get; } = new();
+
+        public Task PublishAsync(ReportingEventEnvelopeDTO reportingEvent, CancellationToken cancellationToken)
+        {
+            Published.Add(reportingEvent);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingUsagePublisher(bool fail = false) : ITenantUsagePublisher
+    {
+        public List<TenantUsageEventDTO> Published { get; } = new();
+
+        public Task PublishAsync(TenantUsageEventDTO usage, CancellationToken cancellationToken)
+        {
+            if (fail) throw new TimeoutException("kafka");
+            Published.Add(usage);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class TestChannelProvider : IChannelProvider
@@ -247,9 +447,11 @@ public sealed class ChannelDeliveryServiceTests
 
         public ChannelTypeEnum ChannelTypeEnum => _channelTypeEnum;
         public string ProviderName => _providerName;
+        public int Sends { get; private set; }
 
         public Task<DeliveryResultDTO> SendAsync(NotificationEvent notification, CancellationToken cancellationToken)
         {
+            Sends++;
             return Task.FromResult(new DeliveryResultDTO
             {
                 Success = _shouldSucceed,
@@ -310,8 +512,9 @@ public sealed class ChannelDeliveryServiceTests
 
     private sealed class NoOpRetryPolicyEngine : IRetryPolicyEngine
     {
-        public Task<DeliveryResultDTO> ExecuteAsync(Func<CancellationToken, Task<DeliveryResultDTO>> sendFunc,
-            int maxAttempts, ProviderResilienceDTO resilienceDto, CancellationToken cancellationToken)
+        public Task<DeliveryResultDTO> ExecuteAsync(string providerName,
+            Func<CancellationToken, Task<DeliveryResultDTO>> sendFunc, int maxAttempts,
+            ProviderResilienceDTO resilienceDto, CancellationToken cancellationToken)
         {
             return sendFunc(cancellationToken);
         }

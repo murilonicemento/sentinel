@@ -1,13 +1,14 @@
 using System.Net;
-using Microsoft.AspNetCore.Mvc.Testing;
+
+using Reporting.IntegrationTests.Support;
 
 namespace Reporting.IntegrationTests;
 
-public class ReportingHealthApiTests : IClassFixture<WebApplicationFactory<Reporting.Api.Program>>
+public class ReportingHealthApiTests : IClassFixture<ReportingApiFactory>
 {
-    private readonly WebApplicationFactory<Reporting.Api.Program> _factory;
+    private readonly ReportingApiFactory _factory;
 
-    public ReportingHealthApiTests(WebApplicationFactory<Reporting.Api.Program> factory)
+    public ReportingHealthApiTests(ReportingApiFactory factory)
     {
         _factory = factory;
     }
@@ -15,7 +16,7 @@ public class ReportingHealthApiTests : IClassFixture<WebApplicationFactory<Repor
     [Fact]
     public async Task GetHealth_ReturnsOk()
     {
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateReaderClient("tenant-a");
 
         var response = await client.GetAsync("/api/reporting/health?tenantId=tenant-a");
 

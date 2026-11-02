@@ -7,6 +7,7 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
+COPY --from=repo-root Directory.Packages.props /
 COPY ["src/ChannelsService.Api/ChannelsService.Api.csproj", "src/ChannelsService.Api/"]
 COPY ["src/ChannelsService.Application/ChannelsService.Application.csproj", "src/ChannelsService.Application/"]
 COPY ["src/ChannelsService.Domain/ChannelsService.Domain.csproj", "src/ChannelsService.Domain/"]

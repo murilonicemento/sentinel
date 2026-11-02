@@ -1,5 +1,4 @@
 using FluentAssertions;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Moq;
 using RiskCatalog.Application.DTO;
@@ -832,7 +831,7 @@ public class EventTypeServiceTests
     }
 
     [Fact]
-    public async Task CreateSeverityCriterionToEventType_WhenRangeOverlaps_ShouldThrowBadHttpRequestException()
+    public async Task CreateSeverityCriterionToEventType_WhenRangeOverlaps_ShouldThrowArgumentException()
     {
         var severityCriterionDto = new SeverityCriterionDTO
         {
@@ -884,7 +883,7 @@ public class EventTypeServiceTests
 
         var act = async () => await _eventTypeService.CreateSeverityCriterionToEventType(severityCriterionDto);
 
-        await act.Should().ThrowAsync<BadHttpRequestException>()
+        await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("Severity criterion range overlaps with an existing criterion.");
 
         _eventTypeRepositoryMock.Verify(

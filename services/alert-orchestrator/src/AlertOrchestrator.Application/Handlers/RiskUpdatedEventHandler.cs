@@ -5,6 +5,7 @@ using AlertOrchestrator.Application.Interfaces.Messaging;
 using AlertOrchestrator.Application.Interfaces.Observability;
 using AlertOrchestrator.Application.Interfaces.Services;
 using AlertOrchestrator.Application.Ports;
+using AlertOrchestrator.Application.Services;
 using AlertOrchestrator.Domain.Aggregates;
 using AlertOrchestrator.Domain.Configuration;
 using AlertOrchestrator.Domain.Enums;
@@ -25,6 +26,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
     private readonly IAlertMetrics _metrics;
     private readonly IAlertWindowRepository _windowRepository;
     private readonly ITenantBillingGateway _tenantBillingGateway;
+    private readonly TriggeredAlertReporter _triggeredAlertReporter;
 
     public RiskUpdatedEventHandler(
         IAlertWindowRepository windowRepository,
@@ -34,7 +36,8 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
         IAlertConfigurationPort configurationPort,
         IAlertMetrics metrics,
         ILogger<RiskUpdatedEventHandler> logger,
-        ITenantBillingGateway tenantBillingGateway)
+        ITenantBillingGateway tenantBillingGateway,
+        TriggeredAlertReporter triggeredAlertReporter)
     {
         _windowRepository = windowRepository;
         _eventPublisher = eventPublisher;
@@ -44,15 +47,20 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
         _metrics = metrics;
         _logger = logger;
         _tenantBillingGateway = tenantBillingGateway;
+        _triggeredAlertReporter = triggeredAlertReporter;
     }
 
     public async Task Handle(RiskUpdatedEvent notification, CancellationToken cancellationToken)
     {
-        if (await _idempotencyService.IsProcessedAsync(notification.EventId, cancellationToken))
+        var claim = await _idempotencyService.TryBeginAsync(notification.EventId, cancellationToken);
+        if (claim == IdempotencyClaimResult.AlreadyProcessed)
         {
             _logger.LogInformation("Event {EventId} already processed, skipping", notification.EventId);
             return;
         }
+
+        if (claim == IdempotencyClaimResult.InProgress)
+            throw new MessageInProgressException(notification.EventId);
 
         try
         {
@@ -64,7 +72,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
                     _logger.LogWarning(
                         "Tenant {TenantId} is not active or not authorized. Skipping RiskUpdatedEvent {EventId}",
                         notification.TenantId, notification.EventId);
-                    await _idempotencyService.MarkAsProcessedAsync(notification.EventId, cancellationToken);
+                    await _idempotencyService.CompleteAsync(notification.EventId, cancellationToken);
                     return;
                 }
             }
@@ -77,7 +85,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
             {
                 _logger.LogDebug("Risk score {Score} below threshold {Threshold} for {RiskType}",
                     notification.RiskScore, config.Threshold, notification.RiskType);
-                await _idempotencyService.MarkAsProcessedAsync(notification.EventId, cancellationToken);
+                await _idempotencyService.CompleteAsync(notification.EventId, cancellationToken);
                 return;
             }
 
@@ -152,9 +160,12 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
                     window.Signals.Count,
                     window.Signals.Select(s => s.Source.ToString()).ToList(),
                     DateTime.UtcNow,
-                    window.CurrentEscalationLevel);
+                    window.CurrentEscalationLevel,
+                    TenantId: window.TenantId);
 
                 await _commandPublisher.PublishAsync(command, cancellationToken);
+                await _triggeredAlertReporter.ReportAsync(window.TenantId, window.Id, window.Region,
+                    notification.RiskScore, command.TriggeredAt, cancellationToken);
             }
             else
             {
@@ -173,13 +184,12 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
                     window.Id, window.Signals.Count, quorumMet, window.ShouldTrigger(notification.RiskScore));
             }
 
-            await _idempotencyService.MarkAsProcessedAsync(notification.EventId, cancellationToken);
+            await _idempotencyService.CompleteAsync(notification.EventId, cancellationToken);
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogError(ex,
-                "Error processing RiskUpdatedEvent {EventId} for Region: {Region}, RiskType: {RiskType}",
-                notification.EventId, notification.Region, notification.RiskType);
+            // Lets a retry or another instance process the event; the consumer logs the failure.
+            await _idempotencyService.AbandonAsync(notification.EventId, CancellationToken.None);
             throw;
         }
     }

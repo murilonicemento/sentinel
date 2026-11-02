@@ -60,7 +60,8 @@ public sealed class KafkaDeadLetterPublisher : IDeadLetterPublisher, IAsyncDispo
                 Converters = { new JsonStringEnumConverter() }
             });
 
-            var message = new Message<Null, string> { Value = payload };
+            var message = new Message<Null, string> { Value = payload, Headers = new Headers() };
+            using var activity = KafkaTracing.StartPublish(_topic, message.Headers);
             var delivery = await _producer.ProduceAsync(_topic, message, cancellationToken);
             _logger.LogInformation("Published notification {EventId} to DLQ topic {Topic} at offset {Offset}.", notification.EventId, _topic, delivery.Offset.Value);
             _metrics.RecordDeadLetterPublished(true);

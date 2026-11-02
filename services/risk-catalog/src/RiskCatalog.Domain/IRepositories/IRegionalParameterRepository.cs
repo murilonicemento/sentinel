@@ -8,11 +8,16 @@ public interface IRegionalParameterRepository
         Guid regionId,
         CancellationToken cancellationToken = default);
 
-    public Task<RegionalParameter?> GetByAdjustmentFactorAsync(
-        double adjustmentFactor,
+    /// <summary>Region with the normalized code (RC-14).</summary>
+    public Task<RegionalParameter?> GetByRegionCodeAsync(
+        string regionCode,
         CancellationToken cancellationToken = default);
 
     public Task<bool> AddRegionalParameterAsync(
         RegionalParameter regionalParameter,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Regional parameters ordered by id.</summary>
+    public Task<(IReadOnlyList<RegionalParameter> Items, long TotalItems)> GetPageAsync(int page, int pageSize,
         CancellationToken cancellationToken = default);
 }

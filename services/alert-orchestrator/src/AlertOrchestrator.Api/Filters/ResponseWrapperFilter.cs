@@ -8,7 +8,8 @@ public class ResponseWrapperFilter : IAsyncResultFilter
 {
     public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
-        if (context.Result is ObjectResult { Value: not null, StatusCode: >= 200 and < 300 } objectResult)
+        if (context.Result is ObjectResult { Value: not null, StatusCode: >= 200 and < 300 } objectResult &&
+            !IsEnvelope(objectResult.Value))
         {
             var dtoType = typeof(ResponseBaseDTO<>).MakeGenericType(objectResult.Value.GetType());
             var wrapper = Activator.CreateInstance(dtoType);
@@ -23,5 +24,12 @@ public class ResponseWrapperFilter : IAsyncResultFilter
         }
 
         await next();
+    }
+
+    // /api/v1 endpoints already return ResponseBaseDTO<T>; wrapping it again would nest the envelope.
+    private static bool IsEnvelope(object value)
+    {
+        var type = value.GetType();
+        return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ResponseBaseDTO<>);
     }
 }

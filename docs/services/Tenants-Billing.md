@@ -272,11 +272,41 @@ O serviço deve expor métricas e logs com tenant awareness.
 7. A mudança de plano ou suspensão é publicada como evento
 8. Outros serviços ajustam automaticamente seu comportamento
 
-## 15. Próximos Passos
+## 15. Estado da implementação (verificado em 2026-11-02)
 
-1. Definir contratos de eventos com outros serviços
-2. Implementar middleware de tenant resolution
-3. Criar mecanismo de quota em Redis
-4. Implementar camada de persistence em PostgreSQL
-5. Criar endpoints administrativos para tenants e planos
-6. Preparar a base para billing e monetização
+As seções anteriores descrevem o desenho. Esta descreve o que o código em `services/tenants-billing` faz hoje.
+
+**API.** Base `/api/v1/tenants-billing`, contrato comum de `docs/compliance/services-validation.md` §4.2 e autenticação JWT (ADR-0002):
+
+| Rota | Papel | Resultado |
+|---|---|---|
+| `POST /tenants` | Write | cria o tenant (`TENANT_ALREADY_EXISTS` em 409, `PLAN_NOT_FOUND` em 422) |
+| `GET /tenants/{tenantId}` | Read | tenant com `status` em texto (`TENANT_NOT_FOUND` em 404); é a rota que os `TenantBillingGateway` de ingestion, alert-orchestrator e channels consultam com token de serviço |
+| `POST /tenants/{tenantId}/usage` | Write | registra uso do tenant |
+| `POST /plans` | Write | cria um plano |
+| `GET /tenants` | Read | tenants das claims `tenant_id` da identidade (todos, para um serviço confiável), ordenados por nome e depois id; filtro opcional `status` (`Active`, `Suspended`, `Canceled`, `Pending`) e paginação `page`/`pageSize` |
+| `PATCH /tenants/{tenantId}/status` | Admin | muda o status para `Active`, `Suspended` ou `Canceled` (corpo `{ "status": "Suspended" }`) e devolve o tenant |
+| `GET /plans` | Read | planos ordenados por nome e depois id, paginados |
+
+As rotas antigas `/api/v1/tenants/*` e `/api/v1/plans` estão depreciadas até 2027-01-23 (ADR-0007). A rota antiga devolve `status` numérico; os gateways aceitam os dois formatos (TB-09).
+
+**Ciclo de vida do tenant (TB-12, 2026-11-02).** Um tenant `Active` pode ser suspenso; um `Suspended` (ou `Pending`) pode ser ativado; qualquer um pode ser cancelado. `Canceled` é terminal: sair dele é 409 `TENANT_STATUS_TRANSITION_NOT_ALLOWED`. Pedir o status atual devolve o tenant sem mudança e sem evento, então repetir a requisição não tem efeito. A gravação só vale se o status guardado ainda é o lido; se outra requisição mudou o status no meio, a resposta é 409 `TENANT_STATUS_CONFLICT` e nada é sobrescrito. A rota exige o papel `TenantsBilling.Admin` e o tenant nas claims da identidade; tokens de serviço não recebem esse papel. Um tenant suspenso ou cancelado fica em hard limit e os `TenantBillingGateway` dos outros serviços o tratam como inativo.
+
+**Uso e quotas.** O uso se acumula por tenant e mês civil no fuso do tenant (fuso vazio ou inválido usa `America/Sao_Paulo`). Cada `SourceEventId` conta uma vez. O status de quota é o maior percentual dos quatro recursos (eventos, alertas, requisições de API, uso de canais) contra os limites do plano e os percentuais de soft e hard limit, e não regride dentro do período. Nenhum outro serviço bloqueia operações pelo status de quota: os gateways só conferem se o tenant está ativo.
+
+**Mensageria.**
+
+| Tópico | Papel | Conteúdo |
+|---|---|---|
+| `tenant-usage-events` | consumido | `TenantUsageEvent { TenantId, EventsConsumed, AlertsTriggered, ApiRequests, ChannelUsage, EventId }`. Publicado por ingestion (eventos de cada coleta), alert-orchestrator (janela disparada) e channels (canal entregue), com `EventId` determinístico (ADR-0009). Nenhum serviço reporta `ApiRequests`. Um tenant desconhecido vai ao DLQ |
+| `tenant-usage-events-dlq` | publicado e consumido | falhas do consumo de uso; o consumidor do DLQ republica as recuperáveis no replay |
+| `tenant-usage-events-replay` | consumido | lido pelo consumidor de uso junto com o tópico principal |
+| `audit-events` (`Kafka:AuditTopic`) | publicado | envelope v1 do audit-compliance: `TenantCreated` na criação e `TenantUpdated` em cada mudança de status, com o `sub` do token como ator e o estado antes/depois, chave igual ao tenant (ADR-0011). A criação de plano não é auditada |
+| `tenants-billing-events` | publicado | `TenantCreated`, `PlanCreated`, `PlanPolicyUpdated`, `TenantQuotaSoftLimitReached`, `TenantQuotaHardLimitReached`, `TenantSuspended`, `TenantReactivated` e `TenantCanceled` (`{ Id, Name, Status }`, publicados por `PATCH /tenants/{tenantId}/status`); nenhum serviço consome esse tópico ainda |
+
+**Persistência.** PostgreSQL `tenants_billing`: `tenants`, `plans`, `tenant_usage` e `recorded_usage_events` (migrations EF Core, seção do `2-schema.sql`). Redis não é usado.
+
+**Próximos passos.**
+
+1. Reportar `ApiRequests` (ADR-0009 deixa em aberto).
+2. Decidir se os outros serviços devem consultar o status de quota antes de operar.

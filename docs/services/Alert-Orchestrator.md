@@ -102,3 +102,42 @@ sequenceDiagram
 - `JanelaAlertaAberta` → inicia contagem do tempo de alerta
 - `AlertaDisparado` → registrado para auditoria
 - `AlertaEntregue` / `AlertaConfirmado` → tracking e métricas de sucesso
+
+---
+
+## 5.5 Estado da implementação (verificado em 2026-10-29)
+
+As seções anteriores descrevem o desenho. Esta descreve o que o código em `services/alert-orchestrator` faz hoje.
+
+**API.** Base `/api/v1/alert-orchestrator`, somente leitura, papel `AlertOrchestrator.Read` (ADR-0002), contrato comum de `docs/compliance/services-validation.md` §4.2:
+
+- `GET /alert-windows/{id}`: uma janela de alerta.
+- `GET /alert-windows?region=&status=&page=&pageSize=`: janelas filtradas por região e/ou status (ao menos um dos dois), da mais recente para a mais antiga, só dos tenants da identidade.
+
+As rotas antigas `/api/alert-windows/*` estão depreciadas até 2027-01-23 (ADR-0007).
+
+**Entrada.**
+
+| Tópico | Evento | Tratamento |
+|---|---|---|
+| `risk-updated` | `RiskUpdatedEvent { EventId, Region, RiskType, RiskScore, TenantId, Timestamp, Metadata }`, publicado pelo risk-evaluation (`Region` é o `regionCode` do catálogo) | exige o tenant (sem ele, vai para o DLQ), confere no tenants-billing se ele está ativo, compara o score com o limiar do tipo de risco e abre ou alimenta a janela de alerta da região |
+| `region-intersected` | `RegionIntersectedEvent { EventId, Region, IntersectingRegion, RiskType, Severity, Timestamp }` | conta como sinal na janela aberta da região; nenhum serviço publica nesse tópico desde o ADR-0008. **Depreciado** (sunset 2027-01-31, ADR-0012): o consumidor avisa no log ao subir e será removido |
+
+Cada evento é processado uma vez, com a reserva atômica `alert-orchestrator:idempotency:v2:{eventId}` no Redis. O consumidor segue o ADR-0003, com DLQ em `alert-orchestrator-dead-letter`.
+
+**Regras.** Os limiares, a duração da janela, o quorum (mínimo de sinais, fontes distintas, exigência de sensor e de satélite) e os intervalos de escalonamento são fixos no código, por tipo de risco (`InMemoryConfigurationPort`: flood, wildfire, earthquake, landslide, storm, heatwave e um padrão). Ainda não vêm do risk-catalog nem variam por tenant. Como todo sinal vem de `risk-updated` e conta como `SENSOR`, nenhuma regra exige satélite nem fontes distintas: o quorum é o número mínimo de sinais de risco na janela (ADR-0008). O cooldown por `(região, tipo de risco, tenant)` fica no Redis.
+
+**Workers.** `AlertEscalationWorker` sobe o nível das janelas disparadas e ainda não confirmadas, conforme o tempo desde o disparo, e republica o `TriggerAlertCommand` com o novo nível; `AlertWindowExpirationWorker` expira as janelas vencidas.
+
+**Saída.**
+
+| Tópico | Conteúdo |
+|---|---|
+| `alert-orchestrator-events` | `AlertWindowOpened`, `AlertTriggered`, `AlertConfirmed`, `AlertEscalated`, `AlertClosed`, `AlertWindowExpired` |
+| `alert-commands` | `TriggerAlertCommand` (disparo e cada escalonamento), com o `TenantId` da janela; consumido pelo channels |
+| `reporting-events` (`Kafka:Topics:Reporting`) | `AlertTriggered` a cada janela disparada (`Severity` `HIGH`, `Channel` `none`, `EventId` `alert-triggered:{janela}`); janela sem tenant não gera evento (ADR-0010) |
+| `tenant-usage-events` (`Kafka:Topics:TenantUsage`) | `TenantUsageEvent` com `AlertsTriggered: 1` a cada janela disparada, `EventId` derivado da janela; escalonamentos não contam de novo. Janela sem tenant em forma de GUID não gera uso (ADR-0009) |
+
+**Persistência.** PostgreSQL `alert_orchestrator` (`alert_windows`, `alert_signals`; migrations EF Core, seção do `2-schema.sql`) e Redis (idempotência e cooldown). Com `Database:UsePostgreSql` / `Cache:UseRedis` desligados, os repositórios ficam em memória.
+
+**Integração (ADR-0008, X-24).** O caminho risk-evaluation → `risk-updated` → janela → `alert-commands` → channels está ligado. `region-intersected` está depreciado e `alert-orchestrator-events` é um tópico de saída, sem consumidor interno por decisão (ADR-0012). O uso é publicado depois de gravar a janela disparada; se a publicação falhar, a nova tentativa não publica de novo, como já acontecia com o comando (ADR-0009). O mesmo vale para o `AlertTriggered` do reporting (ADR-0010). `TriggeredAlertReporter` publica os dois.

@@ -25,5 +25,5 @@ public abstract class ChannelProviderBase : IChannelProvider, IResilientChannelP
     public abstract Task<DeliveryResultDTO> SendAsync(NotificationEvent notification,
         CancellationToken cancellationToken);
 
-    public ProviderResilienceDTO ResilienceOptions { get; }
+    public ProviderResilienceDTO ResilienceOptions => ResilienceDto;
 }

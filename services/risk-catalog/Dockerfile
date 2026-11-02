@@ -7,6 +7,7 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /
+COPY --from=repo-root Directory.Packages.props /
 COPY ["src/RiskCatalog.Api/RiskCatalog.Api.csproj", "src/RiskCatalog.Api/"]
 COPY ["src/RiskCatalog.Application/RiskCatalog.Application.csproj", "src/RiskCatalog.Application/"]
 COPY ["src/RiskCatalog.Domain/RiskCatalog.Domain.csproj", "src/RiskCatalog.Domain/"]

@@ -24,6 +24,9 @@ public sealed class PlanManagementService
         _eventPublisher = eventPublisher;
     }
 
+    public Task<PagedList<Plan>> ListPlansAsync(int page, int pageSize, CancellationToken cancellationToken = default)
+        => _planRepository.ListAsync(page, pageSize, cancellationToken);
+
     public async Task<Plan> CreatePlanAsync(CreatePlanCommand command, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(command.Name))

@@ -1,0 +1,13 @@
+# Destino das notificações de alerta (ADR-0006). A URL vem de ALERT_WEBHOOK_URL no platform/.env; sem ela, os alertas
+# continuam visíveis no Grafana (Alerting > Alert rules) e a entrega falha com o endereço .invalid do compose.
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: sentinel-operators
+    receivers:
+      - uid: sentinel-operators-webhook
+        type: webhook
+        settings:
+          url: $ALERT_WEBHOOK_URL
+          httpMethod: POST
+        disableResolveMessage: false

@@ -7,14 +7,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/ChannelsService.Application/ChannelsService.Application.csproj" />
     <ProjectReference Include="../../src/ChannelsService.Infrastructure/ChannelsService.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\ChannelsService.Api\ChannelsService.Api.csproj" />
   </ItemGroup>
 
 </Project>

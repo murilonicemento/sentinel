@@ -7,8 +7,8 @@ public class Severity
 {
     [Key] public Guid Id { get; set; }
     public SeverityLevelEnum Level { get; set; }
-    public string Description { get; set; }
-    public virtual ICollection<SeverityCriterion> SeverityCriteria { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public virtual ICollection<SeverityCriterion> SeverityCriteria { get; set; } = [];
 
     public Severity()
     {

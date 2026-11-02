@@ -6,6 +6,7 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /
+COPY --from=repo-root Directory.Packages.props /
 COPY ["src/Reporting.Api/Reporting.Api.csproj", "src/Reporting.Api/"]
 COPY ["src/Reporting.Application/Reporting.Application.csproj", "src/Reporting.Application/"]
 COPY ["src/Reporting.Domain/Reporting.Domain.csproj", "src/Reporting.Domain/"]

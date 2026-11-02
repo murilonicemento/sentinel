@@ -8,6 +8,7 @@ using ChannelsService.Infrastructure.Options;
 using ChannelsService.Infrastructure.Persistence;
 using ChannelsService.Infrastructure.Persistence.Repositories;
 using ChannelsService.Infrastructure.Providers;
+using ChannelsService.Infrastructure.Security;
 using ChannelsService.Infrastructure.Services;
 using ChannelsService.Infrastructure.Settings;
 using Confluent.Kafka;
@@ -87,21 +88,30 @@ public static class ServiceCollectionExtensions
                 return new ProducerBuilder<Null, string>(config).Build();
             })
             .AddSingleton<INotificationPublisher, KafkaNotificationPublisher>()
+            .AddSingleton<ITenantUsagePublisher, KafkaTenantUsagePublisher>()
+            .AddSingleton<IReportingEventPublisher, KafkaReportingEventPublisher>()
             .AddSingleton<IDeadLetterPublisher, KafkaDeadLetterPublisher>();
 
-    private static IServiceCollection AddServices(this IServiceCollection services, IConfiguration configuration) =>
-        services
+    private static IServiceCollection AddServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        if (!Uri.TryCreate(configuration["Services:TenantsBillingBaseUrl"], UriKind.Absolute,
+                out var tenantsBillingBaseUrl))
+            throw new InvalidOperationException("Configuration 'Services:TenantsBillingBaseUrl' must be an absolute URL.");
+
+        return services
             .AddHttpClient<TenantBillingGateway>((sp, client) =>
             {
-                var baseUrl = configuration.GetValue<string>("Services:TenantsBillingBaseUrl") ?? "http://localhost:5055";
-                client.BaseAddress = new Uri(baseUrl);
+                client.BaseAddress = tenantsBillingBaseUrl;
                 client.Timeout = TimeSpan.FromSeconds(10);
             })
+            .AddHttpMessageHandler<ServiceTokenHandler>()
             .Services
+            .AddServiceTokens(configuration)
             .AddScoped<ITenantBillingGateway>(sp => sp.GetRequiredService<TenantBillingGateway>())
             .AddScoped<IChannelDeliveryService, ChannelDeliveryService>()
-            .AddScoped<IRetryPolicyEngine, RetryPolicyEngine>()
+            .AddSingleton<IRetryPolicyEngine, RetryPolicyEngine>()
             .AddScoped<IFallbackExecutor, FallbackExecutor>()
             .AddSingleton<IChannelMetrics, ChannelMetrics>()
             .AddHostedService<NotificationConsumerHostedService>();
+    }
 }

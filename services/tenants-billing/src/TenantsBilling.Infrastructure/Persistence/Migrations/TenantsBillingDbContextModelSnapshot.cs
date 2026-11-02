@@ -17,7 +17,7 @@ namespace TenantsBilling.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.0")
+                .HasAnnotation("ProductVersion", "9.0.20")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -59,6 +59,30 @@ namespace TenantsBilling.Infrastructure.Persistence.Migrations
                     b.ToTable("plans", (string)null);
                 });
 
+            modelBuilder.Entity("TenantsBilling.Infrastructure.Persistence.Entities.RecordedUsageEventEntity", b =>
+                {
+                    b.Property<string>("SourceEventId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("SourceEventId");
+
+                    b.HasIndex("TenantId", "Period");
+
+                    b.ToTable("recorded_usage_events", (string)null);
+                });
+
             modelBuilder.Entity("TenantsBilling.Infrastructure.Persistence.Entities.TenantEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -95,6 +119,44 @@ namespace TenantsBilling.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("tenants", (string)null);
+                });
+
+            modelBuilder.Entity("TenantsBilling.Infrastructure.Persistence.Entities.TenantUsageEntity", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Period")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<long>("AlertsTriggered")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ApiRequests")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ChannelUsage")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("EventsConsumed")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("QuotaStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("TenantId", "Period");
+
+                    b.ToTable("tenant_usage", (string)null);
                 });
 #pragma warning restore 612, 618
         }

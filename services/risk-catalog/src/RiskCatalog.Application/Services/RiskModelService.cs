@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RiskCatalog.Application.DTO;
+using RiskCatalog.Application.Errors;
 using RiskCatalog.Application.Events;
 using RiskCatalog.Application.Interfaces;
 using RiskCatalog.Application.Services.Interfaces;
@@ -120,7 +121,7 @@ public class RiskModelService : IRiskModelService
         if (cachedResult != null)
         {
             _logger.LogInformation("IDF curve retrieved from cache. EventTypeCode: {eventTypeCode}", eventTypeCode);
-        
+
             return cachedResult;
         }
 
@@ -201,6 +202,7 @@ public class RiskModelService : IRiskModelService
         var result = new RegionalRiskParametersDTO
         {
             RegionId = regionalParameter.Id,
+            RegionCode = regionalParameter.RegionCode,
             AdjustmentFactor = regionalParameter.AdjustmentFactor,
             Description = regionalParameter.Description,
             CenterLatitude = regionalParameter.CenterLatitude,
@@ -238,7 +240,8 @@ public class RiskModelService : IRiskModelService
                 "Failed to create risk matrix. Event type does not exist. EventTypeCode: {eventTypeCode}",
                 riskMatrixDto.EventTypeCode);
 
-            throw new ArgumentException("Event type does not exist.");
+            throw new RiskCatalogException(RiskCatalogErrorKind.Unprocessable, RiskCatalogErrorCodes.EventTypeNotFound,
+                "Event type does not exist.");
         }
 
         var riskMatrixExist = await _riskMatrixRepository.GetRiskMatrixForEventTypeAsync(
@@ -255,7 +258,7 @@ public class RiskModelService : IRiskModelService
                 riskMatrixDto.SeverityLevel,
                 riskMatrixDto.Version);
 
-            throw new ArgumentException(
+            throw new RiskCatalogException(RiskCatalogErrorKind.Conflict, RiskCatalogErrorCodes.RiskMatrixAlreadyExists,
                 "Risk matrix already exists for the given event type, severity level, and version.");
         }
 
@@ -313,7 +316,8 @@ public class RiskModelService : IRiskModelService
                 "Failed to create IDF curve. Event type does not exist. EventTypeCode: {eventTypeCode}",
                 idfCurvesDto.EventTypeCode);
 
-            throw new ArgumentException("Event type does not exist.");
+            throw new RiskCatalogException(RiskCatalogErrorKind.Unprocessable, RiskCatalogErrorCodes.EventTypeNotFound,
+                "Event type does not exist.");
         }
 
         var idfCurveExist = await _IDFCurveRepository.GetIDFCurveForDurationAndPeriod(
@@ -330,7 +334,7 @@ public class RiskModelService : IRiskModelService
                 idfCurvesDto.DurationMinutes,
                 idfCurvesDto.ReturnPeriodYears);
 
-            throw new ArgumentException(
+            throw new RiskCatalogException(RiskCatalogErrorKind.Conflict, RiskCatalogErrorCodes.IdfCurveAlreadyExists,
                 "IDF Curve already exists for the given event type, duration minutes and return period years.");
         }
 
@@ -411,26 +415,33 @@ public class RiskModelService : IRiskModelService
             }
         }
 
-        var regionalParameterExist = await _regionalParameterRepository.GetByAdjustmentFactorAsync(
-            regionalRiskParametersDto.AdjustmentFactor,
-            cancellationToken) is not null;
+        // RC-14: the region code is the region's identity; the adjustment factor is just a value two regions may share.
+        var regionId = Guid.NewGuid();
+        string regionCode;
+        if (string.IsNullOrWhiteSpace(regionalRiskParametersDto.RegionCode))
+            regionCode = RegionCode.ForLegacy(regionId);
+        else if (!RegionCode.TryNormalize(regionalRiskParametersDto.RegionCode, out regionCode))
+            throw new ArgumentException(
+                "RegionCode must have 1 to 64 characters: letters, digits, '.', '_', ':' or '-'.",
+                nameof(CreateRegionalRiskParameterDTO.RegionCode));
 
-        if (regionalParameterExist)
+        if (await _regionalParameterRepository.GetByRegionCodeAsync(regionCode, cancellationToken) is not null)
         {
             _logger.LogWarning(
-                "Failed to create regional risk parameters. Regional risk parameters already exist. AdjustmentFactor: {adjustmentFactor}",
-                regionalRiskParametersDto.AdjustmentFactor);
+                "Failed to create regional risk parameters. Region {regionCode} already exists.", regionCode);
 
-            throw new ArgumentException(
+            throw new RiskCatalogException(RiskCatalogErrorKind.Conflict, RiskCatalogErrorCodes.RegionalParametersAlreadyExist,
                 "Regional risk parameters already exist for the given region.");
         }
 
-        var regionBoundsJson = regionalRiskParametersDto.RegionBounds != null 
-            ? System.Text.Json.JsonSerializer.Serialize(regionalRiskParametersDto.RegionBounds) 
+        var regionBoundsJson = regionalRiskParametersDto.RegionBounds != null
+            ? System.Text.Json.JsonSerializer.Serialize(regionalRiskParametersDto.RegionBounds)
             : null;
 
         var regionalParameter = new RegionalParameter
         {
+            Id = regionId,
+            RegionCode = regionCode,
             AdjustmentFactor = regionalRiskParametersDto.AdjustmentFactor,
             Description = regionalRiskParametersDto.Description,
             CenterLatitude = regionalRiskParametersDto.CenterLatitude,
@@ -444,9 +455,7 @@ public class RiskModelService : IRiskModelService
 
         if (isCreated)
         {
-            var regionalParameterCreated = await _regionalParameterRepository.GetByAdjustmentFactorAsync(
-                regionalRiskParametersDto.AdjustmentFactor,
-                cancellationToken);
+            var regionalParameterCreated = regionalParameter;
             var cacheKey = $"{RegionalParameterCachePrefix}:{regionalParameterCreated.Id}";
             await _cacheService.RemoveAsync(cacheKey, cancellationToken);
 
@@ -487,7 +496,8 @@ public class RiskModelService : IRiskModelService
             _logger.LogWarning(
                 "Failed to publish catalog version. No data found for version: {version}",
                 catalogPublishDto.Version);
-            throw new ArgumentException($"No data found for version {catalogPublishDto.Version}");
+            throw new RiskCatalogException(RiskCatalogErrorKind.Unprocessable, RiskCatalogErrorCodes.CatalogVersionNotFound,
+                $"No data found for version {catalogPublishDto.Version}");
         }
 
         var publishedEvent = new RiskCatalogPublishedEvent

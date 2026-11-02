@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Elastic.Clients.Elasticsearch;
+using Reporting.Application.Interfaces;
 using Reporting.Domain.Interfaces;
 using Reporting.Infrastructure.HostedServices;
+using Reporting.Infrastructure.Messaging;
 using Reporting.Infrastructure.Persistence;
 using StackExchange.Redis;
 
@@ -10,12 +12,21 @@ namespace Reporting.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructureServices(this IServiceCollection services)
+    private static readonly string[] RequiredSettings =
+        ["Elasticsearch:Uri", "Redis:Configuration", "Kafka:BootstrapServers"];
+
+    public static IServiceCollection AddInfrastructureServices(this IServiceCollection services,
+        IConfiguration configuration)
     {
+        foreach (var key in RequiredSettings)
+            if (string.IsNullOrWhiteSpace(configuration[key]))
+                throw new InvalidOperationException($"Configuration '{key}' is required.");
+
         services.AddSingleton(CreateElasticClient);
         services.AddSingleton(CreateRedisDatabase);
         services.AddSingleton<IReportingRepository, ElasticsearchReportingRepository>();
         services.AddSingleton<IReportingAuditRepository, ReportingAuditRepository>();
+        services.AddSingleton<IReportingReplayPublisher, KafkaReportingReplayPublisher>();
         services.AddHostedService<ReportingKafkaConsumerHostedService>();
         services.AddHostedService<ReportingDeadLetterConsumerHostedService>();
         return services;
@@ -24,7 +35,7 @@ public static class DependencyInjection
     private static ElasticsearchClient CreateElasticClient(IServiceProvider serviceProvider)
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        var uri = configuration["Elasticsearch:Uri"] ?? "http://localhost:9200";
+        var uri = configuration["Elasticsearch:Uri"]!;
         var settings = new ElasticsearchClientSettings(new Uri(uri))
             .DefaultIndex(configuration["Elasticsearch:IndexName"] ?? "reporting-events");
 
@@ -34,13 +45,7 @@ public static class DependencyInjection
     private static IDatabase CreateRedisDatabase(IServiceProvider serviceProvider)
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        var redisConfig = configuration["Redis:Configuration"];
-        if (string.IsNullOrWhiteSpace(redisConfig))
-        {
-            throw new InvalidOperationException("Redis configuration is required for reporting infrastructure.");
-        }
-
-        var options = ConfigurationOptions.Parse(redisConfig);
+        var options = ConfigurationOptions.Parse(configuration["Redis:Configuration"]!);
         options.AbortOnConnectFail = false;
         options.ConnectRetry = 3;
         options.KeepAlive = 180;

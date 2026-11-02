@@ -1,9 +1,13 @@
 using ChannelsService.Application.DTOs;
-using ChannelsService.Domain.Entities;
 
 namespace ChannelsService.Application.Interfaces;
 
 public interface IRetryPolicyEngine
 {
-    Task<DeliveryResultDTO> ExecuteAsync(Func<CancellationToken, Task<DeliveryResultDTO>> sendFunc, int maxAttempts, ProviderResilienceDTO resilienceDto, CancellationToken cancellationToken);
+    /// <summary>
+    /// Sends through <paramref name="sendFunc"/>, retrying only transient failures. <paramref name="maxAttempts"/> is
+    /// the total number of attempts including the first, capped by the platform limit.
+    /// </summary>
+    Task<DeliveryResultDTO> ExecuteAsync(string providerName, Func<CancellationToken, Task<DeliveryResultDTO>> sendFunc,
+        int maxAttempts, ProviderResilienceDTO resilienceDto, CancellationToken cancellationToken);
 }

@@ -1,0 +1,21 @@
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    isDefault: false
+    editable: false
+    jsonData:
+      # Do span para os logs do mesmo trace no Loki (propriedade TraceId gravada pelos serviços).
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: "-5m"
+        spanEndTimeShift: "5m"
+        filterByTraceID: false
+        customQuery: true
+        query: '{service="$${__span.tags["service.name"]}"} |= "$${__trace.traceId}"'
+      nodeGraph:
+        enabled: true

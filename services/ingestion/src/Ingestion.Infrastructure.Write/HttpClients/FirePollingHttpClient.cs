@@ -4,86 +4,65 @@ using CsvHelper;
 using Ingestion.Application.DTO;
 using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Domain.Enums;
-using Microsoft.Extensions.Configuration;
+using Ingestion.Infrastructure.Write.Options;
 
 namespace Ingestion.Infrastructure.Write.HttpClients;
 
-public class FirePollingHttpClient : ISensorPollingClient
+/// <summary>
+/// NASA FIRMS area API (VIIRS S-NPP near real time): fire detections in the subscription's bounding box. The map key
+/// is part of the path, so it is added per request and the client is never logged with it.
+/// </summary>
+public class FirePollingHttpClient(HttpClient httpClient, string mapKey) : ISensorPollingClient
 {
-    private readonly HttpClient _httpClient;
-    private readonly IConfiguration _configuration;
+    public string Source => PollingSources.Fire;
 
-    public FirePollingHttpClient(HttpClient httpClient, IConfiguration configuration)
+    public async Task<List<SensorCollectionDTO>> FetchAsync(PollingSubscription subscription, PollingWindow window,
+        CancellationToken cancellationToken)
     {
-        _httpClient = httpClient;
-        _configuration = configuration;
-    }
+        var (west, south, east, north) = PollingRequests.BoundingBox(subscription);
+        var days = Math.Clamp((int)Math.Ceiling((window.To - window.From).TotalDays), 1, 10);
+        var area = string.Join(',', new[] { west, south, east, north }.Select(PollingRequests.Number));
+        var csvContent = await PollingRequests.ReadAsync(
+            await httpClient.GetAsync($"api/area/csv/{mapKey}/VIIRS_SNPP_NRT/{area}/{days}", cancellationToken),
+            Source, cancellationToken);
 
-    public async Task<List<SensorCollectionDTO>> FetchAsync(CancellationToken cancellationToken)
-    {
-        var mapKey = _configuration["Polling:Fire:MapKey"] ??
-                     throw new ArgumentException("MapKey is required in config");
-        var dataSourceId = Guid.Parse(_configuration["Polling:Fire:DataSourceId"] ??
-                                      throw new ArgumentException("DataSourceId is required in config"));
-        var tenantId = Guid.Parse(_configuration["Polling:Fire:TenantId"] ??
-                                  throw new ArgumentException("TenantId is required in config"));
-        var area = _configuration["Polling:Fire:Area"]! ?? throw new ArgumentException("Area is required in config");
-        var days = _configuration["Polling:Fire:Days"]! ?? throw new ArgumentException("Days is required in config");
-        var date = _configuration["Polling:Fire:Date"]! ?? throw new ArgumentException("Date is required in config");
-        var response =
-            await _httpClient.GetAsync($"api/area/csv/{mapKey}/VIIRS_SNPP_NRT/{area}/{days}/{date}", cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-            return [];
-
-        var csvContent = await response.Content.ReadAsStringAsync(cancellationToken);
         using var reader = new StringReader(csvContent);
         using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
-        var fires = csv.GetRecords<FireFirmsApiResponseDTO>().ToList();
-        var collections = fires.Select(SensorCollectionDTO (fire) =>
-        {
-            var recordedAt = ParseFirmsDateTime(fire.AcqDate, fire.AcqTime);
-
-            return new DisasterCollectionDTO
+        return csv.GetRecords<FireFirmsApiResponseDTO>()
+            .Select(fire => (Fire: fire, DetectedAt: ParseFirmsDateTime(fire.AcqDate, fire.AcqTime)))
+            .Where(detection => detection.DetectedAt >= window.From && detection.DetectedAt <= window.To)
+            .Select(SensorCollectionDTO (detection) => new DisasterCollectionDTO
             {
-                DataSourceId = dataSourceId,
-                TenantId = tenantId,
-                CollectedAt = DateTime.UtcNow,
+                DataSourceId = subscription.DataSourceId,
+                TenantId = subscription.TenantId,
+                CollectedAt = detection.DetectedAt,
+                SourceEventId = string.Join(':', detection.Fire.Satellite,
+                    PollingRequests.Number(detection.Fire.Latitude), PollingRequests.Number(detection.Fire.Longitude),
+                    detection.Fire.AcqDate, detection.Fire.AcqTime),
                 Domain = SensorDomainEnum.Disaster,
                 DisasterType = DisasterEventEnum.Wildfire,
-                Payload = JsonSerializer.Serialize(fire),
+                Payload = JsonSerializer.Serialize(detection.Fire),
                 Samples =
                 [
                     new SampleSensorDTO
                     {
-                        SensorValue = fire.BrightTi4,
-                        Unit = "Kelvin",
-                        Latitude = fire.Latitude,
-                        Longitude = fire.Longitude,
-                        RecordedAt = recordedAt
+                        // Fire radiative power, the FIRMS measure of fire intensity.
+                        SensorValue = detection.Fire.Frp,
+                        Unit = "MW",
+                        Latitude = detection.Fire.Latitude,
+                        Longitude = detection.Fire.Longitude,
+                        RecordedAt = detection.DetectedAt
                     }
                 ]
-            };
-        }).ToList();
-
-        return collections;
+            })
+            .ToList();
     }
 
     private static DateTime ParseFirmsDateTime(string date, string time)
     {
         var paddedTime = time.PadLeft(4, '0');
-        var hour = int.Parse(paddedTime.Substring(0, 2));
-        var minute = int.Parse(paddedTime.Substring(2, 2));
-        var baseDate = DateTime.Parse(date, CultureInfo.InvariantCulture);
-
-        return new DateTime(
-            baseDate.Year,
-            baseDate.Month,
-            baseDate.Day,
-            hour,
-            minute,
-            0,
-            DateTimeKind.Utc
-        );
+        var baseDate = DateTime.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return new DateTime(baseDate.Year, baseDate.Month, baseDate.Day, int.Parse(paddedTime[..2]),
+            int.Parse(paddedTime[2..4]), 0, DateTimeKind.Utc);
     }
 }

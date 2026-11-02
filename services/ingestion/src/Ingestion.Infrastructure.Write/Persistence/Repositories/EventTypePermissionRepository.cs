@@ -27,7 +27,7 @@ public class EventTypePermissionRepository : IEventTypePermissionRepository
             p.EventType,
         });
 
-        await _writeDbContext.Connection.ExecuteAsync(query, parameters);
+        await _writeDbContext.Connection.ExecuteAsync(query, parameters, _writeDbContext.Transaction);
 
         return true;
     }

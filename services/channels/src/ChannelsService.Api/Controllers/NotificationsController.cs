@@ -1,44 +1,51 @@
+using ChannelsService.Api.Contracts;
+using ChannelsService.Api.Security;
+using ChannelsService.Application.DTOs;
 using ChannelsService.Application.Interfaces;
-using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Events;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ChannelsService.Api.Controllers;
 
 [ApiController]
+[DeprecatedRoute("/" + ChannelsV1Controller.BasePath + "/notifications")]
 [Route("api/notifications")]
 public class NotificationsController : ControllerBase
 {
-    private readonly IChannelDeliveryService _deliveryService;
-    private readonly IDeadLetterPublisher _deadLetterPublisher;
-    private readonly IDeliveryRepository _deliveryRepository;
+    private readonly INotificationDispatchService _dispatchService;
+    private readonly IDeliveryAttemptQueryService _deliveryAttemptQueryService;
+    private readonly TenantAccessEvaluator _tenantAccess;
 
     public NotificationsController(
-        IChannelDeliveryService deliveryService,
-        IDeadLetterPublisher deadLetterPublisher,
-        IDeliveryRepository deliveryRepository)
+        INotificationDispatchService dispatchService,
+        IDeliveryAttemptQueryService deliveryAttemptQueryService,
+        TenantAccessEvaluator tenantAccess)
     {
-        _deliveryService = deliveryService;
-        _deadLetterPublisher = deadLetterPublisher;
-        _deliveryRepository = deliveryRepository;
+        _dispatchService = dispatchService;
+        _deliveryAttemptQueryService = deliveryAttemptQueryService;
+        _tenantAccess = tenantAccess;
     }
 
     [HttpGet("{eventId}/attempts")]
+    [Authorize(Policy = ChannelsServicePolicies.Read)]
     public async Task<IActionResult> GetAttempts(string eventId, CancellationToken cancellationToken)
     {
-        var attempts = await _deliveryRepository.GetByEventAsync(eventId);
+        var scope = _tenantAccess.IsServicePrincipal(User)
+            ? TenantAccessScope.Platform
+            : TenantAccessScope.ForTenants(_tenantAccess.TenantIds(User));
+        var attempts = await _deliveryAttemptQueryService.GetByEventAsync(eventId, scope, cancellationToken);
         return Ok(attempts);
     }
 
     [HttpPost]
+    [Authorize(Policy = ChannelsServicePolicies.Write)]
     public async Task<IActionResult> Post(NotificationEvent notification, CancellationToken cancellationToken)
     {
-        var result = await _deliveryService.DeliverAsync(notification, cancellationToken);
+        if (!_tenantAccess.CanAccessTenant(User, notification.TenantId)) return Forbid();
 
-        if (result.Success)
-            return Ok(result);
+        var result = await _dispatchService.DispatchAsync(notification, cancellationToken);
 
-        await _deadLetterPublisher.PublishAsync(notification, result, cancellationToken);
-        return StatusCode(500, result);
+        return result.Success ? Ok(result) : StatusCode(500, result);
     }
 }

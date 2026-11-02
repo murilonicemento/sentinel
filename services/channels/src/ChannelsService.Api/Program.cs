@@ -1,15 +1,14 @@
 using System.Diagnostics.Metrics;
 using System.Net;
 using System.Text.Json.Serialization;
+using ChannelsService.Api.Contracts;
+using ChannelsService.Api.Observability;
+using ChannelsService.Api.Security;
 using ChannelsService.Application;
 using ChannelsService.Infrastructure;
 using ChannelsService.Infrastructure.Messaging;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
-using HealthChecks.UI.Client;
-using OpenTelemetry.Metrics;
 using Scalar.AspNetCore;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,12 +19,24 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
     });
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.MarkDeprecatedOperations());
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        var status = context.ProblemDetails.Status ?? StatusCodes.Status500InternalServerError;
+        ApiProblems.Enrich(context.ProblemDetails, context.HttpContext, ApiProblems.DefaultCodeFor(status));
+    };
+});
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddChannelsServiceAuthentication(builder.Configuration);
 
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
     {
+        if (ApiProblems.IsVersionedApi(context.HttpContext)) return ModelValidationProblems.For(context);
+
         var errors = context.ModelState
             .Values
             .SelectMany(v => v.Errors)
@@ -48,13 +59,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
     };
 });
 
-builder.Host.UseSerilog((context, configuration) =>
-{
-    configuration.ReadFrom.Configuration(context.Configuration)
-        .Enrich.FromLogContext()
-        .Enrich.WithEnvironmentName()
-        .WriteTo.Console();
-});
+builder.AddSentinelObservability("channels", activitySources: ["ChannelsService"], meters: ["ChannelsService"]);
 
 builder.Services.AddApplicationServiceCollection();
 builder.Services.AddChannelsServiceInfrastructure(builder.Configuration);
@@ -64,43 +69,45 @@ var dbConnection = builder.Configuration.GetConnectionString("ChannelsServiceDat
 
 if (!string.IsNullOrWhiteSpace(dbConnection))
 {
-    healthChecks.AddNpgSql(dbConnection, name: "postgresql", tags: new[] { "db" });
+    healthChecks.AddNpgSql(dbConnection, name: "postgresql", tags: [ObservabilityExtensions.ReadinessTag],
+        timeout: TimeSpan.FromSeconds(3));
 }
 
 var redisConnection = builder.Configuration["Redis:Configuration"];
 
 if (!string.IsNullOrWhiteSpace(redisConnection))
 {
-    healthChecks.AddRedis(redisConnection, name: "redis", tags: new[] { "cache" });
+    healthChecks.AddRedis(redisConnection, name: "redis", tags: [ObservabilityExtensions.ReadinessTag],
+        timeout: TimeSpan.FromSeconds(3));
 }
 
-healthChecks.AddCheck<KafkaHealthCheck>("kafka", tags: new[] { "kafka", "messaging" });
-
-builder.Services.AddOpenTelemetry()
-    .WithMetrics(metrics => metrics.AddMeter("ChannelsService"))
-    .WithTracing(tracing => tracing.AddSource("ChannelsService"));
+// Kafka feeds the consumer, not the HTTP API, so it is reported on /health but does not gate readiness.
+healthChecks.AddCheck<KafkaHealthCheck>("kafka", tags: ["kafka", "messaging"]);
 
 var app = builder.Build();
 
+app.UseSentinelRequestLogging();
+
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
     app.MapScalarApiReference(options =>
     {
         options
             .WithTitle("Sentinel - Channels Service API")
             .WithTheme(ScalarTheme.DeepSpace)
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
-    });
+    }).AllowAnonymous();
 }
 
+app.UseExceptionHandler();
+app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePages());
 app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization();
-app.UseOpenTelemetryPrometheusScrapingEndpoint();
 app.MapControllers();
-app.MapHealthChecks("/health", new HealthCheckOptions
-{
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-});
+app.MapSentinelOperationalEndpoints();
 
 app.Run();
+
+public partial class Program;

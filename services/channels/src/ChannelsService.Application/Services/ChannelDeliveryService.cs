@@ -19,6 +19,8 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
     private readonly IChannelMetrics _metrics;
     private readonly ILogger<ChannelDeliveryService> _logger;
     private readonly ITenantBillingGateway _tenantBillingGateway;
+    private readonly ITenantUsagePublisher _usagePublisher;
+    private readonly IReportingEventPublisher _reportingPublisher;
 
     public ChannelDeliveryService(
         IEnumerable<IChannelProvider> providers,
@@ -28,7 +30,9 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
         IFallbackExecutor fallbackExecutor,
         IChannelMetrics metrics,
         ILogger<ChannelDeliveryService> logger,
-        ITenantBillingGateway tenantBillingGateway)
+        ITenantBillingGateway tenantBillingGateway,
+        ITenantUsagePublisher usagePublisher,
+        IReportingEventPublisher reportingPublisher)
     {
         _providers = providers;
         _deliveryRepository = deliveryRepository;
@@ -38,6 +42,8 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
         _metrics = metrics;
         _logger = logger;
         _tenantBillingGateway = tenantBillingGateway;
+        _usagePublisher = usagePublisher;
+        _reportingPublisher = reportingPublisher;
     }
 
     public async Task<DeliveryResultDTO> DeliverAsync(NotificationEvent notification, CancellationToken cancellationToken)
@@ -60,6 +66,14 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
 
         var attemptedChannels = 0;
         var settings = _settingsProvider.GetSettings(notification.TenantId);
+
+        // A redelivered notification (consumer retry or reprocessed DLQ entry) must not resend on channels that
+        // already succeeded: providers are not idempotent and an SMS would be delivered twice.
+        var deliveredChannels = (await _deliveryRepository.GetByEventAsync(notification.EventId))
+            .Where(a => string.Equals(a.TenantId, notification.TenantId, StringComparison.OrdinalIgnoreCase))
+            .Where(a => a.StatusEnum is DeliveryStatusEnum.Sent or DeliveryStatusEnum.Retried)
+            .GroupBy(a => a.Channel)
+            .ToDictionary(g => g.Key, g => g.First().Provider);
         var orderedChannels = _fallbackExecutor.GetFallbackOrder(notification, settings);
 
         _logger.LogInformation(
@@ -89,21 +103,34 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                 return new DeliveryResultDTO { Success = false, Error = "Delivery cancelled." };
             }
 
+            if (deliveredChannels.TryGetValue(channel, out var deliveredBy))
+            {
+                _logger.LogInformation("Event {EventId} was already delivered on channel {Channel}; skipping",
+                    notification.EventId, channel);
+                successfulProviders.Add(deliveredBy);
+                // Reported again in case the earlier attempt delivered but failed before reporting; the ids are the
+                // same, so tenants-billing and reporting count the channel once.
+                await ReportDeliveryAsync(notification, channel, delivered: true, cancellationToken);
+                continue;
+            }
+
             var provider = _providers.FirstOrDefault(p => p.ChannelTypeEnum == channel);
             if (provider == null)
             {
                 _logger.LogWarning("No provider registered for channel {Channel}.", channel);
                 failedChannels.Add(channel.ToString());
+                await ReportDeliveryAsync(notification, channel, delivered: false, cancellationToken);
                 continue;
             }
 
-            var maxRetries = settings.MaxRetries.GetValueOrDefault(channel, 3);
+            // MaxRetries is the total number of attempts per channel; the engine caps it at the platform limit.
+            var maxAttempts = settings.MaxRetries.GetValueOrDefault(channel, 3);
             var attemptNumber = 0;
             var resilienceOptions = (provider as IResilientChannelProvider)?.ResilienceOptions ?? new ProviderResilienceDTO();
             attemptedChannels++;
             var attemptStopwatch = Stopwatch.StartNew();
 
-            var attemptResult = await _retryPolicyEngine.ExecuteAsync(async ct =>
+            var attemptResult = await _retryPolicyEngine.ExecuteAsync(provider.ProviderName, async ct =>
             {
                 attemptNumber++;
                 var deliveryResult = await provider.SendAsync(notification, ct);
@@ -127,7 +154,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                 });
 
                 return deliveryResult;
-            }, maxRetries, resilienceOptions, cancellationToken);
+            }, maxAttempts, resilienceOptions, cancellationToken);
 
             attemptStopwatch.Stop();
             _metrics.RecordChannelAttempt(channel, provider.ProviderName, attemptResult.Success, attemptNumber > 1, attemptNumber);
@@ -141,6 +168,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                     notification.EventId,
                     channel,
                     attemptResult.ProviderName);
+                await ReportDeliveryAsync(notification, channel, delivered: true, cancellationToken);
             }
             else
             {
@@ -148,9 +176,10 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                     "Channel {Channel} failed for event {EventId} after {Attempts} attempts: {Error}",
                     channel,
                     notification.EventId,
-                    maxRetries,
+                    attemptNumber,
                     attemptResult.Error);
                 failedChannels.Add(channel.ToString());
+                await ReportDeliveryAsync(notification, channel, delivered: false, cancellationToken);
             }
         }
 
@@ -171,5 +200,32 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                 ? $"All configured channels failed: {string.Join(",", failedChannels)}"
                 : "No channels were attempted."
         };
+    }
+
+    /// <summary>
+    /// Reports a channel's outcome: a delivered channel counts as tenant usage (ADR-0009) and both outcomes go to
+    /// reporting as NotificationSent or NotificationFailed (X-24). A failure propagates, so the notification is
+    /// retried: a delivered channel is not resent, only reported again with the same ids.
+    /// </summary>
+    private async Task ReportDeliveryAsync(NotificationEvent notification, ChannelTypeEnum channel, bool delivered,
+        CancellationToken cancellationToken)
+    {
+        if (delivered)
+        {
+            var usage = TenantUsageEventDTO.ForDeliveredChannel(notification.TenantId, notification.EventId, channel);
+            if (usage is null)
+                _logger.LogWarning(
+                    "Notification {EventId} has no tenant id or event id; its delivery on {Channel} is not reported as usage",
+                    notification.EventId, channel);
+            else
+                await _usagePublisher.PublishAsync(usage, cancellationToken);
+        }
+
+        var reportingEvent = ReportingEventEnvelopeDTO.ForDelivery(notification, channel, delivered, DateTime.UtcNow);
+        if (reportingEvent is null)
+            _logger.LogWarning("Notification {EventId} has no tenant or event id; its outcome on {Channel} is not sent " +
+                               "to reporting", notification.EventId, channel);
+        else
+            await _reportingPublisher.PublishAsync(reportingEvent, cancellationToken);
     }
 }

@@ -30,6 +30,18 @@ public sealed class PostgresPlanRepository : IPlanRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<PagedList<Plan>> ListAsync(int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.Plans.AsNoTracking();
+        var total = await query.CountAsync(cancellationToken);
+        var entities = await query
+            .OrderBy(x => x.Name).ThenBy(x => x.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedList<Plan>(entities.Select(MapToDomain).ToList(), total);
+    }
+
     private static Plan MapToDomain(PlanEntity entity)
         => new(
             entity.Id,

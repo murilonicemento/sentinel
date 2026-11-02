@@ -1,6 +1,6 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using RiskCatalog.Application.DTO;
+using RiskCatalog.Application.Errors;
 using RiskCatalog.Application.Interfaces;
 using RiskCatalog.Application.Services.Interfaces;
 using RiskCatalog.Domain.Enums;
@@ -175,7 +175,8 @@ public class EventTypeService : IEventTypeService
                 "Failed to create event type. Event type already exists. Code: {code}",
                 eventTypeDto.Code);
 
-            throw new ArgumentException("Event type with the same code already exists.");
+            throw new RiskCatalogException(RiskCatalogErrorKind.Conflict, RiskCatalogErrorCodes.EventTypeAlreadyExists,
+                "Event type with the same code already exists.");
         }
 
         var eventType = new EventType
@@ -224,7 +225,8 @@ public class EventTypeService : IEventTypeService
                 "Failed to create severity. Severity level already exists. Level: {level}",
                 severityDto.Level);
 
-            throw new ArgumentException("Severity with the same level already exists.");
+            throw new RiskCatalogException(RiskCatalogErrorKind.Conflict, RiskCatalogErrorCodes.SeverityAlreadyExists,
+                "Severity with the same level already exists.");
         }
 
         var severity = new Severity
@@ -325,7 +327,8 @@ public class EventTypeService : IEventTypeService
                 severityCriterionDto.Unit,
                 severityCriterionDto.Version);
 
-            throw new BadHttpRequestException("Severity criterion range overlaps with an existing criterion.");
+            throw new RiskCatalogException(RiskCatalogErrorKind.Conflict, RiskCatalogErrorCodes.SeverityCriterionOverlap,
+                "Severity criterion range overlaps with an existing criterion.");
         }
 
         var severityLevel = Enum.Parse<SeverityLevelEnum>(severityCriterionDto.SeverityLevel);
@@ -337,7 +340,8 @@ public class EventTypeService : IEventTypeService
                 "Failed to add severity criterion. Severity level not found. SeverityLevel: {severityLevel}",
                 severityCriterionDto.SeverityLevel);
 
-            throw new ArgumentException("Severity level not found.");
+            throw new RiskCatalogException(RiskCatalogErrorKind.Unprocessable, RiskCatalogErrorCodes.SeverityNotFound,
+                "Severity level not found.");
         }
 
         var severityCriterion = new SeverityCriterion

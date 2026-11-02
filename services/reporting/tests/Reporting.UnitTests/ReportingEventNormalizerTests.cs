@@ -104,7 +104,7 @@ public class ReportingEventNormalizerTests
 
         Assert.False(result.IsValid);
         Assert.Contains("Severity must be one of LOW, MEDIUM, HIGH, CRITICAL.", result.Errors);
-        Assert.Contains("Channel must be one of sms, email, push, webhook.", result.Errors);
+        Assert.Contains("Channel must be one of sms, email, push, webhook, whatsapp, mqtt, siren, none.", result.Errors);
     }
 
     [Fact]
@@ -148,6 +148,34 @@ public class ReportingEventNormalizerTests
         var result = normalizer.Normalize(envelope);
 
         Assert.False(result.IsValid);
-        Assert.Contains("Notification events must use one of sms, email, push, webhook.", result.Errors);
+        Assert.Contains("Notification events must use one of sms, email, push, webhook, whatsapp, mqtt, siren.", result.Errors);
+    }
+
+    [Theory]
+    [InlineData("AlertTriggered", "none", "HIGH", "SUCCESS")]
+    [InlineData("NotificationSent", "whatsapp", "MEDIUM", "SUCCESS")]
+    [InlineData("NotificationSent", "Siren", "CRITICAL", "SUCCESS")]
+    [InlineData("NotificationFailed", "mqtt", "HIGH", "FAILED")]
+    public void Normalize_AcceptsTheChannelsOfTheProducers(string eventType, string channel, string severity,
+        string status)
+    {
+        var result = new ReportingEventNormalizer().Normalize(new ReportingEventEnvelope("evt-6", eventType,
+            "tenant-a", "north", severity, channel, 0.8, status, DateTime.UtcNow, "tests"));
+
+        Assert.True(result.IsValid, string.Join("; ", result.Errors));
+        Assert.Equal(channel.ToLowerInvariant(), result.NormalizedEnvelope!.Channel);
+    }
+
+    [Theory]
+    [InlineData("NotificationSent")]
+    [InlineData("NotificationFailed")]
+    public void Normalize_NotificationWithoutAChannel_IsRejected(string eventType)
+    {
+        var result = new ReportingEventNormalizer().Normalize(new ReportingEventEnvelope("evt-7", eventType,
+            "tenant-a", "north", "HIGH", "none", 0.8, "SUCCESS", DateTime.UtcNow, "tests"));
+
+        Assert.False(result.IsValid);
+        Assert.Contains("Notification events must use one of sms, email, push, webhook, whatsapp, mqtt, siren.",
+            result.Errors);
     }
 }

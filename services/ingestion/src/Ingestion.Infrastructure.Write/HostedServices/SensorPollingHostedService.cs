@@ -1,69 +1,115 @@
+using Ingestion.Application.Errors;
 using Ingestion.Application.Interfaces.HttpClients;
 using Ingestion.Application.Interfaces.Services;
-using Ingestion.Application.Services;
-using Ingestion.Infrastructure.Write.HttpClients;
+using Ingestion.Infrastructure.Write.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Ingestion.Infrastructure.Write.HostedServices;
 
-public class SensorPollingHostedService : BackgroundService
+/// <summary>
+/// Polls each enabled source on its own interval (<c>Polling:&lt;Source&gt;:IntervalMinutes</c>) for every
+/// subscription. A failing subscription or a rejected reading is logged and counted without stopping the others;
+/// the next poll asks for an overlapping window, and readings already ingested are skipped by their provider id.
+/// </summary>
+public class SensorPollingHostedService(
+    IServiceScopeFactory scopeFactory,
+    IOptionsMonitor<PollingSourceOptions> options,
+    PollingMetrics metrics,
+    TimeProvider timeProvider,
+    ILogger<SensorPollingHostedService> logger) : BackgroundService
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IEnumerable<ISensorPollingClient> _sensorPollingClients;
-    private readonly ILogger<SensorPollingHostedService> _logger;
-    private readonly TimeSpan _interval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Tick = TimeSpan.FromSeconds(30);
 
-    public SensorPollingHostedService(
-        IServiceScopeFactory scopeFactory,
-        ISensorPollingClientFactory sensorPollingClientFactory,
-        ILogger<SensorPollingHostedService> logger
-    )
-    {
-        _scopeFactory = scopeFactory;
-        _sensorPollingClients = sensorPollingClientFactory.GetAllClients();
-        _logger = logger;
-    }
+    private readonly Dictionary<string, DateTime> _nextPoll = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Sensor Polling Worker started.");
+        logger.LogInformation("Sensor polling started for {Sources}", string.Join(", ",
+            PollingSources.All.Where(source => options.Get(source).Enabled)));
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                foreach (var client in _sensorPollingClients)
-                {
-                    var collections = await client.FetchAsync(stoppingToken);
-
-                    if (collections.Count <= 0) continue;
-
-                    using var scope = _scopeFactory.CreateScope();
-                    var sensorCollectionService = scope.ServiceProvider.GetRequiredService<ISensorCollectionService>();
-
-                    foreach (var result in collections)
-                    {
-                        await sensorCollectionService.ProcessSensorCollection<object>(
-                            result.DataSourceId,
-                            result.TenantId,
-                            result.CollectedAt.GetValueOrDefault(DateTime.UtcNow),
-                            result.Payload,
-                            result.Samples,
-                            result.Domain.ToString(),
-                            stoppingToken);
-                    }
-                }
+                await PollDueSourcesAsync(stoppingToken);
             }
-            catch (Exception ex)
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                _logger.LogError(ex, "An error occurred while polling sensor collection.");
+                break;
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "Sensor polling pass failed");
             }
 
-            await Task.Delay(_interval, stoppingToken);
+            await Task.Delay(Tick, timeProvider, stoppingToken);
+        }
+    }
+
+    /// <summary>One pass: polls the sources whose interval has elapsed.</summary>
+    public async Task PollDueSourcesAsync(CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var collections = scope.ServiceProvider.GetRequiredService<ISensorCollectionService>();
+
+        foreach (var client in scope.ServiceProvider.GetServices<ISensorPollingClient>())
+        {
+            var source = options.Get(client.Source);
+            if (!source.Enabled || _nextPoll.GetValueOrDefault(client.Source) > now) continue;
+
+            _nextPoll[client.Source] = now.AddMinutes(source.IntervalMinutes);
+            var window = new Application.DTO.PollingWindow(now.AddHours(-source.LookbackHours), now);
+            foreach (var subscription in source.Subscriptions)
+                await PollSubscriptionAsync(client, subscription, window, collections, cancellationToken);
+        }
+    }
+
+    private async Task PollSubscriptionAsync(ISensorPollingClient client,
+        Application.DTO.PollingSubscription subscription, Application.DTO.PollingWindow window,
+        ISensorCollectionService collections, CancellationToken cancellationToken)
+    {
+        List<Application.DTO.SensorCollectionDTO> readings;
+        try
+        {
+            readings = await client.FetchAsync(subscription, window, cancellationToken);
+            metrics.Request(client.Source, success: true);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException ||
+                                          !cancellationToken.IsCancellationRequested)
+        {
+            metrics.Request(client.Source, success: false);
+            logger.LogWarning(exception, "Polling {Source} failed for data source {DataSourceId}", client.Source,
+                subscription.DataSourceId);
+            return;
         }
 
-        _logger.LogInformation("Sensor Polling Worker ended.");
+        foreach (var reading in readings)
+        {
+            try
+            {
+                await collections.ProcessPolledCollectionAsync(reading, cancellationToken);
+                metrics.Reading(client.Source, "processed");
+            }
+            catch (Exception exception) when (exception is ArgumentException or IIngestionError)
+            {
+                // The data source does not accept this reading (unit, permissions, missing data source): a
+                // configuration problem, reported but not retried until the configuration changes.
+                metrics.Reading(client.Source, "rejected");
+                logger.LogWarning("Polled {Source} reading {SourceEventId} rejected: {Reason}", client.Source,
+                    reading.SourceEventId, exception.Message);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException ||
+                                              !cancellationToken.IsCancellationRequested)
+            {
+                // Stores unavailable: the claim was released, and the next poll's window covers this reading again.
+                metrics.Reading(client.Source, "failed");
+                logger.LogError(exception, "Polled {Source} reading {SourceEventId} could not be stored",
+                    client.Source, reading.SourceEventId);
+            }
+        }
     }
 }

@@ -19,7 +19,8 @@ public class KafkaPublisher : IPublisher
     {
         try
         {
-            var message = new Message<Null, string> { Value = payload };
+            var message = new Message<Null, string> { Value = payload, Headers = new Headers() };
+            using var activity = KafkaTracing.StartPublish(topic, message.Headers);
             var response = await _producer.ProduceAsync(topic, message, cancellationToken);
 
             _logger.LogInformation(

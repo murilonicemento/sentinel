@@ -1,6 +1,7 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RiskCatalog.Api.Contracts;
+using RiskCatalog.Api.Security;
 using RiskCatalog.Application.DTO;
 using RiskCatalog.Application.Services;
 using RiskCatalog.Application.Services.Interfaces;
@@ -9,6 +10,7 @@ namespace RiskCatalog.Api.Controllers;
 
 [Route("api/risk-model")]
 [ApiController]
+[DeprecatedRoute("/api/v1/risk-catalog")]
 [Authorize]
 public class RiskModelController : ControllerBase
 {
@@ -111,7 +113,9 @@ public class RiskModelController : ControllerBase
     [Authorize(Policy = "RiskCatalogWrite")]
     public async Task<ActionResult> PublishRiskCatalogVersion([FromBody] CatalogPublishDTO catalogPublishDto)
     {
-        var tenantId = Guid.Parse(HttpContext.User.FindFirst("tenantId")?.Value!);
+        if (!PublisherTenantResolver.TryGetTenantId(User, out var tenantId))
+            return Forbid();
+
         var isPublished = await _riskModelService.PublishCatalogVersionAsync(catalogPublishDto, tenantId);
 
         return isPublished

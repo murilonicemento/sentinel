@@ -1,56 +1,85 @@
 using System.Text.Json;
 using Ingestion.Application.DTO;
+using Ingestion.Application.Events;
+using Ingestion.Application.Errors;
 using Ingestion.Application.Interfaces.Deduplicators;
 using Ingestion.Application.Interfaces.Providers;
+using Ingestion.Application.Interfaces.Repositories;
 using Ingestion.Application.Interfaces.Services;
+using Ingestion.Domain.AggregateRoots;
 using Ingestion.Domain.Aggregates;
 using Ingestion.Domain.Enums;
 using Ingestion.Domain.Interfaces.Repositories;
 using Ingestion.Domain.Outbox;
 using Ingestion.Domain.ValueObjects;
-using Ingestion.Infrastructure.Read.Persistence.DbContext;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Ingestion.Application.Services;
 
 public class SensorCollectionService : ISensorCollectionService
 {
+    /// <summary>How long a claim on a collection survives a crashed process before another attempt may take it.</summary>
+    private static readonly TimeSpan ProcessingLease = TimeSpan.FromMinutes(2);
+
     private readonly IDataSourceRepository _dataSourceRepository;
     private readonly IDataCollectionRepository _dataCollectionRepository;
+    private readonly ISampleSensorRepository _sampleSensorRepository;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IEventDeduplicator _eventDeduplicator;
     private readonly IObjectStorageProvider _minioProvider;
     private readonly IOutboxRepository _outboxRepository;
-    private readonly ReadDbContext _readDbContext;
-    private readonly IConfiguration _configuration;
+    private readonly IDetectedEventReadRepository _detectedEventReadRepository;
     private readonly IGeospatialValidationService _geospatialValidationService;
     private readonly ILogger<SensorCollectionService> _logger;
 
     public SensorCollectionService(
         IDataSourceRepository dataSourceRepository,
         IDataCollectionRepository dataCollectionRepository,
+        ISampleSensorRepository sampleSensorRepository,
+        IUnitOfWork unitOfWork,
         IEventDeduplicator eventDeduplicator,
         IObjectStorageProvider minioProvider,
         IOutboxRepository outboxRepository,
-        ReadDbContext readDbContext,
-        IConfiguration configuration,
+        IDetectedEventReadRepository detectedEventReadRepository,
         IGeospatialValidationService geospatialValidationService,
         ILogger<SensorCollectionService> logger)
     {
         _dataSourceRepository = dataSourceRepository;
         _dataCollectionRepository = dataCollectionRepository;
+        _sampleSensorRepository = sampleSensorRepository;
+        _unitOfWork = unitOfWork;
         _eventDeduplicator = eventDeduplicator;
         _minioProvider = minioProvider;
         _outboxRepository = outboxRepository;
-        _readDbContext = readDbContext;
-        _configuration = configuration;
+        _detectedEventReadRepository = detectedEventReadRepository;
         _geospatialValidationService = geospatialValidationService;
         _logger = logger;
     }
 
-    public async Task<Guid> ProcessSensorCollection<TEvent>(Guid dataSourceId, Guid tenantId, DateTime collectedAt,
+    /// <summary>A collection submitted over HTTP: the data source's collection frequency applies.</summary>
+    public Task<Guid> ProcessSensorCollection(Guid dataSourceId, Guid tenantId, DateTime collectedAt,
         string payload,
-        List<SampleSensorDTO> samples, string domain, CancellationToken cancellationToken) where TEvent : class
+        List<SampleSensorDTO> samples, string domain, CancellationToken cancellationToken) =>
+        ProcessAsync(dataSourceId, tenantId, collectedAt, payload, samples, domain, sourceEventId: null,
+            cancellationToken);
+
+    /// <summary>
+    /// A reading polled from an external source. The poll interval of the source, not the data source's collection
+    /// frequency, controls how often it arrives (one poll brings many events); the provider's event id is the
+    /// deduplication key, so a window polled again ingests nothing twice. The domain comes from the data source.
+    /// </summary>
+    public Task<Guid> ProcessPolledCollectionAsync(SensorCollectionDTO collection, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(collection.SourceEventId))
+            throw new ArgumentException("A polled collection requires the provider's event id.");
+
+        return ProcessAsync(collection.DataSourceId, collection.TenantId,
+            collection.CollectedAt ?? throw new ArgumentException("A polled collection requires its time."),
+            collection.Payload, collection.Samples, domain: null, collection.SourceEventId, cancellationToken);
+    }
+
+    private async Task<Guid> ProcessAsync(Guid dataSourceId, Guid tenantId, DateTime collectedAt, string payload,
+        List<SampleSensorDTO> samples, string? domain, string? sourceEventId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(payload))
             throw new ArgumentException("Payload can't be blank.");
@@ -58,7 +87,7 @@ public class SensorCollectionService : ISensorCollectionService
             throw new ArgumentException("Samples unit can't be blank.");
 
         var dataSource = _dataSourceRepository.GetByIdAndTenantId(dataSourceId, tenantId)
-                         ?? throw new KeyNotFoundException(
+                         ?? throw new IngestionReferenceNotFoundException(IngestionErrorCodes.DataSourceNotFound,
                              $"DataSource or tenant not found. DataSource Id: {dataSourceId}, TenantId: {tenantId}");
 
         _logger.LogInformation("Datasource info. Id: {id}; TenantId: {tenantId}", dataSource.Id, dataSource.TenantId);
@@ -77,7 +106,7 @@ public class SensorCollectionService : ISensorCollectionService
             JsonSerializer.Serialize(lastDataCollected)
         );
 
-        if (lastDataCollected != null)
+        if (lastDataCollected != null && sourceEventId is null)
         {
             var isFreqValid = CollectionFrequencyType.From(dataSource.CollectionFrequency)
                 .IsValidFrequency(lastDataCollected.CollectedAt);
@@ -85,28 +114,61 @@ public class SensorCollectionService : ISensorCollectionService
                 throw new ArgumentException($"Collection frequency mismatch: {dataSource.CollectionFrequency}");
         }
 
-        var dedupKey = $"ing:{tenantId}:{dataSourceId}:{collectedAt:yyyyMMddHHmmss}";
-        
-        if (await _eventDeduplicator.IsDuplicateAsync(dedupKey))
+        domain ??= dataSource.ResolveSensorDomain().ToString();
+
+        // Submitted collections keep the original key format (read by older versions); polled readings are keyed by
+        // the provider's event id, because many of them can share the same second.
+        var dedupKey = sourceEventId is null
+            ? $"ing:{tenantId}:{dataSourceId}:{collectedAt:yyyyMMddHHmmss}"
+            : $"ing:{tenantId}:{dataSourceId}:src:{sourceEventId}";
+
+        if (!await _eventDeduplicator.TryBeginAsync(dedupKey, ProcessingLease))
         {
             _logger.LogInformation("Event duplicated. Key: {dedupKey}", dedupKey);
             return dataSourceId;
         }
 
-        var collectionGuid = Guid.NewGuid();
+        try
+        {
+            await RegisterCollectionAsync(dataSource, tenantId, collectedAt, payload, samples, domain, dedupKey,
+                cancellationToken);
+        }
+        catch
+        {
+            // Releases the claim so the collection can be retried; event ids are deterministic, so a retry does not
+            // duplicate what was already projected or published.
+            await _eventDeduplicator.AbandonAsync(dedupKey);
+            throw;
+        }
+
+        await _eventDeduplicator.MarkAsProcessedAsync(dedupKey, TimeSpan.FromMinutes(5));
+        return dataSourceId;
+    }
+
+    private async Task RegisterCollectionAsync(DataSource dataSource, Guid tenantId, DateTime collectedAt,
+        string payload, List<SampleSensorDTO> samples, string domain, string dedupKey,
+        CancellationToken cancellationToken)
+    {
+        var dataSourceId = dataSource.Id;
+
+        // Every id below derives from the collection key, so a retry rewrites the same object and the inserts skip
+        // the rows a previous attempt already committed.
+        var collectionGuid = DeterministicEventId.For($"{dedupKey}/collection", 0);
         var objectName = $"raw/{collectionGuid}.json";
-        var putResponse =
-            await _minioProvider.UploadJsonAsync(_configuration["MinIO:BucketName"]!, objectName, payload);
+        var putResponse = await _minioProvider.UploadJsonAsync(objectName, payload);
 
         var dataCollection = new DataCollection(collectionGuid, dataSourceId, collectedAt,
             JsonSerializer.Serialize(putResponse), tenantId);
-        await _dataCollectionRepository.RegisterAsync(dataCollection);
+        var sampleSensors = samples
+            .Select((sample, index) => new SampleSensor(DeterministicEventId.For($"{dedupKey}/sample", index),
+                collectionGuid, sample.SensorValue, sample.Unit, sample.Latitude, sample.Longitude,
+                sample.RecordedAt))
+            .ToList();
+        var outboxMessages = new List<OutboxMessage>();
 
-        var collectionName = domain == "Climatic" ? "climaticEvents" : "disasterEvents";
-        var mongoCollection = _readDbContext.GetCollection<TEvent>(collectionName);
-
-        foreach (var sample in samples)
+        for (var sampleIndex = 0; sampleIndex < samples.Count; sampleIndex++)
         {
+            var sample = samples[sampleIndex];
             var isValidCoords =
                 await _geospatialValidationService.ValidateCoordinatesAsync(sample.Latitude, sample.Longitude,
                     cancellationToken);
@@ -128,28 +190,38 @@ public class SensorCollectionService : ISensorCollectionService
             }
 
             var intensity = MeasurementType.From(dataSource.MeasurementType).CalculateIntensity(sample.SensorValue);
-            var evt = Activator.CreateInstance(typeof(TEvent),
-                collectionGuid,
-                eventType,
-                intensity,
-                sample.Latitude,
-                sample.Longitude,
-                collectedAt) as TEvent;
-
-            if (evt == null) continue;
+            var evt = new SensorEventDetected(collectionGuid, eventType, intensity, sample.Latitude, sample.Longitude,
+                collectedAt, DeterministicEventId.For(dedupKey, sampleIndex), tenantId);
 
             _logger.LogInformation(
                 "Inserting climatic event to mongodb. Json event: {evt}",
                 evt
             );
-            await mongoCollection.InsertOneAsync(evt, cancellationToken);
+            await _detectedEventReadRepository.AddAsync(
+                new DetectedEventDTO(evt.EventId, collectionGuid, tenantId, domain, eventType, intensity,
+                    sample.Latitude, sample.Longitude, collectedAt),
+                cancellationToken);
 
-            var outbox = new OutboxMessage(Guid.NewGuid(), collectionGuid,
-                $"{domain.ToLower()}-event-detected", JsonSerializer.Serialize(evt));
-            await _outboxRepository.RegisterAsync(outbox);
+            outboxMessages.Add(new OutboxMessage(evt.EventId, collectionGuid,
+                $"{domain.ToLower()}-event-detected", JsonSerializer.Serialize(evt)));
         }
 
-        await _eventDeduplicator.MarkAsProcessedAsync(dedupKey, TimeSpan.FromMinutes(5));
-        return dataSourceId;
+        // The tenant's usage travels in the same transaction, so it is counted exactly when the events are published.
+        if (outboxMessages.Count > 0)
+        {
+            var usage = new TenantUsageEvent(tenantId, outboxMessages.Count, 0, 0, 0,
+                DeterministicEventId.For($"{dedupKey}/usage", 0));
+            outboxMessages.Add(new OutboxMessage(usage.EventId, collectionGuid, TenantUsageEvent.Topic,
+                JsonSerializer.Serialize(usage)));
+        }
+
+        // Transactional outbox: the collection, its samples and the events to publish are committed together.
+        await _unitOfWork.ExecuteAsync(async _ =>
+        {
+            await _dataCollectionRepository.RegisterAsync(dataCollection);
+            await _sampleSensorRepository.RegisterManyAsync(sampleSensors);
+            foreach (var outboxMessage in outboxMessages)
+                await _outboxRepository.RegisterAsync(outboxMessage);
+        }, cancellationToken);
     }
 }

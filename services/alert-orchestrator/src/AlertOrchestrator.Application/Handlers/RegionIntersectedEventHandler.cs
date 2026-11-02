@@ -3,6 +3,7 @@ using AlertOrchestrator.Application.Events;
 using AlertOrchestrator.Application.Interfaces.Messaging;
 using AlertOrchestrator.Application.Interfaces.Observability;
 using AlertOrchestrator.Application.Ports;
+using AlertOrchestrator.Application.Services;
 using AlertOrchestrator.Domain.Aggregates;
 using AlertOrchestrator.Domain.Configuration;
 using AlertOrchestrator.Domain.Enums;
@@ -22,6 +23,7 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
     private readonly ILogger<RegionIntersectedEventHandler> _logger;
     private readonly IAlertMetrics _metrics;
     private readonly IAlertWindowRepository _windowRepository;
+    private readonly TriggeredAlertReporter _triggeredAlertReporter;
 
     public RegionIntersectedEventHandler(
         IAlertWindowRepository windowRepository,
@@ -30,7 +32,8 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
         IIdempotencyService idempotencyService,
         IAlertConfigurationPort configurationPort,
         IAlertMetrics metrics,
-        ILogger<RegionIntersectedEventHandler> logger)
+        ILogger<RegionIntersectedEventHandler> logger,
+        TriggeredAlertReporter triggeredAlertReporter)
     {
         _windowRepository = windowRepository;
         _eventPublisher = eventPublisher;
@@ -39,15 +42,20 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
         _configurationPort = configurationPort;
         _metrics = metrics;
         _logger = logger;
+        _triggeredAlertReporter = triggeredAlertReporter;
     }
 
     public async Task Handle(RegionIntersectedEvent notification, CancellationToken cancellationToken)
     {
-        if (await _idempotencyService.IsProcessedAsync(notification.EventId, cancellationToken))
+        var claim = await _idempotencyService.TryBeginAsync(notification.EventId, cancellationToken);
+        if (claim == IdempotencyClaimResult.AlreadyProcessed)
         {
             _logger.LogInformation("Event {EventId} already processed, skipping", notification.EventId);
             return;
         }
+
+        if (claim == IdempotencyClaimResult.InProgress)
+            throw new MessageInProgressException(notification.EventId);
 
         try
         {
@@ -128,9 +136,12 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
                     window.Signals.Count,
                     window.Signals.Select(s => s.Source.ToString()).ToList(),
                     DateTime.UtcNow,
-                    window.CurrentEscalationLevel);
+                    window.CurrentEscalationLevel,
+                    TenantId: window.TenantId);
 
                 await _commandPublisher.PublishAsync(command, cancellationToken);
+                await _triggeredAlertReporter.ReportAsync(window.TenantId, window.Id, window.Region,
+                    notification.Severity, command.TriggeredAt, cancellationToken);
             }
             else
             {
@@ -149,13 +160,12 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
                     window.Id, window.Signals.Count, quorumMet);
             }
 
-            await _idempotencyService.MarkAsProcessedAsync(notification.EventId, cancellationToken);
+            await _idempotencyService.CompleteAsync(notification.EventId, cancellationToken);
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogError(ex,
-                "Error processing RegionIntersectedEvent {EventId} for Region: {Region}, IntersectingRegion: {IntersectingRegion}, RiskType: {RiskType}",
-                notification.EventId, notification.Region, notification.IntersectingRegion, notification.RiskType);
+            // Lets a retry or another instance process the event; the consumer logs the failure.
+            await _idempotencyService.AbandonAsync(notification.EventId, CancellationToken.None);
             throw;
         }
     }

@@ -653,3 +653,12 @@ O Auditoria & Conformidade Service é um componente de infraestrutura de confian
 A qualidade da auditoria depende da confiabilidade dos serviços emissores, dos contratos de integração, da persistência durável, dos controles de acesso e da capacidade de detectar e corrigir falhas.
 
 O objetivo é permitir que uma operação relevante possa ser investigada com clareza, identificando o que aconteceu, quando aconteceu, qual ator esteve envolvido e quais recursos foram afetados, sem transformar a auditoria em uma dependência indevida dos fluxos de negócio.
+
+## 21. Estado da Implementação
+
+A primeira versão está implementada em `services/audit-compliance`. As decisões tomadas para as pendências da seção 17 estão registradas em `docs/adr/ADR-0001-audit-compliance-service.md`, com status Proposto. O estado detalhado, os contratos, a configuração e os procedimentos operacionais estão em `docs/audit-compliance-service-status.md`.
+
+Diferenças em relação às propostas deste documento:
+
+- A rota base implementada é `/api/v1/audit-compliance`, seguindo a regra de versionamento de `.claude/rules/api-design.md`. Também foi adicionado o endpoint `GET /api/v1/audit-compliance/exports/{id}/download`.
+- A camada opcional `AuditCompliance.Integration` não foi criada, porque não há complexidade de integração que a justifique.

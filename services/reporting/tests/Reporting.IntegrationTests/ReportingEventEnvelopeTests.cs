@@ -1,15 +1,16 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Reporting.Domain.Entities;
+
+using Reporting.IntegrationTests.Support;
 
 namespace Reporting.IntegrationTests;
 
-public class ReportingEventEnvelopeTests : IClassFixture<WebApplicationFactory<Reporting.Api.Program>>
+public class ReportingEventEnvelopeTests : IClassFixture<ReportingApiFactory>
 {
-    private readonly WebApplicationFactory<Reporting.Api.Program> _factory;
+    private readonly ReportingApiFactory _factory;
 
-    public ReportingEventEnvelopeTests(WebApplicationFactory<Reporting.Api.Program> factory)
+    public ReportingEventEnvelopeTests(ReportingApiFactory factory)
     {
         _factory = factory;
     }
@@ -17,7 +18,7 @@ public class ReportingEventEnvelopeTests : IClassFixture<WebApplicationFactory<R
     [Fact]
     public async Task PostEnvelope_AcceptsAndProcessesEvent()
     {
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateWriterClient("tenant-c");
         var envelope = new ReportingEventEnvelope("evt-10", "AlertTriggered", "tenant-c", "west", "High", "sms", 0.9, "Success", DateTime.UtcNow, "alert-orchestrator");
 
         var response = await client.PostAsJsonAsync("/api/reporting/events/envelope", envelope);

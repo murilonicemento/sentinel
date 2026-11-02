@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RiskEvaluation.Domain.Interfaces;
@@ -8,17 +9,21 @@ namespace RiskEvaluation.Infrastructure.Caching;
 
 public class RedisRecentScoresCache : IRecentScoresCache
 {
+    private const string KeyPrefix = "risk:score:";
+
+    private readonly IConnectionMultiplexer _connection;
     private readonly IDatabase _redis;
     private readonly ILogger<RedisRecentScoresCache> _logger;
     private static readonly TimeSpan DefaultExpiration = TimeSpan.FromMinutes(5);
 
     public RedisRecentScoresCache(IConnectionMultiplexer redis, ILogger<RedisRecentScoresCache> logger)
     {
+        _connection = redis;
         _redis = redis.GetDatabase();
         _logger = logger;
     }
 
-    public async Task<RiskScoreCacheEntry?> GetAsync(int latitude, int longitude, CancellationToken cancellationToken = default)
+    public async Task<RiskScoreCacheEntry?> GetAsync(double latitude, double longitude, CancellationToken cancellationToken = default)
     {
         var key = BuildKey(latitude, longitude);
         var value = await _redis.StringGetAsync(key);
@@ -40,7 +45,7 @@ public class RedisRecentScoresCache : IRecentScoresCache
         }
     }
 
-    public async Task SetAsync(int latitude, int longitude, RiskScoreCacheEntry entry, TimeSpan? expiration = null, CancellationToken cancellationToken = default)
+    public async Task SetAsync(double latitude, double longitude, RiskScoreCacheEntry entry, TimeSpan? expiration = null, CancellationToken cancellationToken = default)
     {
         var key = BuildKey(latitude, longitude);
         var value = JsonSerializer.Serialize(entry);
@@ -49,5 +54,21 @@ public class RedisRecentScoresCache : IRecentScoresCache
         await _redis.StringSetAsync(key, value, expiry);
     }
 
-    private static string BuildKey(int latitude, int longitude) => $"risk:score:{latitude}:{longitude}";
+    public async Task<long> InvalidateAllAsync(CancellationToken cancellationToken = default)
+    {
+        long removed = 0;
+        // SCAN (not KEYS) walks the keyspace incrementally without blocking Redis.
+        foreach (var server in _connection.GetServers().Where(s => s.IsConnected && !s.IsReplica))
+            await foreach (var key in server.KeysAsync(_redis.Database, $"{KeyPrefix}*", pageSize: 500)
+                               .WithCancellation(cancellationToken))
+                if (await _redis.KeyDeleteAsync(key))
+                    removed++;
+
+        return removed;
+    }
+
+    // v2: exact position (the v1 keys, by whole degree, expire within DefaultExpiration). InvalidateAllAsync matches
+    // KeyPrefix, so it removes both formats.
+    private static string BuildKey(double latitude, double longitude) =>
+        string.Create(CultureInfo.InvariantCulture, $"{KeyPrefix}v2:{latitude:R}:{longitude:R}");
 }

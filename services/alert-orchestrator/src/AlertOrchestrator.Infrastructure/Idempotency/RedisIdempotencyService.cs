@@ -1,38 +1,57 @@
 using AlertOrchestrator.Application.Interfaces.Messaging;
-using Microsoft.Extensions.Caching.Distributed;
+using StackExchange.Redis;
 
 namespace AlertOrchestrator.Infrastructure.Idempotency;
 
+/// <summary>
+/// Claims use <c>SET NX</c> with a short lease, so the check and the claim are one atomic Redis operation across
+/// instances. Keys are <c>alert-orchestrator:idempotency:v2:{eventId}</c>; the legacy <c>idempotency:{eventId}</c>
+/// key written by the previous version is still honoured until it expires (24 h).
+/// </summary>
 public sealed class RedisIdempotencyService : IIdempotencyService
 {
-    private readonly IDistributedCache _cache;
-    private readonly TimeSpan _expirationTime;
+    private const string Processing = "processing";
+    private const string Done = "done";
 
-    public RedisIdempotencyService(IDistributedCache cache, TimeSpan? expirationTime = null)
+    private readonly IConnectionMultiplexer _redis;
+    private readonly TimeSpan _retention;
+    private readonly TimeSpan _lease;
+
+    public RedisIdempotencyService(IConnectionMultiplexer redis, TimeSpan? retention = null, TimeSpan? lease = null)
     {
-        _cache = cache;
-        _expirationTime = expirationTime ?? TimeSpan.FromHours(24);
+        _redis = redis;
+        _retention = retention ?? TimeSpan.FromHours(24);
+        _lease = lease ?? TimeSpan.FromMinutes(5);
     }
 
-    public async Task<bool> IsProcessedAsync(Guid eventId, CancellationToken cancellationToken = default)
+    public async Task<IdempotencyClaimResult> TryBeginAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
-        var key = GetKey(eventId);
-        var value = await _cache.GetStringAsync(key, cancellationToken);
-        return !string.IsNullOrEmpty(value);
+        var database = _redis.GetDatabase();
+
+        if (await database.KeyExistsAsync(LegacyKey(eventId)))
+            return IdempotencyClaimResult.AlreadyProcessed;
+
+        if (await database.StringSetAsync(Key(eventId), Processing, _lease, When.NotExists))
+            return IdempotencyClaimResult.Acquired;
+
+        return await database.StringGetAsync(Key(eventId)) == Done
+            ? IdempotencyClaimResult.AlreadyProcessed
+            : IdempotencyClaimResult.InProgress;
     }
 
-    public async Task MarkAsProcessedAsync(Guid eventId, CancellationToken cancellationToken = default)
+    public Task CompleteAsync(Guid eventId, CancellationToken cancellationToken = default) =>
+        _redis.GetDatabase().StringSetAsync(Key(eventId), Done, _retention);
+
+    public async Task AbandonAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
-        var key = GetKey(eventId);
-        var options = new DistributedCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = _expirationTime
-        };
-        await _cache.SetStringAsync(key, "processed", options, cancellationToken);
+        // Releases only an unfinished claim, never a completed one.
+        var transaction = _redis.GetDatabase().CreateTransaction();
+        transaction.AddCondition(Condition.StringEqual(Key(eventId), Processing));
+        _ = transaction.KeyDeleteAsync(Key(eventId));
+        await transaction.ExecuteAsync();
     }
 
-    private static string GetKey(Guid eventId)
-    {
-        return $"idempotency:{eventId}";
-    }
+    private static string Key(Guid eventId) => $"alert-orchestrator:idempotency:v2:{eventId}";
+
+    private static string LegacyKey(Guid eventId) => $"idempotency:{eventId}";
 }

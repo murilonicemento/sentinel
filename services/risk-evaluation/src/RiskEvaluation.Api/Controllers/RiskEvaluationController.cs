@@ -1,5 +1,8 @@
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RiskEvaluation.Api.Contracts;
+using RiskEvaluation.Api.Security;
 using RiskEvaluation.Application.Commands;
 using RiskEvaluation.Application.DTOs;
 using RiskEvaluation.Application.Queries;
@@ -8,6 +11,7 @@ namespace RiskEvaluation.Api.Controllers;
 
 [ApiController]
 [Route("api/risk-evaluation")]
+[DeprecatedRoute("/" + RiskEvaluationV1Controller.BasePath)]
 public class RiskEvaluationController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -20,6 +24,7 @@ public class RiskEvaluationController : ControllerBase
     }
 
     [HttpPost("evaluate")]
+    [Authorize(Policy = RiskEvaluationPolicies.Write)]
     public async Task<ActionResult<EvaluateRiskResponse>> EvaluateRisk([FromBody] EvaluateRiskRequest request)
     {
         _logger.LogInformation("Received risk evaluation request for latitude: {Latitude}; longitude: {Longitude}",
@@ -63,6 +68,7 @@ public class RiskEvaluationController : ControllerBase
     }
 
     [HttpGet("history")]
+    [Authorize(Policy = RiskEvaluationPolicies.Read)]
     public async Task<ActionResult<List<RiskEvaluationDto>>> GetRiskHistory(
         [FromQuery] int latitude,
         [FromQuery] int longitude)
@@ -91,6 +97,7 @@ public class RiskEvaluationController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = RiskEvaluationPolicies.Read)]
     public async Task<ActionResult<RiskEvaluationDto>> GetRiskEvaluationById(Guid id)
     {
         _logger.LogInformation("Fetching risk evaluation by ID: {Id}", id);
@@ -110,6 +117,7 @@ public class RiskEvaluationController : ControllerBase
     }
 
     [HttpPut("model")]
+    [Authorize(Roles = RiskEvaluationRoles.Admin)]
     public async Task<ActionResult<UpdateRiskModelResponse>> UpdateRiskModel([FromBody] UpdateRiskModelRequest request)
     {
         _logger.LogInformation("Received risk model update request for version: {Version}", request.Version);

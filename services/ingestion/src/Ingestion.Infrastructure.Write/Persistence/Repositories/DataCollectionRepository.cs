@@ -21,9 +21,10 @@ public class DataCollectionRepository : IDataCollectionRepository
                 data_collection 
                     (id, data_source_id, collected_at, payload, tenant_id, created_at) 
                 VALUES 
-                    (@Id, @DataSourceId, @CollectedAt, @Payload::jsonb, @TenantId, @CreatedAt)";
+                    (@Id, @DataSourceId, @CollectedAt, @Payload::jsonb, @TenantId, @CreatedAt)
+                ON CONFLICT (id) DO NOTHING";
 
-        await _writeDbContext.Connection.ExecuteAsync(query, dataCollection);
+        await _writeDbContext.Connection.ExecuteAsync(query, dataCollection, _writeDbContext.Transaction);
 
         return dataCollection.Id;
     }

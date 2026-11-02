@@ -9,6 +9,8 @@ namespace Reporting.UnitTests;
 
 public class ReportingKafkaConsumerTests
 {
+    private const string ReplayTopic = "reporting-events-replay";
+
     [Fact]
     public void ParseEnvelopes_WhenPayloadContainsMultipleEvents_ReturnsAll()
     {
@@ -136,6 +138,50 @@ public class ReportingKafkaConsumerTests
 
         Assert.NotNull(deadLetter);
         Assert.True(ReportingDeadLetterConsumerHostedService.ShouldReplay(deadLetter!));
+    }
+
+    [Fact]
+    public void ResolvePayload_OnTheMainTopic_ReturnsTheMessageItself()
+    {
+        const string value = "{\"eventId\":\"evt-1\"}";
+
+        Assert.Equal(value, ReportingKafkaConsumerHostedService.ResolvePayload("reporting-events", ReplayTopic, value));
+    }
+
+    [Fact]
+    public void ResolvePayload_OnTheReplayTopic_ReturnsTheWrappedPayload()
+    {
+        const string original = """
+            {"eventId":"evt-7","eventType":"alert","tenantId":"tenant-a","region":"sp","severity":"high","channel":"sms","riskScore":0.9,"status":"sent","timestamp":"2026-11-01T12:00:00Z","source":"tests"}
+            """;
+        var replay = ReportingKafkaConsumerHostedService.BuildReprocessingMessage(original, "reporting-events", "admin");
+
+        var payload = ReportingKafkaConsumerHostedService.ResolvePayload(ReplayTopic, ReplayTopic, replay);
+
+        var envelope = Assert.Single(ReportingKafkaConsumerHostedService.ParseEnvelopes(payload!));
+        Assert.Equal("evt-7", envelope.EventId);
+        Assert.Equal("tenant-a", envelope.TenantId);
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("{\"sourceTopic\":\"reporting-events\"}")]
+    [InlineData("{\"originalPayload\":\"\"}")]
+    [InlineData("[1,2]")]
+    public void ResolvePayload_OnTheReplayTopicWithoutAPayload_ReturnsNull(string value)
+    {
+        Assert.Null(ReportingKafkaConsumerHostedService.ResolvePayload(ReplayTopic, ReplayTopic, value));
+    }
+
+    [Fact]
+    public void ShouldReplay_WhenTheReplayItselfFailed_IsTerminal()
+    {
+        var deadLetter = ReportingDeadLetterConsumerHostedService.ParseDeadLetterEnvelope(
+            ReportingKafkaConsumerHostedService.BuildDeadLetterMessage(
+                "{\"eventId\":\"evt-99\"}", ReplayTopic, "Processing failed after retries", 3, 0, 7));
+
+        Assert.False(ReportingDeadLetterConsumerHostedService.ShouldReplay(deadLetter, ReplayTopic));
+        Assert.True(ReportingDeadLetterConsumerHostedService.ShouldReplay(deadLetter));
     }
 
     [Fact]

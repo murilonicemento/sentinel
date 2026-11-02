@@ -1,5 +1,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
+COPY --from=repo-root Directory.Packages.props /
 
 COPY src/TenantsBilling.Api/TenantsBilling.Api.csproj src/TenantsBilling.Api/
 COPY src/TenantsBilling.Application/TenantsBilling.Application.csproj src/TenantsBilling.Application/

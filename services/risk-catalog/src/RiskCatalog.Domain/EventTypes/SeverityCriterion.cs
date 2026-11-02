@@ -9,10 +9,11 @@ public class SeverityCriterion
     public Guid SeverityId { get; set; }
     public double MinValue { get; set; }
     public double MaxValue { get; set; }
-    public string Unit { get; set; }
+    public string Unit { get; set; } = string.Empty;
     public int Version { get; set; }
-    public virtual EventType EventType { get; set; }
-    public virtual Severity Severity { get; set; }
+    // Navigations are filled by EF Core when loaded (its documented `= null!` pattern for required ones).
+    public virtual EventType EventType { get; set; } = null!;
+    public virtual Severity Severity { get; set; } = null!;
 
     public SeverityCriterion()
     {

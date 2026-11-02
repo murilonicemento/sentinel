@@ -69,32 +69,37 @@ public sealed class Tenant
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void Suspend()
+    /// <summary>
+    /// Whether the tenant may move to <paramref name="target"/>: an active tenant can be suspended, a suspended or
+    /// pending one activated, and any tenant canceled. Canceled is terminal. Keeping the current status is allowed.
+    /// </summary>
+    public bool CanChangeStatusTo(TenantStatus target)
     {
-        Status = TenantStatus.Suspended;
+        if (target == Status) return true;
+        if (Status == TenantStatus.Canceled) return false;
+
+        return target switch
+        {
+            TenantStatus.Active => Status is TenantStatus.Suspended or TenantStatus.Pending,
+            TenantStatus.Suspended => Status == TenantStatus.Active,
+            TenantStatus.Canceled => true,
+            _ => false
+        };
+    }
+
+    /// <summary>Moves the tenant to <paramref name="target"/>; false when it already had that status.</summary>
+    public bool ChangeStatus(TenantStatus target)
+    {
+        if (!CanChangeStatusTo(target))
+            throw new InvalidOperationException($"A {Status} tenant cannot become {target}.");
+
+        if (target == Status) return false;
+
+        Status = target;
         UpdatedAt = DateTime.UtcNow;
+        return true;
     }
 
-    public void Reactivate()
-    {
-        Status = TenantStatus.Active;
-        UpdatedAt = DateTime.UtcNow;
-    }
-
-    public TenantQuotaStatus RecordUsage(int eventsConsumed, int alertsTriggered, int apiRequests, int channelUsage)
-    {
-        if (Status == TenantStatus.Suspended || Status == TenantStatus.Canceled)
-            return TenantQuotaStatus.HardLimit;
-
-        var softLimitReached = eventsConsumed >= 80 || alertsTriggered >= 80 || apiRequests >= 80 || channelUsage >= 80;
-        var hardLimitReached = eventsConsumed >= 100 || alertsTriggered >= 100 || apiRequests >= 100 || channelUsage >= 100;
-
-        if (hardLimitReached)
-            return TenantQuotaStatus.HardLimit;
-
-        if (softLimitReached)
-            return TenantQuotaStatus.SoftLimit;
-
-        return TenantQuotaStatus.WithinLimit;
-    }
+    /// <summary>Suspended and canceled tenants are over quota regardless of their consumption.</summary>
+    public bool IsBlocked => Status is TenantStatus.Suspended or TenantStatus.Canceled;
 }

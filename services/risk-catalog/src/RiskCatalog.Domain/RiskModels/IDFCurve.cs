@@ -12,7 +12,8 @@ public class IDFCurve
     public double Intensity { get; set; }
     public int ReturnPeriodYears { get; set; }
     public int Version { get; set; }
-    public virtual EventType EventType { get; set; }
+    // Navigations are filled by EF Core when loaded (its documented `= null!` pattern for required ones).
+    public virtual EventType EventType { get; set; } = null!;
 
     public IDFCurve()
     {

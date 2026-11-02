@@ -3,16 +3,16 @@ namespace RiskEvaluation.Domain.Events;
 public class RiskEvaluatedEvent
 {
     public Guid EvaluationId { get; }
-    public int Latitude { get; }
-    public int Longitude { get; }
+    public double Latitude { get; }
+    public double Longitude { get; }
     public double Score { get; }
     public string Level { get; }
     public DateTime Timestamp { get; }
 
     public RiskEvaluatedEvent(
         Guid evaluationId,
-        int latitude,
-        int longitude,
+        double latitude,
+        double longitude,
         double score,
         string level,
         DateTime timestamp)

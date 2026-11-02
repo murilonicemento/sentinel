@@ -41,7 +41,7 @@ public class RiskFactorRepository : IRiskFactorRepository
     public async Task SaveManyAsync(IEnumerable<RiskFactor> riskFactors, CancellationToken cancellationToken = default)
     {
         var models = new List<WriteModel<RiskFactor>>();
-        
+
         foreach (var factor in riskFactors)
         {
             var filter = Builders<RiskFactor>.Filter.Eq(x => x.Type, factor.Type);

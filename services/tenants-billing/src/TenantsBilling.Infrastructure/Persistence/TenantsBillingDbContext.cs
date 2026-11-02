@@ -12,6 +12,8 @@ public sealed class TenantsBillingDbContext : DbContext
 
     public DbSet<TenantEntity> Tenants => Set<TenantEntity>();
     public DbSet<PlanEntity> Plans => Set<PlanEntity>();
+    public DbSet<TenantUsageEntity> TenantUsage => Set<TenantUsageEntity>();
+    public DbSet<RecordedUsageEventEntity> RecordedUsageEvents => Set<RecordedUsageEventEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +27,27 @@ public sealed class TenantsBillingDbContext : DbContext
             entity.Property(x => x.Status).IsRequired();
             entity.Property(x => x.CreatedAt).IsRequired();
             entity.Property(x => x.UpdatedAt).IsRequired();
+        });
+
+        modelBuilder.Entity<TenantUsageEntity>(entity =>
+        {
+            entity.ToTable("tenant_usage");
+            entity.HasKey(x => new { x.TenantId, x.Period });
+            entity.Property(x => x.Period).IsRequired().HasMaxLength(7);
+            entity.Property(x => x.QuotaStatus).IsRequired();
+            entity.Property(x => x.UpdatedAt).IsRequired();
+            // Concurrent consumers updating the same period conflict instead of losing increments.
+            entity.Property(x => x.Version).IsRowVersion();
+        });
+
+        modelBuilder.Entity<RecordedUsageEventEntity>(entity =>
+        {
+            entity.ToTable("recorded_usage_events");
+            entity.HasKey(x => x.SourceEventId);
+            entity.Property(x => x.SourceEventId).HasMaxLength(200);
+            entity.Property(x => x.Period).IsRequired().HasMaxLength(7);
+            entity.Property(x => x.RecordedAt).IsRequired();
+            entity.HasIndex(x => new { x.TenantId, x.Period });
         });
 
         modelBuilder.Entity<PlanEntity>(entity =>

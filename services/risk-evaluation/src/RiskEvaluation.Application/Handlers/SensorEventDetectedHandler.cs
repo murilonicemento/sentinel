@@ -15,16 +15,16 @@ public class SensorEventDetectedHandler : INotificationHandler<SensorEventDetect
 
     public async Task Handle(SensorEventDetected notification, CancellationToken cancellationToken)
     {
-        var latitude = (int)notification.Latitude;
-        var longitude = (int)notification.Longitude;
         var metrics = MapEventTypeToRiskMetrics(notification.EventType, notification.Intensity);
         var events = MapEventTypeToRiskEvents(notification.EventType, notification.Intensity);
 
         await _riskEvaluationService.EvaluateRiskAsync(
-            latitude,
-            longitude,
+            notification.Latitude,
+            notification.Longitude,
             metrics,
-            events);
+            events,
+            new EvaluationSource(notification.Latitude, notification.Longitude, notification.EventType,
+                notification.Intensity, notification.EventId, notification.TenantId?.ToString()));
     }
 
     private static RiskMetrics MapEventTypeToRiskMetrics(string eventType, double intensity)
@@ -33,19 +33,19 @@ public class SensorEventDetectedHandler : INotificationHandler<SensorEventDetect
 
         switch (eventType.ToLowerInvariant())
         {
-            case "temperatureAnomaly":
+            case "temperatureanomaly":
                 events.TemperatureAnomaly = intensity;
                 break;
-            case "humidityAnomaly":
+            case "humidityanomaly":
                 events.HumidityAnomaly = intensity;
                 break;
-            case "windGust":
+            case "windgust":
                 events.WindGust = intensity;
                 break;
             case "rainfall":
                 events.Rainfall = intensity;
                 break;
-            case "pressureChange":
+            case "pressurechange":
                 events.PressureChange = intensity;
                 break;
         }

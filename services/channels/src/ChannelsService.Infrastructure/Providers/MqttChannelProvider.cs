@@ -4,6 +4,7 @@ using ChannelsService.Domain.Entities;
 using ChannelsService.Domain.Enums;
 using ChannelsService.Domain.Events;
 using ChannelsService.Infrastructure.Options;
+using ChannelsService.Infrastructure.Messaging.Reliability;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
@@ -80,7 +81,13 @@ public sealed class MqttChannelProvider : ChannelProviderBase
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "MQTT send failed for event {EventId}.", notification.EventId);
-            return new DeliveryResultDTO { Success = false, Error = exception.Message, ProviderName = ProviderName };
+            return new DeliveryResultDTO
+            {
+                Success = false,
+                IsTransient = TransientFailureClassifier.IsTransient(exception),
+                Error = exception.Message,
+                ProviderName = ProviderName
+            };
         }
     }
 }

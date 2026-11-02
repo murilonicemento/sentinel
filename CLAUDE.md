@@ -29,6 +29,9 @@ dotnet run --project services/<service>/src/<Service>.Api
 docker compose -f platform/docker-compose.yml up -d
 docker compose -f platform/docker-compose.yml down
 
+# Build one service image outside compose (Dockerfiles read Directory.Packages.props from the repo root)
+docker build --build-context repo-root=. -t <service> services/<service>
+
 # EF Core migrations (example: tenants-billing)
 dotnet ef migrations add <Name> \
   --project services/tenants-billing/src/TenantsBilling.Infrastructure \
@@ -37,7 +40,26 @@ dotnet ef migrations add <Name> \
 
 Tests use xUnit and Moq. Integration tests use `WebApplicationFactory`, and some use Testcontainers (Postgres, Redis, Kafka).
 
-**Solution membership:** `Sentinel.sln` includes every service except `tenants-billing`, which only has its own `services/tenants-billing/TenantsBilling.sln`. The constitution says each service should have its own `.sln`. In practice, the root solution is what holds most services, so when you add a project, add it to the right solution(s).
+NuGet versions are managed centrally in `Directory.Packages.props` (`ManagePackageVersionsCentrally`). `PackageReference` items in `.csproj` files carry no `Version`; add or bump versions only in `Directory.Packages.props`. A per-project exception uses `VersionOverride` and must be documented in `docs/compliance/services-validation.md` (X-06). Every Dockerfile copies that file from the `repo-root` build context, which `platform/docker-compose.yml` defines for each service.
+
+**Solution and Project Organization**
+
+The repository must have a single .NET solution: `Sentinel.sln`, located at the repository root.
+
+- `Sentinel.sln` is the solution for the entire Sentinel platform, not for an individual microservice.
+- Every application, infrastructure, domain, API, unit test, and integration test project must be included in `Sentinel.sln`.
+- Microservices are organized into separate directories under `services/<service-name>/`, but their projects remain members of the root solution.
+- **Never create a separate `.sln` file for an individual microservice.** Do not create files such as `services/tenants-billing/TenantsBilling.sln`.
+- When creating a new project, add it to the existing `Sentinel.sln` using `dotnet sln Sentinel.sln add <project-path>`.
+- When creating a new microservice, add all its projects to `Sentinel.sln`, including test projects.
+- When modifying an existing service, preserve the single-solution structure and ensure all new projects are registered in `Sentinel.sln`.
+- Project references must follow the dependency rules defined in `docs/constitution.md`. Solution membership does not imply that projects may reference one another freely.
+- Build and test the entire platform from the root solution using `dotnet build Sentinel.sln` and `dotnet test Sentinel.sln`.
+- Individual projects may still be built, tested, or executed directly using their `.csproj` paths when necessary. This does not justify creating additional solution files.
+
+**Current repository state:** `Sentinel.sln` contains every .NET project in the repository, including `tenants-billing` (its former `TenantsBilling.sln` was migrated and removed). Verify with `dotnet sln Sentinel.sln list`.
+
+**Non-negotiable rule:** One repository, one solution (`Sentinel.sln`), multiple microservices, and independently organized projects.
 
 ## Architecture
 
@@ -67,19 +89,44 @@ The constitution enforces these rules:
 
 Topics are created by the `kafka-init` container in `platform/docker-compose.yml`. When you add a topic, add it there too.
 
-1. **ingestion** polls external sources (USGS earthquakes, FIRMS fire, NOAA, Stormglass, etc.) and takes in sensor data. It writes through a transactional **outbox** (`OutboxHostedService`) and publishes `sensor-event-detected`, `disaster-event-detected` and `climatic-event-detected`.
-2. **risk-catalog** manages event types, severities, IDF curves, risk matrices and regional parameters, and publishes `risk-catalog-published`.
-3. **geospatial** handles geometry operations with NetTopologySuite and Elasticsearch. It also exposes a synchronous HTTP API that ingestion, risk-catalog and risk-evaluation call. It consumes `sensor-event-detected`, publishes `region-intersected`, and sends failures to `geospatial-dead-letter`.
-4. **risk-evaluation** consumes sensor events and catalog updates, scores risk, caches recent scores in Redis, and publishes `risk-updated` / `risk-evaluated`.
-5. **alert-orchestrator** consumes `risk-updated` and `region-intersected`. It manages the `AlertWindow` aggregate (quorum, cooldown, escalation and expiration workers) and publishes to `alert-orchestrator-events` and `alert-commands`.
-6. **channels** delivers notifications (SMS/WhatsApp via Twilio, email via SendGrid, push, MQTT, sirens) with retry, fallback and DLQ handling (`notification-events`, `notification-events-dlq`).
-7. **reporting** consumes events for dashboards, analytics and exports, with a DLQ consumer. Its implementation status is tracked in `docs/reporting-service-status.md`.
-8. **tenants-billing** manages tenants and plans. It consumes `tenant-usage-events` (with `-dlq` / `-replay` topics) and publishes `tenants-billing-events`. Other services check whether a tenant is active over synchronous HTTP (`GET /api/v1/tenants/{id}`) through their own `TenantBillingGateway`.
-9. **api-gateway** uses Ocelot (`ocelot.json`) to route to the services.
+The sensor → risk → alert → delivery path is connected by `docs/adr/ADR-0008-event-pipeline-contracts.md`; usage, reporting and audit feeds are in ADR-0009 to ADR-0011, and the remaining topics were settled by `docs/adr/ADR-0012-remaining-pipeline-topics.md` (X-24 in `docs/compliance/services-validation.md`; topic map in `.claude/rules/backward-compatibility.md`). The steps below say what each service actually reads and writes; the "Estado da implementação" section of each `docs/services/*.md` has the details. A contract between two services is tested on both sides with the same JSON sample.
+
+1. **ingestion** takes in sensor data over HTTP and polls external sources (USGS earthquakes, NASA FIRMS fire, NOAA CDO, Stormglass) per tenant subscription (`docs/adr/ADR-0005-external-polling-and-region-identity.md`). Each source is enabled in `platform/.env` with its provider key; subscriptions (tenant, data source, area) live in `platform/config/ingestion-polling.json`, mounted as `appsettings.Polling.json`. Polled readings skip the data source's collection frequency and are deduplicated by the provider's event id. It writes through a transactional **outbox** (`OutboxHostedService`) and publishes `SensorEventDetected` (with `TenantId`) to `disaster-event-detected` and `climatic-event-detected`. `sensor-event-detected` is deprecated: nothing publishes it.
+2. **risk-catalog** manages event types, severities, IDF curves, risk matrices and regional parameters (identified by a unique `regionCode`, required in v1), and publishes `risk-catalog-published`. After each publication risk-evaluation copies that version (regional factors, severity criteria, matrix) through the paged v1 listings into its local `CatalogSnapshots`, and evaluations read only that copy.
+3. **geospatial** handles geometry operations with NetTopologySuite and Elasticsearch. It also exposes a synchronous HTTP API that ingestion and risk-catalog call. It consumes `disaster-event-detected` and `climatic-event-detected` (`KafkaConsumerOptions:Topics`, indexing each event) and sends failures to `geospatial-dead-letter`. It publishes nothing: an HTTP `intersects` call is indexed, not announced.
+4. **risk-evaluation** consumes `disaster-event-detected`, `climatic-event-detected` and `risk-catalog-published`, scores risk, caches recent scores in Redis, and publishes `RiskEvaluatedEvent` / `HighRiskDetectedEvent` to `risk-events` (`Kafka:Topic`, no consumer; deprecated, sunset 2027-01-31, `Kafka:PublishRiskEvents=false` stops it, `docs/adr/ADR-0012-remaining-pipeline-topics.md`) and, for a sensor event with a tenant inside a catalog region, `RiskUpdatedEvent` to `risk-updated` (`Region` = the region's `regionCode`, `EventId` = the sensor event id). Evaluations, the recent-score cache (`risk:score:v2:{lat}:{lon}`) and its events keep the exact position; the HTTP contract still takes and returns whole degrees, and the history returns a whole-degree cell (RE-18).
+5. **alert-orchestrator** consumes `risk-updated` (a `TenantId` is required) and `region-intersected` (no producer; the consumer is deprecated, sunset 2027-01-31). It manages the `AlertWindow` aggregate (quorum, cooldown, escalation and expiration workers) and publishes to `alert-orchestrator-events` (an output topic with no internal consumer, by decision) and `alert-commands` (`TriggerAlertCommand` with the window's tenant). Every signal counts as a sensor signal, so the default rules require neither a satellite nor distinct sources.
+6. **channels** delivers notifications (SMS/WhatsApp via Twilio, email via SendGrid, push, MQTT, sirens) with retry, fallback and DLQ handling (`notification-events`, `notification-events-dlq`). It also consumes `alert-commands`, turning each trigger into a notification with event id `alert:{window}:{level}`. Only its own reprocessing endpoint publishes to `notification-events`.
+7. **reporting** consumes `reporting-events` (`AlertTriggered` from alert-orchestrator, `NotificationSent` / `NotificationFailed` from channels, `docs/adr/ADR-0010-reporting-event-feed.md`) for dashboards, analytics and exports, with a DLQ consumer that republishes recoverable failures to `reporting-events-replay`; the main consumer reads that topic too (a replay that fails again is terminal, REP-09). Its implementation status is in `docs/services/Reporting.md` §6.12.
+8. **tenants-billing** manages tenants and plans, and accumulates usage per calendar month in the tenant's time zone against the plan limits (each usage `SourceEventId` is counted once). It consumes `tenant-usage-events` (with `-dlq` / `-replay` topics), published by ingestion (events per collection, through the outbox), alert-orchestrator (one per triggered window) and channels (one per delivered channel), each with a deterministic `EventId` (`docs/adr/ADR-0009-tenant-usage-metering.md`; nothing reports `ApiRequests`). It publishes `tenants-billing-events`. Other services check whether a tenant is active over synchronous HTTP (`GET /api/v1/tenants-billing/tenants/{id}`) through their own `TenantBillingGateway`, which also accepts the legacy body (numeric `status`) of the deprecated `GET /api/v1/tenants/{id}`.
+9. **audit-compliance** consumes auditable events from `audit-events` (and `audit-events-replay`), persists append-only records in MongoDB, and sends invalid messages to `audit-events-dlq`. It exposes queries and async CSV/JSON exports under `/api/v1/audit-compliance`. Only tenants-billing publishes to `audit-events` (`TenantCreated` and `TenantUpdated`, with the token's `sub` as actor, `docs/adr/ADR-0011-tenant-administration-audit.md`). Status and contract are in `docs/audit-compliance-service-status.md`, decisions in `docs/adr/ADR-0001-audit-compliance-service.md`.
+10. **api-gateway** uses Ocelot (`ocelot.json`) to route to the services.
+
+### Authentication and tenant access
+
+`docs/adr/ADR-0002-service-authentication.md` defines the model. Every service API validates HS256 JWTs from `Jwt:Issuer` / `Jwt:Audience` / `Jwt:SigningKey`, with a fallback policy that rejects anonymous requests; only health checks, `/metrics` and dev-only OpenAPI/Scalar are `AllowAnonymous`. Roles are `<Service>.Admin` / `.Read` / `.Write` in the `role` claim, and tenants come from the multi-valued `tenant_id` claim (checked by each API's `Security/TenantAccessEvaluator`).
+
+Service-to-service calls carry a short-lived token signed with the caller's own key (`ServiceToken:*`, attached by `Infrastructure/Security/ServiceTokenHandler`). The called service lists each caller in `Jwt:TrustedServices` with its issuer, key and `AllowedRoles`, and drops any other role. When a service starts calling another one, add it to that service's `Jwt:TrustedServices`, to `platform/docker-compose.yml` and to `platform/.env.example`. Signing keys never go in `appsettings*.json`; use User Secrets locally and `platform/.env` for compose.
+
+Each service has its own copy of the `Security` classes (no shared library yet), so keep the copies in sync when one changes.
 
 ### Conventions worth knowing
 
+- Every service exposes its public contract under `/api/v1/<service>`: `ResponseBaseDTO` envelope, RFC 9457 Problem Details (`code` and `traceId` extensions, built by each API's `Contracts/ApiProblems` and `ApiExceptionHandler`) and `page`/`pageSize` pagination (default 10, max 50). Older routes are frozen and deprecated (`Deprecation`/`Sunset`/`Link` headers, sunset 2027-01-23); add new behavior only to v1. Routes and error codes are listed in `docs/compliance/services-validation.md` §4.2.
 - Several services choose adapters from config flags, for example `UsePostgreSql` / `UseRedis` in `*InfrastructureOptions`. With the flags off, they fall back to in-memory repositories and idempotency services. Check these flags when a service "loses" data or ignores Redis.
-- Consumers that publish domain events are expected to be idempotent, using a Redis-backed idempotency or dedup service.
-- Observability goes through Serilog (console + Loki), OpenTelemetry, and a Prometheus exporter on some services. Dashboards are provisioned from `platform/observability/grafana/provisioning`.
-- Database bootstrap scripts are in `platform/init-db/{postgres,mongodb}`.
+- Kafka consumers follow `docs/adr/ADR-0003-message-consumption-reliability.md`: each consuming service has a copy of `Infrastructure/Messaging/Reliability` (`ReliableConsumerLoop`, `ReliableMessageProcessor`, its own `TransientFailureClassifier`). Offsets are committed only after the message is handled or dead-lettered; transient failures get at most 3 attempts, then the consumer seeks back and pauses. Each service has its own dead-letter topic (`<service>-dead-letter`, or the existing `geospatial-dead-letter` / `tenant-usage-events-dlq` formats). Never set `EnableAutoCommit = true` or commit in a `catch`.
+- Consumers with side effects are idempotent through an atomic Redis claim (`SET NX` with a lease, released on failure): `alert-orchestrator:idempotency:v2:{eventId}`, `risk-evaluation:consumed:v1:{key}`, ingestion's `ing:{tenant}:{dataSource}:{timestamp}` (HTTP collections) and `ing:{tenant}:{dataSource}:src:{providerEventId}` (polled readings). `SensorEventDetected.EventId` is deterministic per collection sample, so retries republish the same id.
+- Observability follows `docs/adr/ADR-0004-platform-observability.md`. Each Api has a copy of `Observability/ObservabilityExtensions` (`AddSentinelObservability`, `UseSentinelRequestLogging`, `MapSentinelOperationalEndpoints`), which sets up:
+  - Serilog to console + Loki (label `service`, `TraceId`/`SpanId` on every event);
+  - OpenTelemetry traces over OTLP to Tempo;
+  - Prometheus metrics on `/metrics`;
+  - `/health/live` (no dependencies), `/health/ready` (checks tagged `ready`) and `/health` (all checks).
+
+  Loki and OTLP are enabled only when `Loki:Url` / `OpenTelemetry:OtlpEndpoint` are set; compose sets both. Put only log levels in `Serilog` in `appsettings.json`, never sinks. Kafka producers and consumers carry W3C trace context in the message headers through each Infrastructure's copy of `Messaging/KafkaTracing`, so a new producer or consumer should use it too. Grafana datasources and dashboards are provisioned from `platform/observability/grafana/provisioning`, Tempo's config is in `platform/observability/tempo`, and Prometheus scrapes every service from `platform/observability/prometheus/prometheus.yml` (add new services there).
+- Alerts and dashboards follow `docs/adr/ADR-0006-alerts-and-dashboards.md`: Grafana Alerting rules in `platform/observability/grafana/provisioning/alerting` (webhook from `ALERT_WEBHOOK_URL`), dashboards in `.../dashboards/sentinel`. They are files: edits made in the Grafana UI do not persist. The reliability kit counts consumer outcomes in `Messaging/Reliability/MessagingMetrics` (`sentinel_messages_handled_total{topic,outcome}`); keep the copies in sync.
+- api-gateway applies a per-client-IP fixed-window rate limit (`RateLimiting:PermitLimit` / `WindowSeconds`, default 300/60 s, 429 with `Retry-After`). It ignores `X-Forwarded-For`, and health and `/metrics` are exempt. Its own endpoints run before Ocelot.
+- Required settings (Kafka bootstrap servers, base URLs of other services, store connection strings) have no `localhost` fallback in code: they are read at registration and fail startup with the key name. Local defaults live in `appsettings.json`, and compose overrides them.
+- ingestion's write side (Dapper) opens one connection per DI scope from a shared `NpgsqlDataSource`; multi-table writes go through `IUnitOfWork`. A collection, its samples and its outbox rows commit in one transaction with deterministic ids (`ON CONFLICT DO NOTHING`), so a retried collection writes nothing twice. Its schema (`ingestion` section of `postgres/2-schema.sql`) is hand-written and idempotent: change it there, and keep it compatible with existing databases (`ADD COLUMN IF NOT EXISTS`).
+- Integration tests of ingestion (`tests/.../Stack`) and risk-catalog (`tests/.../Stack`) run the real `2-schema.sql` sections on Testcontainers and replace only calls to other services.
+- The public MinIO images are no longer published; compose and the tests use `cgr.dev/chainguard/minio` pinned by digest (runs as uid 65532).
+- Database bootstrap scripts are in `platform/init-db/{postgres,mongodb}`. The `risk_catalog`, `alert_orchestrator`, `channels` and `tenants_billing` sections of `postgres/2-schema.sql` are the idempotent scripts generated from each service's EF migrations (`dotnet ef migrations script --idempotent`); regenerate them after adding a migration instead of editing the SQL by hand. Migrations are never applied at application startup.

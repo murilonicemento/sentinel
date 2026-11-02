@@ -79,4 +79,19 @@ public class EventTypeRepository : IEventTypeRepository
 
         return result > 0;
     }
+
+    public async Task<(IReadOnlyList<SeverityCriterion> Items, long TotalItems)> GetSeverityCriteriaPageAsync(
+        int? version, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.SeverityCriteria.AsNoTracking().Include(c => c.EventType).Include(c => c.Severity)
+            .AsQueryable();
+        if (version.HasValue) query = query.Where(c => c.Version == version.Value);
+
+        var total = await query.LongCountAsync(cancellationToken);
+        var items = await query
+            .OrderBy(c => c.EventType.Code).ThenBy(c => c.Version).ThenBy(c => c.MinValue).ThenBy(c => c.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .ToListAsync(cancellationToken);
+        return (items, total);
+    }
 }

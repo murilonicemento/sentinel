@@ -18,7 +18,8 @@ public class TenantRepository : ITenantRepository
     {
         var query = @"SELECT 1 FROM tenant WHERE id = @TenantId AND is_active = true";
         var result =
-            await _writeDbContext.Connection.QueryFirstOrDefaultAsync<int?>(query, new { TenantId = tenantId });
+            await _writeDbContext.Connection.QueryFirstOrDefaultAsync<int?>(query, new { TenantId = tenantId },
+                _writeDbContext.Transaction);
         return result.HasValue;
     }
 
@@ -28,7 +29,8 @@ public class TenantRepository : ITenantRepository
                           FROM tenant 
                           WHERE id = @TenantId AND is_active = true";
 
-        return await _writeDbContext.Connection.QueryFirstOrDefaultAsync<Tenant>(query, new { TenantId = tenantId });
+        return await _writeDbContext.Connection.QueryFirstOrDefaultAsync<Tenant>(query, new { TenantId = tenantId },
+            _writeDbContext.Transaction);
     }
 
     public async Task<Tenant> RegisterAsync(Tenant tenant)
@@ -36,7 +38,7 @@ public class TenantRepository : ITenantRepository
         var query = @"INSERT INTO tenant (id, name, is_active, created_at) 
                           VALUES (@Id, @Name, @IsActive, @CreatedAt)";
 
-        await _writeDbContext.Connection.ExecuteAsync(query, tenant);
+        await _writeDbContext.Connection.ExecuteAsync(query, tenant, _writeDbContext.Transaction);
         return tenant;
     }
 }

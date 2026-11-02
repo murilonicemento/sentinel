@@ -1,0 +1,31 @@
+{
+  "Polling": {
+    "Earthquake": {
+      "Subscriptions": []
+    },
+    "Fire": {
+      "Subscriptions": []
+    },
+    "Flood": {
+      "Subscriptions": []
+    },
+    "Landslide": {
+      "Subscriptions": []
+    },
+    "TemperatureAnomaly": {
+      "Subscriptions": []
+    },
+    "HumidityAnomaly": {
+      "Subscriptions": []
+    },
+    "WindGust": {
+      "Subscriptions": []
+    },
+    "Rainfall": {
+      "Subscriptions": []
+    },
+    "PressureChange": {
+      "Subscriptions": []
+    }
+  }
+}

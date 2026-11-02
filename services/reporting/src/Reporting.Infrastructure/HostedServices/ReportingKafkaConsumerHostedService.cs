@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Reporting.Application.Interfaces;
 using Reporting.Domain.Entities;
 using Reporting.Domain.Interfaces;
+using Reporting.Infrastructure.Messaging;
 
 namespace Reporting.Infrastructure.HostedServices;
 
@@ -30,6 +31,9 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Consume() blocks; without yielding first, the loop would run synchronously inside StartAsync and block host startup.
+        await Task.Yield();
+
         var bootstrapServers = _configuration["Kafka:BootstrapServers"];
         if (string.IsNullOrWhiteSpace(bootstrapServers))
         {
@@ -38,6 +42,7 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
         }
 
         var topic = _configuration["Kafka:Topic"] ?? "reporting-events";
+        var replayTopic = _configuration["Kafka:ReplayTopic"] ?? "reporting-events-replay";
         var groupId = _configuration["Kafka:ConsumerGroupId"] ?? "reporting-service-group";
 
         var config = new ConsumerConfig
@@ -60,35 +65,42 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
             .SetErrorHandler((_, error) => _logger.LogError("Kafka consumer error: {Reason}", error.Reason))
             .Build();
 
-        consumer.Subscribe(topic);
-        _logger.LogInformation("Reporting Kafka consumer subscribed to topic {Topic} with DLQ {DeadLetterTopic}", topic, deadLetterTopic);
+        consumer.Subscribe(new[] { topic, replayTopic });
+        _logger.LogInformation("Reporting Kafka consumer subscribed to topics {Topic} and {ReplayTopic} with DLQ {DeadLetterTopic}",
+            topic, replayTopic, deadLetterTopic);
 
         try
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                ConsumeResult<Ignore, string>? consumeResult = null;
                 try
                 {
-                    var consumeResult = consumer.Consume(stoppingToken);
+                    consumeResult = consumer.Consume(stoppingToken);
                     if (consumeResult?.Message?.Value is null)
                     {
                         continue;
                     }
 
-                    var envelopes = ParseEnvelopes(consumeResult.Message.Value);
+                    using var activity = KafkaTracing.StartProcess(consumeResult.Topic, consumeResult.Message.Headers,
+                        consumeResult.Partition.Value, consumeResult.Offset.Value);
+                    var sourceTopic = consumeResult.Topic;
+                    var payload = ResolvePayload(sourceTopic, replayTopic, consumeResult.Message.Value);
+                    var envelopes = ParseEnvelopes(payload ?? string.Empty);
                     if (envelopes.Count == 0)
                     {
-                        _logger.LogWarning("Received invalid reporting envelope payload on topic {Topic}. Sending to dead-letter queue.", topic);
+                        _logger.LogWarning("Received invalid reporting envelope payload on topic {Topic}. Sending to dead-letter queue.", sourceTopic);
                         await PublishDeadLetterAsync(
-                            consumeResult.Message.Value,
+                            payload ?? consumeResult.Message.Value,
                             deadLetterTopic,
-                            topic,
+                            sourceTopic,
                             "Invalid payload structure",
                             consumeResult.Partition.Value,
                             consumeResult.Offset.Value,
                             0,
                             stoppingToken);
                         consumer.Commit(consumeResult);
+                        MessagingMetrics.DeadLettered(consumeResult.Topic);
                         continue;
                     }
 
@@ -100,7 +112,7 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                         eventConsumer,
                         auditRepository,
                         envelopes,
-                        topic,
+                        sourceTopic,
                         consumeResult.Partition.Value,
                         consumeResult.Offset.Value,
                         maxAttempts,
@@ -110,19 +122,21 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                         stoppingToken))
                     {
                         consumer.Commit(consumeResult);
+                        MessagingMetrics.Processed(consumeResult.Topic);
                     }
                     else
                     {
                         await PublishDeadLetterAsync(
-                            consumeResult.Message.Value,
+                            payload!,
                             deadLetterTopic,
-                            topic,
+                            sourceTopic,
                             "Processing failed after retries",
                             consumeResult.Partition.Value,
                             consumeResult.Offset.Value,
                             maxAttempts,
                             stoppingToken);
                         consumer.Commit(consumeResult);
+                        MessagingMetrics.DeadLettered(consumeResult.Topic);
                     }
                 }
                 catch (OperationCanceledException)
@@ -132,6 +146,14 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                 catch (Exception exception)
                 {
                     _logger.LogError(exception, "Error consuming reporting event from Kafka");
+                    // Not committing is not enough: the next commit would move past this message. Read it again
+                    // after a pause instead.
+                    if (consumeResult is not null)
+                    {
+                        MessagingMetrics.NotDurable(consumeResult.Topic);
+                        consumer.Seek(consumeResult.TopicPartitionOffset);
+                        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                    }
                 }
             }
         }
@@ -139,6 +161,37 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
         {
             consumer.Close();
         }
+    }
+
+    /// <summary>
+    /// Returns the reporting payload carried by a consumed message. Messages on the replay topic wrap it in
+    /// <c>originalPayload</c> (<see cref="BuildReprocessingMessage"/>); messages on any other topic are the payload
+    /// itself. Returns <c>null</c> for a replay message without a payload.
+    /// </summary>
+    public static string? ResolvePayload(string consumedTopic, string replayTopic, string value)
+    {
+        if (!string.Equals(consumedTopic, replayTopic, StringComparison.Ordinal))
+        {
+            return value;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(value);
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && TryGetProperty(document.RootElement, "originalPayload", out var original)
+                && original.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(original.GetString()))
+            {
+                return original.GetString();
+            }
+        }
+        catch (JsonException)
+        {
+            // A replay message that is not JSON carries no payload.
+        }
+
+        return null;
     }
 
     public static List<ReportingEventEnvelope> ParseEnvelopes(string payload)
@@ -342,42 +395,36 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
 
     private async Task PublishDeadLetterAsync(string payload, string deadLetterTopic, string sourceTopic, string reason, int partition, long offset, int attempts, CancellationToken cancellationToken)
     {
-        try
+        var producerConfig = new ProducerConfig
         {
-            var producerConfig = new ProducerConfig
-            {
-                BootstrapServers = _configuration["Kafka:BootstrapServers"],
-                EnableIdempotence = true,
-                Acks = Acks.All,
-                MessageSendMaxRetries = 3,
-                RetryBackoffMs = 1000
-            };
+            BootstrapServers = _configuration["Kafka:BootstrapServers"],
+            EnableIdempotence = true,
+            Acks = Acks.All,
+            MessageSendMaxRetries = 3,
+            RetryBackoffMs = 1000
+        };
 
-            using var producer = new ProducerBuilder<Null, string>(producerConfig).Build();
-            var messageBody = BuildDeadLetterMessage(payload, sourceTopic, reason, attempts, partition, offset);
-            var headers = new Headers();
-            headers.Add("source-topic", System.Text.Encoding.UTF8.GetBytes(sourceTopic));
-            headers.Add("dead-letter-reason", System.Text.Encoding.UTF8.GetBytes(reason));
-            headers.Add("dead-lettered-at", System.Text.Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o")));
+        using var producer = new ProducerBuilder<Null, string>(producerConfig).Build();
+        var messageBody = BuildDeadLetterMessage(payload, sourceTopic, reason, attempts, partition, offset);
+        var headers = new Headers();
+        headers.Add("source-topic", System.Text.Encoding.UTF8.GetBytes(sourceTopic));
+        headers.Add("dead-letter-reason", System.Text.Encoding.UTF8.GetBytes(reason));
+        headers.Add("dead-lettered-at", System.Text.Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o")));
 
-            var message = new Message<Null, string>
-            {
-                Value = messageBody,
-                Headers = headers
-            };
-
-            var deliveryResult = await producer.ProduceAsync(deadLetterTopic, message, cancellationToken);
-            _logger.LogWarning(
-                "Published dead letter for source topic {SourceTopic} to {DeadLetterTopic} at partition {Partition} offset {Offset}",
-                sourceTopic,
-                deadLetterTopic,
-                deliveryResult.Partition.Value,
-                deliveryResult.Offset.Value);
-        }
-        catch (Exception exception)
+        var message = new Message<Null, string>
         {
-            _logger.LogError(exception, "Failed to publish dead letter payload to topic {DeadLetterTopic}", deadLetterTopic);
-        }
+            Value = messageBody,
+            Headers = headers
+        };
+        using var activity = KafkaTracing.StartPublish(deadLetterTopic, headers);
+
+        var deliveryResult = await producer.ProduceAsync(deadLetterTopic, message, cancellationToken);
+        _logger.LogWarning(
+            "Published dead letter for source topic {SourceTopic} to {DeadLetterTopic} at partition {Partition} offset {Offset}",
+            sourceTopic,
+            deadLetterTopic,
+            deliveryResult.Partition.Value,
+            deliveryResult.Offset.Value);
     }
 
     private static JsonSerializerOptions CreateJsonOptions() => new()

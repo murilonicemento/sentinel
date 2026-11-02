@@ -6,79 +6,88 @@ Prevent unintended breakage for existing consumers, integrations, data contracts
 
 ## Compatibility Scope
 
+The tables below were verified against the code and `platform/docker-compose.yml` on 2026-10-29. Each service's `docs/services/*.md` has an "Estado da implementação" section with the details.
+
 ### Public APIs and External Integrations
 
-The following external APIs, providers, and infrastructure integrations are part of the current compatibility scope.
+Every service exposes its public contract under `/api/v1/<service>`; the older routes are frozen and deprecated until 2027-01-23 (`docs/adr/ADR-0007-api-versioning-and-deprecation.md`). Internal callers of a deprecated route must move to v1 before the sunset; no known internal caller uses a deprecated route since ingestion and risk-catalog moved to geospatial's v1 operations (X-25).
 
 | Service               | API or Integration                                   | Purpose                                                       | Authentication / Configuration                                                                     |
 | --------------------- | ---------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| ingestion             | USGS Earthquake (`earthquake.usgs.gov`)              | Earthquake data (`fdsnws/event/1/query`)                      | No API key required                                                                                |
-| ingestion             | NASA FIRMS (`firms.modaps.eosdis.nasa.gov`)          | Fire detections (VIIRS CSV)                                   | `MapKey`                                                                                           |
-| ingestion             | NOAA NCEI CDO v2 (`ncei.noaa.gov/cdo-web/api/v2`)    | `Flood`, `Landslide`, `TemperatureAnomaly`, `HumidityAnomaly` | Token configured in `appsettings.Development.json`; URLs use `*.example.com` in `appsettings.json` |
-| ingestion             | Stormglass v2 (`api.stormglass.io/v2/weather/point`) | `WindGust`, `Rainfall`, `PressureChange`                      | `APIKey`                                                                                           |
-| ingestion             | MinIO (S3)                                           | File storage; bucket `sentinel-ingestion-service`             | Access key and secret key in configuration                                                         |
-| channels              | SendGrid                                             | Email delivery                                                | `ApiKey`                                                                                           |
-| channels              | Twilio                                               | SMS and WhatsApp delivery                                     | `AccountSid` and `AuthToken`                                                                       |
-| channels              | MQTT broker                                          | MQTT notification channel (`notifications/mqtt`)              | Defaults to `localhost:1883`                                                                       |
-| channels              | HTTP Push and HTTP Siren                             | Custom push and siren providers                               | `localhost:5010/api/push`, `localhost:5011/api/siren`; API key required for push                   |
+| ingestion             | USGS Earthquake (`earthquake.usgs.gov`)              | Earthquake data (`fdsnws/event/1/query`)                      | No API key required; polling off unless `POLLING_EARTHQUAKE_ENABLED=true`                          |
+| ingestion             | NASA FIRMS (`firms.modaps.eosdis.nasa.gov`)          | Fire detections (VIIRS S-NPP NRT CSV, FRP in MW)              | Map key in the request path, from `POLLING_FIRMS_MAP_KEY`                                          |
+| ingestion             | NOAA NCEI CDO v2 (`ncei.noaa.gov/cdo-web/api/v2`)    | `Flood`, `Landslide`, `TemperatureAnomaly`, `HumidityAnomaly` | `token` header, from `POLLING_NOAA_TOKEN`                                                          |
+| ingestion             | Stormglass v2 (`api.stormglass.io/v2/weather/point`) | `WindGust`, `Rainfall`, `PressureChange`                      | Raw key in the `Authorization` header, from `POLLING_STORMGLASS_API_KEY`                           |
+| ingestion             | MinIO (S3)                                           | Raw payloads (`raw/{collectionId}.json`); bucket `sentinel-ingestion-service` | `MinIO:AccessKey` / `SecretKey`, from `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` in compose |
+| channels              | SendGrid                                             | Email delivery                                                | `SENDGRID_API_KEY`                                                                                 |
+| channels              | Twilio                                               | SMS and WhatsApp delivery                                     | `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`                                                       |
+| channels              | MQTT broker                                          | MQTT notification channel (`notifications/mqtt`)              | `ChannelsService:Providers:MQTT:Options` (local default `localhost:1883`)                         |
+| channels              | HTTP Push and HTTP Siren                             | Custom push and siren providers                               | `localhost:5010/api/push`, `localhost:5011/api/siren`; `PUSH_API_KEY`, `SIREN_API_KEY`             |
 | geospatial, reporting | Elasticsearch 8.17.4                                 | `geospatial-events` and `reporting-events` indices            | No authentication configured                                                                       |
+
+Polling subscriptions (tenant, data source, area) live in `platform/config/ingestion-polling.json` (`docs/adr/ADR-0005-external-polling-and-region-identity.md`). Provider credentials never go in `appsettings*.json`.
 
 ### Database Schemas
 
-PostgreSQL 15.5 is used, with one database per service.
+PostgreSQL 15.5 is used, with one database per service, created by `platform/init-db/postgres/1-database.sql`.
 
-| Database           | Tables and Schema Notes                                                                                                                                                |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ingestion (write)  | `tenant`, `data_source`, `event_type_permission`, `data_collection`, `sensor_sample`, `outbox`. The `outbox` schema is managed through manual SQL rather than EF Core. |
-| risk_catalog       | `users`, `event_type`, `severity`, `severity_criterion`, `idf_curve`, `regional_parameter`, `risk_matrix`                                                              |
-| alert_orchestrator | `alert_windows`, `alert_signals`                                                                                                                                       |
-| channels           | `delivery_attempts`                                                                                                                                                    |
-| tenants_billing    | `tenants`, `plans`                                                                                                                                                     |
+| Database           | Tables and Schema Notes                                                                                                                                                                  |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ingestion          | `tenant`, `data_source`, `event_type_permission`, `data_collection`, `sensor_sample`, `outbox`. Hand-written, idempotent SQL in the `ingestion` section of `2-schema.sql` (Dapper, no EF). |
+| risk_catalog       | `users`, `event_type`, `severity`, `severity_criterion`, `idf_curve`, `regional_parameter` (unique `region_code`), `risk_matrix`                                                         |
+| alert_orchestrator | `alert_windows`, `alert_signals`                                                                                                                                                         |
+| channels           | `delivery_attempts`                                                                                                                                                                      |
+| tenants_billing    | `tenants`, `plans`, `tenant_usage`, `recorded_usage_events`                                                                                                                              |
 
-The file `platform/init-db/postgres/2-schema.sql` is outdated: it does not include `users`, and the channels database name differs from the application configuration (`channels_service`). Treat the actual EF Core models and current database migrations as the sources of truth for EF-managed schemas. Verify manually managed SQL schemas separately.
+The `risk_catalog`, `alert_orchestrator`, `channels` and `tenants_billing` sections of `platform/init-db/postgres/2-schema.sql` are generated from the EF Core migrations (`dotnet ef migrations script --idempotent`) and must be regenerated after a migration. The integration tests of ingestion and risk-catalog run those sections on PostgreSQL 15.5.
 
 **MongoDB 7**
 
-- **ingestion (read):** `climaticEvents` and `disasterEvents` collections, with unique indexes on `EventId`.
-- **risk-evaluation:** `RiskEvaluations`, `RiskModels`, and `RiskFactors` collections.
+- **ingestion (read):** `climaticEvents` and `disasterEvents` (unique indexes on `EventId`), written by the pipeline and read by v1. The frozen legacy routes read `events`, which nothing writes.
+- **risk-evaluation:** `RiskEvaluations` (exact `double` coordinates; documents stored before RE-18 hold whole-degree integers and stay readable), `RiskModels`, `RiskFactors`, `CatalogVersions` and `CatalogSnapshots`.
+- **audit-compliance:** `AuditComplianceDatabase` with `auditRecords` (append-only, unique index on `SourceService` + `EventId`), `auditExports`, and the GridFS bucket `auditExportFiles`. The custom role `auditComplianceApp` denies `update`/`remove` on `auditRecords`. Index and role definitions live in `platform/init-db/mongodb` and `MongoIndexInitializer`.
 
 **Redis 7**
 
-- **ingestion:** Event deduplication with TTL.
-- **risk-catalog:** Generic cache.
-- **risk-evaluation:** Recent scores using the `risk-evaluation:` prefix.
-- **alert-orchestrator:** Cooldown state keyed by `(region, riskType, tenantId)`.
+- **ingestion:** Deduplication claims `ing:{tenant}:{dataSource}:{yyyyMMddHHmmss}` (HTTP collections) and `ing:{tenant}:{dataSource}:src:{providerEventId}` (polled readings), with a lease while processing and a TTL after it.
+- **risk-catalog:** Read cache of risk matrices and IDF curves (TTL of 1 hour).
+- **risk-evaluation:** Recent scores by exact position under `risk:score:v2:{latitude}:{longitude}` (TTL of 5 minutes; the older whole-degree keys `risk:score:{lat}:{lon}` expire on their own), and consumption claims `risk-evaluation:consumed:v1:{key}`.
+- **alert-orchestrator:** Idempotency claims `alert-orchestrator:idempotency:v2:{eventId}` and cooldown state keyed by `(region, riskType, tenantId)`.
 - **channels:** Tenant settings under `ChannelsService:TenantSettings:{tenantId}`, with a TTL of 300 seconds.
-- **reporting:** Query cache with a TTL of 5 minutes and event cache with a TTL of 10 minutes.
+- **reporting:** `reporting:events:{tenantId}` (TTL of 5 minutes) and `reporting:event:{tenantId}:{eventId}` (TTL of 10 minutes).
 
 **Elasticsearch**
 
-- `geospatial-events`: Geospatial data.
+- `geospatial-events`: Geospatial operations and consumed sensor events.
 - `reporting-events`: Reporting data.
 
 ### Events and Messages
 
-The following event topics, producers, consumers, and payloads are part of the compatibility scope. Entries marked as not identified require verification against the actual implementation and runtime configuration.
+Producers and consumers were verified in the code. A topic with no producer or no consumer is a known integration gap (X-24 in `docs/compliance/services-validation.md`), not proof that the topic is unused: keep it until the gap is resolved.
 
-| Topic                                                                 | Producer                                                               | Consumer           | Payload                                                                                                                    |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `disaster-event-detected` / `climatic-event-detected`                 | ingestion outbox, using the `{domain}-event-detected` type convention  | risk-evaluation    | `SensorEventDetected { CollectionId, EventType, Intensity, Latitude, Longitude, CollectedAt }`                             |
-| `sensor-event-detected`                                               | Not identified                                                         | geospatial         | Same `SensorEventDetected` payload                                                                                         |
-| `region-intersected`                                                  | geospatial                                                             | alert-orchestrator | `RegionIntersectedEvent { EventId, Region, IntersectingRegion, RiskType, Severity, Timestamp }`                            |
-| `risk-catalog-published`                                              | risk-catalog                                                           | risk-evaluation    | `{ Version: int, Notes, PublishedAt, PublishedBy }`                                                                        |
-| `risk-events` (configured topic)                                      | risk-evaluation                                                        | Not identified     | `RiskEvaluatedEvent { EvaluationId, Latitude, Longitude, Score, Level, Timestamp }`                                        |
-| `risk-updated` / `risk-evaluated`                                     | Not identified                                                         | alert-orchestrator | `RiskUpdatedEvent { EventId, Region, RiskType, RiskScore, TenantId, Timestamp, Metadata }`                                 |
-| `alert-orchestrator-events`                                           | alert-orchestrator                                                     | Not identified     | `AlertTriggered`, `AlertConfirmed`, `AlertEscalated`, `AlertClosed`, `AlertWindowOpened`, `AlertWindowExpired`             |
-| `alert-commands`                                                      | alert-orchestrator                                                     | Not identified     | Alert commands                                                                                                             |
-| `notification-events` / `notification-events-dlq`                     | Published by the channels service through `KafkaNotificationPublisher` | channels           | `NotificationEvent { EventId, TenantId, Channels, PriorityEnum, Message, Metadata }`                                       |
-| `tenants-billing-events`                                              | tenants-billing                                                        | Not identified     | Tenant events                                                                                                              |
-| `tenant-usage-events` and associated `-dlq` and `-replay` topics      | Not identified                                                         | tenants-billing    | `TenantUsageEvent { TenantId, EventsConsumed, AlertsTriggered, ApiRequests, ChannelUsage }`                                |
-| `reporting-events` and associated `-dead-letter` and `-replay` topics | Not identified                                                         | reporting          | `ReportingEventEnvelope { EventId, EventType, TenantId, Region, Severity, Channel, RiskScore, Status, Timestamp, Source }` |
-| `geospatial-dead-letter`                                              | geospatial                                                             | Not identified     | `DeadLetterEnvelope`                                                                                                       |
+| Topic                                                       | Producer                                                                | Consumer                       | Payload                                                                                                                                  |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `disaster-event-detected` / `climatic-event-detected`       | ingestion outbox (`{domain}-event-detected`)                            | risk-evaluation, geospatial (ADR-0012) | `SensorEventDetected { CollectionId, EventType, Intensity, Latitude, Longitude, CollectedAt, EventId, TenantId }` (`TenantId` since ADR-0008; absent in older messages) |
+| `sensor-event-detected`                                     | None                                                                    | None since ADR-0012 (geospatial reads the two topics above); deprecated | Same `SensorEventDetected` payload |
+| `region-intersected`                                        | None (geospatial stopped publishing on HTTP `intersects`, ADR-0008)     | alert-orchestrator (deprecated, sunset 2027-01-31, ADR-0012) | `RegionIntersectedEvent { EventId, Region, IntersectingRegion, RiskType, Severity, Timestamp }`; older messages hold a `GeospatialOperationEvent` and are dead-lettered |
+| `risk-catalog-published`                                    | risk-catalog                                                            | risk-evaluation                | `{ Version: int, Notes, PublishedAt, PublishedBy }`                                                                                      |
+| `risk-events` (`Kafka:Topic`)                               | risk-evaluation (deprecated, sunset 2027-01-31; `Kafka:PublishRiskEvents=false` stops it, ADR-0012) | None                           | `RiskEvaluatedEvent { EvaluationId, Latitude, Longitude, Score, Level, Timestamp }` and `HighRiskDetectedEvent` (decimal coordinates since RE-18; older messages hold whole degrees) |
+| `risk-updated` (`Kafka:RiskUpdatedTopic`)                   | risk-evaluation (ADR-0008), keyed `{tenant}:{region}`                   | alert-orchestrator             | `RiskUpdatedEvent { EventId, Region, RiskType, RiskScore, TenantId, Timestamp, Metadata }`; `Region` is the catalog `regionCode`, `TenantId` is required |
+| `risk-evaluated`                                            | None                                                                    | None                           | Created by `kafka-init` only                                                                                                             |
+| `alert-orchestrator-events`                                 | alert-orchestrator                                                      | None (output topic by decision, ADR-0012) | `AlertWindowOpened`, `AlertTriggered`, `AlertConfirmed`, `AlertEscalated`, `AlertClosed`, `AlertWindowExpired`                           |
+| `alert-commands`                                            | alert-orchestrator                                                      | channels (ADR-0008)            | `TriggerAlertCommand` (PascalCase, `EscalationLevel` as a number, `TenantId` required by channels)                                      |
+| `notification-events` / `notification-events-dlq`           | channels (reprocessing endpoint) / channels (undelivered notifications, including alert commands) | channels / None | `NotificationEvent { EventId, TenantId, UserId, EventType, CorrelationId, PriorityEnum, Message, Channels, FallbackEnabled, Metadata }` |
+| `tenants-billing-events`                                    | tenants-billing                                                         | None (output topic by decision, ADR-0012) | `TenantCreated`, `PlanCreated`, `PlanPolicyUpdated`, `TenantQuotaSoftLimitReached`, `TenantQuotaHardLimitReached`, `TenantSuspended`, `TenantReactivated`, `TenantCanceled` |
+| `tenant-usage-events` and its `-dlq` and `-replay` topics   | ingestion (outbox), alert-orchestrator, channels (ADR-0009); the `-dlq` and `-replay` topics are written by tenants-billing | tenants-billing                | `TenantUsageEvent { TenantId, EventsConsumed, AlertsTriggered, ApiRequests, ChannelUsage, EventId }` (deterministic `EventId`, counted once) |
+| `reporting-events`                                          | alert-orchestrator (`AlertTriggered`), channels (`NotificationSent` / `NotificationFailed`) (ADR-0010) | reporting                      | `ReportingEventEnvelope { EventId, EventType, TenantId, Region, Severity, Channel, RiskScore, Status, Timestamp, Source }`; `Channel` also accepts `whatsapp`, `mqtt`, `siren` and `none` since ADR-0010 |
+| `reporting-events-dead-letter` / `reporting-events-replay`  | reporting                                                               | reporting / reporting          | Dead-letter envelope / replay wrapper `{ sourceTopic, reprocessedBy, replayRequested, requestedAtUtc, originalPayload }` (REP-09)        |
+| `audit-events` and its `-replay` topic                      | tenants-billing (`TenantCreated`, `TenantUpdated`, keyed by tenant, ADR-0011) | audit-compliance               | `AuditEventEnvelope` v1 `{ EventId, EventType, EventVersion, SourceService, OccurredAt, TenantId, CorrelationId, CausationId, Action, Actor, Resource, Metadata, BeforeState, AfterState }` |
+| `audit-events-dlq`                                          | audit-compliance                                                        | None                           | `DeadLetterEnvelope { OriginalTopic, Partition, Offset, Key, Payload, ErrorCode, ErrorReason, FailedAt, ConsumerGroup }`                 |
+| `<service>-dead-letter`, `geospatial-dead-letter`           | each consuming service (ADR-0003)                                       | None                           | `DeadLetterEnvelope`                                                                                                                     |
 
 ### Shared Libraries
 
-No shared libraries have been identified.
+No shared libraries exist. Copied code (security, observability, the reliability kit, `TenantBillingGateway`, `DeprecatedRouteAttribute`) must be kept in sync across services.
 
 ## Rules
 

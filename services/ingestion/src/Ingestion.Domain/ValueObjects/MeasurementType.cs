@@ -9,7 +9,7 @@ public class MeasurementType : ValueObject
     private static readonly MeasurementType WindSpeed = new("WindSpeed");
     private static readonly MeasurementType Rainfall = new("Rainfall");
     private static readonly MeasurementType Pressure = new("Pressure");
-    private static readonly MeasurementType Fire = new("WildFire");
+    private static readonly MeasurementType Fire = new("Fire");
     private static readonly MeasurementType Earthquake = new("Earthquake");
 
     private MeasurementType(string value)
@@ -26,7 +26,8 @@ public class MeasurementType : ValueObject
             "WindSpeed" => WindSpeed,
             "Rainfall" => Rainfall,
             "Pressure" => Pressure,
-            "Fire" => Fire,
+            // "WildFire" was the stored value of Fire before the fix; data sources registered then still carry it.
+            "Fire" or "WildFire" => Fire,
             "Earthquake" => Earthquake,
             _ => throw new ArgumentException($"Invalid measurement type: {value}")
         };
@@ -39,7 +40,8 @@ public class MeasurementType : ValueObject
             { "Temperature", new[] { "C", "F", "K" } },
             { "WindSpeed", new[] { "km/h", "m/s" } },
             { "Pressure", new[] { "hPa", "atm" } },
-            { "Fire", new[] { "kW/m²" } }, // unidade de intensidade de incêndio
+            // kW/m²: intensidade do incêndio; MW: potência radiativa (FRP) reportada pelo NASA FIRMS
+            { "Fire", new[] { "kW/m²", "MW" } },
             { "Earthquake", new[] { "Mw" } } // magnitude sísmica
         };
 
@@ -60,7 +62,7 @@ public class MeasurementType : ValueObject
             "Temperature" or "Humidity" => intensityValue - baseline,
             "WindSpeed" or "Rainfall" => intensityValue,
             "Pressure" => baseline > 0 ? intensityValue - baseline : intensityValue - 1013,
-            "WildFire" or "Earthquake" => intensityValue,
+            "Fire" or "Earthquake" => intensityValue,
             _ => throw new ArgumentException($"Invalid measurement type: {intensityValue}")
         };
     }

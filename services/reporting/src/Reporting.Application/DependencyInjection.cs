@@ -11,6 +11,8 @@ public static class DependencyInjection
         services.AddMemoryCache();
         services.AddScoped<ReportingQueryService>();
         services.AddScoped<ReportingHealthService>();
+        services.AddScoped<ReportingReplayService>();
+        services.AddScoped<ReportingEventIngestionService>();
         services.AddScoped<IReportingEventConsumer, ReportingEventConsumer>();
         services.AddScoped<IReportingEventNormalizer, ReportingEventNormalizer>();
         return services;
