@@ -5,6 +5,7 @@ using AlertOrchestrator.Application.Interfaces.Messaging;
 using AlertOrchestrator.Application.Interfaces.Observability;
 using AlertOrchestrator.Application.Interfaces.Services;
 using AlertOrchestrator.Application.Ports;
+using AlertOrchestrator.Application.Services;
 using AlertOrchestrator.Domain.Aggregates;
 using AlertOrchestrator.Domain.Configuration;
 using AlertOrchestrator.Domain.Enums;
@@ -25,7 +26,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
     private readonly IAlertMetrics _metrics;
     private readonly IAlertWindowRepository _windowRepository;
     private readonly ITenantBillingGateway _tenantBillingGateway;
-    private readonly ITenantUsagePublisher _usagePublisher;
+    private readonly TriggeredAlertReporter _triggeredAlertReporter;
 
     public RiskUpdatedEventHandler(
         IAlertWindowRepository windowRepository,
@@ -36,7 +37,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
         IAlertMetrics metrics,
         ILogger<RiskUpdatedEventHandler> logger,
         ITenantBillingGateway tenantBillingGateway,
-        ITenantUsagePublisher usagePublisher)
+        TriggeredAlertReporter triggeredAlertReporter)
     {
         _windowRepository = windowRepository;
         _eventPublisher = eventPublisher;
@@ -46,7 +47,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
         _metrics = metrics;
         _logger = logger;
         _tenantBillingGateway = tenantBillingGateway;
-        _usagePublisher = usagePublisher;
+        _triggeredAlertReporter = triggeredAlertReporter;
     }
 
     public async Task Handle(RiskUpdatedEvent notification, CancellationToken cancellationToken)
@@ -163,7 +164,8 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
                     TenantId: window.TenantId);
 
                 await _commandPublisher.PublishAsync(command, cancellationToken);
-                await PublishUsageAsync(window.TenantId, window.Id, cancellationToken);
+                await _triggeredAlertReporter.ReportAsync(window.TenantId, window.Id, window.Region,
+                    notification.RiskScore, command.TriggeredAt, cancellationToken);
             }
             else
             {
@@ -207,19 +209,5 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
             "API" or "EXTERNAL" => SignalSource.ExternalApi,
             _ => SignalSource.Sensor
         };
-    }
-
-    /// <summary>Counts the triggered alert for the window's tenant (X-24). Escalations are not counted again.</summary>
-    private async Task PublishUsageAsync(string? tenantId, Guid alertWindowId, CancellationToken cancellationToken)
-    {
-        var usage = TenantUsageEvent.ForTriggeredAlert(tenantId, alertWindowId);
-        if (usage is null)
-        {
-            _logger.LogWarning("Window {WindowId} has no tenant; its triggered alert is not reported as usage",
-                alertWindowId);
-            return;
-        }
-
-        await _usagePublisher.PublishAsync(usage, cancellationToken);
     }
 }

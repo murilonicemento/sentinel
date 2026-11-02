@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using AlertOrchestrator.Application.Services;
 using AlertOrchestrator.Application.Commands;
 using AlertOrchestrator.Application.DTOs;
 using AlertOrchestrator.Application.Events;
@@ -25,6 +27,7 @@ public class RegionIntersectedEventHandlerTests
     private readonly Mock<IAlertMetrics> _metrics = new();
     private readonly Mock<ILogger<RegionIntersectedEventHandler>> _logger = new();
     private readonly Mock<ITenantUsagePublisher> _usagePublisher = new();
+    private readonly Mock<IReportingEventPublisher> _reportingPublisher = new();
 
     private RegionIntersectedEventHandler CreateHandler() => new(
         _windowRepository.Object,
@@ -34,7 +37,8 @@ public class RegionIntersectedEventHandlerTests
         _configurationPort.Object,
         _metrics.Object,
         _logger.Object,
-        _usagePublisher.Object);
+        new TriggeredAlertReporter(_usagePublisher.Object, _reportingPublisher.Object,
+            NullLogger<TriggeredAlertReporter>.Instance));
 
     [Fact]
     public async Task Handle_WhenRegionIntersectionTriggersAlert_ShouldPublishCommand()

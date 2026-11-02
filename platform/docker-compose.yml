@@ -213,6 +213,7 @@ services:
       - Kafka__Topics__Command=alert-commands
       - Kafka__Topics__DeadLetter=alert-orchestrator-dead-letter
       - Kafka__Topics__TenantUsage=tenant-usage-events
+      - Kafka__Topics__Reporting=reporting-events
       - Loki__Url=http://loki:3100
       - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:

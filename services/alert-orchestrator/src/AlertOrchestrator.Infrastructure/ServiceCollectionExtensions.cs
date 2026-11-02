@@ -111,6 +111,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITenantUsagePublisher>(sp => new KafkaTenantUsagePublisher(
             options.KafkaBootstrapServers, options.TenantUsageTopic,
             sp.GetRequiredService<ILogger<KafkaTenantUsagePublisher>>()));
+        services.AddSingleton<IReportingEventPublisher>(sp => new KafkaReportingEventPublisher(
+            options.KafkaBootstrapServers, options.ReportingTopic,
+            sp.GetRequiredService<ILogger<KafkaReportingEventPublisher>>()));
+        services.AddSingleton<TriggeredAlertReporter>();
 
         // Consumers (Background Services)
         var reliabilityOptions = new ConsumerReliabilityOptions();

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using AlertOrchestrator.Application.Services;
 using AlertOrchestrator.Application.Commands;
 using AlertOrchestrator.Application.DTOs;
 using AlertOrchestrator.Application.Events;
@@ -27,6 +29,7 @@ public class RiskUpdatedEventHandlerTests
     private readonly Mock<ILogger<RiskUpdatedEventHandler>> _logger = new();
     private readonly Mock<ITenantBillingGateway> _tenantBillingGateway = new();
     private readonly Mock<ITenantUsagePublisher> _usagePublisher = new();
+    private readonly Mock<IReportingEventPublisher> _reportingPublisher = new();
 
     public RiskUpdatedEventHandlerTests()
     {
@@ -45,7 +48,8 @@ public class RiskUpdatedEventHandlerTests
         _metrics.Object,
         _logger.Object,
         _tenantBillingGateway.Object,
-        _usagePublisher.Object);
+        new TriggeredAlertReporter(_usagePublisher.Object, _reportingPublisher.Object,
+            NullLogger<TriggeredAlertReporter>.Instance));
 
     [Fact]
     public async Task Handle_WhenRiskScoreBelowThreshold_ShouldOpenWindowWithoutTriggeringAlert()
@@ -103,9 +107,32 @@ public class RiskUpdatedEventHandlerTests
         _commandPublisher.Verify(x => x.PublishAsync(
             It.Is<TriggerAlertCommand>(c => c.TenantId == "tenant-1" && c.Region == "region-1"),
             It.IsAny<CancellationToken>()), Times.Once);
-        // "tenant-1" is not a tenant id, so there is no tenant to bill.
+        // "tenant-1" is not a tenant id, so there is no tenant to bill; reporting only needs the tenant.
         _usagePublisher.Verify(x => x.PublishAsync(It.IsAny<TenantUsageEvent>(), It.IsAny<CancellationToken>()),
             Times.Never);
+        _reportingPublisher.Verify(x => x.PublishAsync(
+            It.Is<ReportingEventEnvelope>(e => e.TenantId == "tenant-1" && e.EventType == "AlertTriggered"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WhenAlertTriggers_SendsAlertTriggeredToReporting()
+    {
+        var reported = new List<ReportingEventEnvelope>();
+        _reportingPublisher.Setup(x => x.PublishAsync(It.IsAny<ReportingEventEnvelope>(), It.IsAny<CancellationToken>()))
+            .Callback<ReportingEventEnvelope, CancellationToken>((e, _) => reported.Add(e))
+            .Returns(Task.CompletedTask);
+        TriggerAlertCommand? command = null;
+        _commandPublisher.Setup(x => x.PublishAsync(It.IsAny<TriggerAlertCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<TriggerAlertCommand, CancellationToken>((c, _) => command = c)
+            .Returns(Task.CompletedTask);
+
+        await TriggerAsync("tenant-1", setupCommandPublisher: false);
+
+        var reportingEvent = Assert.Single(reported);
+        Assert.Equal(new ReportingEventEnvelope($"alert-triggered:{command!.AlertWindowId:N}", "AlertTriggered",
+            "tenant-1", "region-1", "HIGH", "none", command.RiskScore, "SUCCESS", command.TriggeredAt,
+            "alert-orchestrator"), reportingEvent);
     }
 
     [Fact]

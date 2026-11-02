@@ -80,6 +80,7 @@ var infrastructureOptions = new AlertOrchestratorInfrastructureOptions
     CommandTopic = kafkaTopicsConfig.GetValue("Command", "alert-commands"),
     DeadLetterTopic = kafkaTopicsConfig.GetValue("DeadLetter", "alert-orchestrator-dead-letter"),
     TenantUsageTopic = kafkaTopicsConfig.GetValue("TenantUsage", "tenant-usage-events"),
+    ReportingTopic = kafkaTopicsConfig.GetValue("Reporting", "reporting-events"),
     UsePostgreSql = databaseConfig.GetValue("UsePostgreSql", false),
     PostgreSqlConnectionString = databaseConfig.GetValue("PostgreSqlConnectionString", string.Empty),
     UseRedis = cacheConfig.GetValue("UseRedis", false),

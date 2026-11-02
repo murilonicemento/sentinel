@@ -16,6 +16,7 @@ public sealed class AlertOrchestratorInfrastructureOptions
     public string CommandTopic { get; set; } = "alert-commands";
     public string DeadLetterTopic { get; set; } = "alert-orchestrator-dead-letter";
     public string TenantUsageTopic { get; set; } = "tenant-usage-events";
+    public string ReportingTopic { get; set; } = "reporting-events";
 
     public TimeSpan IdempotencyExpiration { get; set; } = TimeSpan.FromHours(24);
     public TimeSpan? ExpirationCheckInterval { get; set; }
