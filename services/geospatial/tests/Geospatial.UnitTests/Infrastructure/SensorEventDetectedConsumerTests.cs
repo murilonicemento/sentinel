@@ -35,7 +35,7 @@ public class SensorEventDetectedConsumerTests
             reliability,
             Mock.Of<IGeospatialEventRepository>(),
             Options.Create(new KafkaConsumerOptions
-            { TopicName = "sensor-event-detected", DeadLetterTopic = "geospatial-dead-letter" }),
+            { Topics = ["disaster-event-detected", "climatic-event-detected"], DeadLetterTopic = "geospatial-dead-letter" }),
             NullLogger<SensorEventDetectedConsumer>.Instance);
 
         await Task.Run(() => consumer.StartAsync(CancellationToken.None)).WaitAsync(TimeSpan.FromSeconds(1));
@@ -43,8 +43,8 @@ public class SensorEventDetectedConsumerTests
         using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await consumer.StopAsync(stopTimeout.Token);
 
-        kafkaConsumer.Verify(c => c.Subscribe(It.Is<IEnumerable<string>>(t => t.Single() == "sensor-event-detected")),
-            Times.Once);
+        kafkaConsumer.Verify(c => c.Subscribe(It.Is<IEnumerable<string>>(t =>
+            t.SequenceEqual(new[] { "disaster-event-detected", "climatic-event-detected" }))), Times.Once);
     }
 
     private static readonly ConsumerReliabilityOptions FastRetries = new()
@@ -58,7 +58,7 @@ public class SensorEventDetectedConsumerTests
     {
         var message = new ConsumeResult<Null, string>
         {
-            Topic = "sensor-event-detected",
+            Topic = "climatic-event-detected",
             Partition = new Partition(1),
             Offset = new Offset(5),
             Message = new Message<Null, string> { Value = payload }
@@ -88,7 +88,7 @@ public class SensorEventDetectedConsumerTests
                 "geospatial-service-consumer", FastRetries, NullLogger.Instance),
             FastRetries, repository.Object,
             Options.Create(new KafkaConsumerOptions
-            { TopicName = "sensor-event-detected", DeadLetterTopic = "geospatial-dead-letter" }),
+            { Topics = ["disaster-event-detected", "climatic-event-detected"], DeadLetterTopic = "geospatial-dead-letter" }),
             NullLogger<SensorEventDetectedConsumer>.Instance);
 
         await consumer.StartAsync(CancellationToken.None);
@@ -122,6 +122,29 @@ public class SensorEventDetectedConsumerTests
             It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
+    /// <summary>The event as ingestion's outbox publishes it; the sample is ingestion's SensorEventDetectedContractTests.</summary>
+    [Fact]
+    public async Task SensorEventFromIngestion_IsIndexedAsASensorEvent()
+    {
+        const string sample = """
+            {"CollectionId":"1b2c3d4e-5f60-4718-8a9b-0c1d2e3f4a5b","EventType":"Rainfall","Intensity":7.5,"Latitude":-22.9068,"Longitude":-43.1729,"CollectedAt":"2026-11-01T12:00:00Z","EventId":"8f3a5c1e-2d4b-8e6f-9a1b-3c5d7e9f1a2b","TenantId":"6d3f1c8e-2b4a-4f1e-9c7d-1a2b3c4d5e6f"}
+            """;
+        GeospatialOperationEvent? indexed = null;
+        var repository = new Mock<IGeospatialEventRepository>();
+        repository.Setup(r => r.IndexAsync(It.IsAny<GeospatialOperationEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<GeospatialOperationEvent, CancellationToken>((e, _) => indexed = e)
+            .Returns(Task.CompletedTask);
+
+        var published = await ConsumeOnceAsync(sample, repository);
+
+        Assert.Empty(published);
+        Assert.NotNull(indexed);
+        Assert.Equal(SensorEventDetectedConsumer.SensorEventOperationType, indexed!.OperationType);
+        Assert.Equal(Guid.Parse("8f3a5c1e-2d4b-8e6f-9a1b-3c5d7e9f1a2b"), indexed.SourceEventId);
+        Assert.Equal(-22.9068, indexed.MainPoint!.Lat);
+        Assert.Equal(-43.1729, indexed.MainPoint.Lon);
+    }
+
     [Fact]
     public async Task InvalidCoordinates_AreDeadLetteredInTheExistingFormat()
     {
@@ -130,7 +153,7 @@ public class SensorEventDetectedConsumerTests
         var published = await ConsumeOnceAsync("{\"Latitude\":120,\"Longitude\":0}", repository);
 
         using var envelope = JsonDocument.Parse(Assert.Single(published));
-        Assert.Equal("sensor-event-detected", envelope.RootElement.GetProperty("OriginalTopic").GetString());
+        Assert.Equal("climatic-event-detected", envelope.RootElement.GetProperty("OriginalTopic").GetString());
         Assert.Equal(5, envelope.RootElement.GetProperty("OriginalOffset").GetInt64());
         Assert.Equal(MessageErrorCodes.InvalidPayload, envelope.RootElement.GetProperty("ErrorCode").GetString());
         repository.VerifyNoOtherCalls();

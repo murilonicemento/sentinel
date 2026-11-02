@@ -11,7 +11,8 @@ public class GeospatialOptionsValidationTests
     private static readonly Dictionary<string, string?> Valid = new()
     {
         ["Elasticsearch:Url"] = "http://elasticsearch:9200",
-        ["KafkaConsumerOptions:TopicName"] = "sensor-event-detected",
+        ["KafkaConsumerOptions:Topics:0"] = "disaster-event-detected",
+        ["KafkaConsumerOptions:Topics:1"] = "climatic-event-detected",
         ["KafkaConsumerOptions:DeadLetterTopic"] = "geospatial-dead-letter"
     };
 
@@ -28,13 +29,30 @@ public class GeospatialOptionsValidationTests
     {
         using var provider = Provider("Elasticsearch:Url", "http://elasticsearch:9200");
 
-        Assert.Equal("sensor-event-detected",
-            provider.GetRequiredService<IOptions<KafkaConsumerOptions>>().Value.TopicName);
+        Assert.Equal(["disaster-event-detected", "climatic-event-detected"],
+            provider.GetRequiredService<IOptions<KafkaConsumerOptions>>().Value.SubscribedTopics);
+    }
+
+    [Fact]
+    public void LegacyTopicName_IsUsedOnlyWithoutTopics()
+    {
+        var settings = new Dictionary<string, string?>
+        {
+            ["Elasticsearch:Url"] = "http://elasticsearch:9200",
+            ["KafkaConsumerOptions:TopicName"] = "sensor-event-detected",
+            ["KafkaConsumerOptions:DeadLetterTopic"] = "geospatial-dead-letter"
+        };
+        using var provider = new ServiceCollection()
+            .AddGeospatialOptions(new ConfigurationBuilder().AddInMemoryCollection(settings).Build())
+            .BuildServiceProvider();
+
+        Assert.Equal(["sensor-event-detected"],
+            provider.GetRequiredService<IOptions<KafkaConsumerOptions>>().Value.SubscribedTopics);
     }
 
     [Theory]
     [InlineData("Elasticsearch:Url", "not-a-url")]
-    [InlineData("KafkaConsumerOptions:TopicName", "")]
+    [InlineData("KafkaConsumerOptions:Topics:0", "")]
     [InlineData("KafkaConsumerOptions:DeadLetterTopic", "")]
     public void InvalidSettings_FailWithTheKeyName(string key, string value)
     {
@@ -42,6 +60,6 @@ public class GeospatialOptionsValidationTests
 
         var exception = Assert.Throws<OptionsValidationException>(() =>
             provider.GetRequiredService<IStartupValidator>().Validate());
-        Assert.Contains(key, exception.Message);
+        Assert.Contains(key.EndsWith(":0", StringComparison.Ordinal) ? key[..^2] : key, exception.Message);
     }
 }

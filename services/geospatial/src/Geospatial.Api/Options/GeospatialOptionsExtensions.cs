@@ -17,9 +17,10 @@ public static class GeospatialOptionsExtensions
             .ValidateOnStart();
         services.AddOptions<KafkaConsumerOptions>()
             .Bind(configuration.GetSection("KafkaConsumerOptions"))
-            .Validate(options => !string.IsNullOrWhiteSpace(options.TopicName) &&
+            .Validate(options => options.SubscribedTopics.Count > 0 &&
+                                 options.SubscribedTopics.All(topic => !string.IsNullOrWhiteSpace(topic)) &&
                                  !string.IsNullOrWhiteSpace(options.DeadLetterTopic),
-                "KafkaConsumerOptions:TopicName and KafkaConsumerOptions:DeadLetterTopic are required.")
+                "KafkaConsumerOptions:Topics and KafkaConsumerOptions:DeadLetterTopic are required.")
             .ValidateOnStart();
         return services;
     }

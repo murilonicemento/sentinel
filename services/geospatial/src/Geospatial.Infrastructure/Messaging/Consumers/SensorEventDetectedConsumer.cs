@@ -18,6 +18,12 @@ namespace Geospatial.Infrastructure.Messaging.Consumers;
 /// </summary>
 public sealed class SensorEventDetectedConsumer : BackgroundService
 {
+    /// <summary>
+    /// <c>OperationType</c> of an indexed sensor event. It keeps the name of the former topic, so search results look
+    /// the same whichever ingestion topic carried the event.
+    /// </summary>
+    public const string SensorEventOperationType = "sensor-event-detected";
+
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private readonly IConsumer<Null, string> _consumer;
@@ -44,7 +50,7 @@ public sealed class SensorEventDetectedConsumer : BackgroundService
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
-        ReliableConsumerLoop.Start(_consumer, [_options.TopicName], _processor, HandleAsync, _reliability, _logger,
+        ReliableConsumerLoop.Start(_consumer, _options.SubscribedTopics, _processor, HandleAsync, _reliability, _logger,
             stoppingToken);
 
     private async Task<MessageHandlingResult> HandleAsync(ConsumeResult<Null, string> result,
@@ -68,7 +74,7 @@ public sealed class SensorEventDetectedConsumer : BackgroundService
         {
             CollectionId = evt.CollectionId,
             SourceEventId = evt.EventId,
-            OperationType = _options.TopicName,
+            OperationType = SensorEventOperationType,
             Payload = evt,
             Timestamp = evt.CollectedAt,
             MainPoint = new GeoLocation { Lat = evt.Latitude, Lon = evt.Longitude }
