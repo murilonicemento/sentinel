@@ -24,6 +24,7 @@ public class RegionIntersectedEventHandlerTests
     private readonly Mock<IAlertConfigurationPort> _configurationPort = new();
     private readonly Mock<IAlertMetrics> _metrics = new();
     private readonly Mock<ILogger<RegionIntersectedEventHandler>> _logger = new();
+    private readonly Mock<ITenantUsagePublisher> _usagePublisher = new();
 
     private RegionIntersectedEventHandler CreateHandler() => new(
         _windowRepository.Object,
@@ -32,7 +33,8 @@ public class RegionIntersectedEventHandlerTests
         _idempotencyService.Object,
         _configurationPort.Object,
         _metrics.Object,
-        _logger.Object);
+        _logger.Object,
+        _usagePublisher.Object);
 
     [Fact]
     public async Task Handle_WhenRegionIntersectionTriggersAlert_ShouldPublishCommand()

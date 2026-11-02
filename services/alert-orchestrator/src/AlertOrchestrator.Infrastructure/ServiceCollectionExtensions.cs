@@ -108,6 +108,10 @@ public static class ServiceCollectionExtensions
             return new KafkaCommandPublisher(options.KafkaBootstrapServers, options.CommandTopic, logger);
         });
 
+        services.AddSingleton<ITenantUsagePublisher>(sp => new KafkaTenantUsagePublisher(
+            options.KafkaBootstrapServers, options.TenantUsageTopic,
+            sp.GetRequiredService<ILogger<KafkaTenantUsagePublisher>>()));
+
         // Consumers (Background Services)
         var reliabilityOptions = new ConsumerReliabilityOptions();
         services.AddSingleton<IDeadLetterSink>(_ =>

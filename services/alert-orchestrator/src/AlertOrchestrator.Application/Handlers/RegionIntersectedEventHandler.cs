@@ -22,6 +22,7 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
     private readonly ILogger<RegionIntersectedEventHandler> _logger;
     private readonly IAlertMetrics _metrics;
     private readonly IAlertWindowRepository _windowRepository;
+    private readonly ITenantUsagePublisher _usagePublisher;
 
     public RegionIntersectedEventHandler(
         IAlertWindowRepository windowRepository,
@@ -30,7 +31,8 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
         IIdempotencyService idempotencyService,
         IAlertConfigurationPort configurationPort,
         IAlertMetrics metrics,
-        ILogger<RegionIntersectedEventHandler> logger)
+        ILogger<RegionIntersectedEventHandler> logger,
+        ITenantUsagePublisher usagePublisher)
     {
         _windowRepository = windowRepository;
         _eventPublisher = eventPublisher;
@@ -39,6 +41,7 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
         _configurationPort = configurationPort;
         _metrics = metrics;
         _logger = logger;
+        _usagePublisher = usagePublisher;
     }
 
     public async Task Handle(RegionIntersectedEvent notification, CancellationToken cancellationToken)
@@ -136,6 +139,7 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
                     TenantId: window.TenantId);
 
                 await _commandPublisher.PublishAsync(command, cancellationToken);
+                await PublishUsageAsync(window.TenantId, window.Id, cancellationToken);
             }
             else
             {
@@ -162,5 +166,19 @@ public sealed class RegionIntersectedEventHandler : INotificationHandler<RegionI
             await _idempotencyService.AbandonAsync(notification.EventId, CancellationToken.None);
             throw;
         }
+    }
+
+    /// <summary>Counts the triggered alert for the window's tenant (X-24). Escalations are not counted again.</summary>
+    private async Task PublishUsageAsync(string? tenantId, Guid alertWindowId, CancellationToken cancellationToken)
+    {
+        var usage = TenantUsageEvent.ForTriggeredAlert(tenantId, alertWindowId);
+        if (usage is null)
+        {
+            _logger.LogWarning("Window {WindowId} has no tenant; its triggered alert is not reported as usage",
+                alertWindowId);
+            return;
+        }
+
+        await _usagePublisher.PublishAsync(usage, cancellationToken);
     }
 }

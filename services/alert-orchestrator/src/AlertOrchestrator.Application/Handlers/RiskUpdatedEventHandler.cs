@@ -25,6 +25,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
     private readonly IAlertMetrics _metrics;
     private readonly IAlertWindowRepository _windowRepository;
     private readonly ITenantBillingGateway _tenantBillingGateway;
+    private readonly ITenantUsagePublisher _usagePublisher;
 
     public RiskUpdatedEventHandler(
         IAlertWindowRepository windowRepository,
@@ -34,7 +35,8 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
         IAlertConfigurationPort configurationPort,
         IAlertMetrics metrics,
         ILogger<RiskUpdatedEventHandler> logger,
-        ITenantBillingGateway tenantBillingGateway)
+        ITenantBillingGateway tenantBillingGateway,
+        ITenantUsagePublisher usagePublisher)
     {
         _windowRepository = windowRepository;
         _eventPublisher = eventPublisher;
@@ -44,6 +46,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
         _metrics = metrics;
         _logger = logger;
         _tenantBillingGateway = tenantBillingGateway;
+        _usagePublisher = usagePublisher;
     }
 
     public async Task Handle(RiskUpdatedEvent notification, CancellationToken cancellationToken)
@@ -160,6 +163,7 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
                     TenantId: window.TenantId);
 
                 await _commandPublisher.PublishAsync(command, cancellationToken);
+                await PublishUsageAsync(window.TenantId, window.Id, cancellationToken);
             }
             else
             {
@@ -203,5 +207,19 @@ public sealed class RiskUpdatedEventHandler : INotificationHandler<RiskUpdatedEv
             "API" or "EXTERNAL" => SignalSource.ExternalApi,
             _ => SignalSource.Sensor
         };
+    }
+
+    /// <summary>Counts the triggered alert for the window's tenant (X-24). Escalations are not counted again.</summary>
+    private async Task PublishUsageAsync(string? tenantId, Guid alertWindowId, CancellationToken cancellationToken)
+    {
+        var usage = TenantUsageEvent.ForTriggeredAlert(tenantId, alertWindowId);
+        if (usage is null)
+        {
+            _logger.LogWarning("Window {WindowId} has no tenant; its triggered alert is not reported as usage",
+                alertWindowId);
+            return;
+        }
+
+        await _usagePublisher.PublishAsync(usage, cancellationToken);
     }
 }
