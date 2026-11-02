@@ -14,24 +14,32 @@ namespace Reporting.IntegrationTests;
 /// <summary>
 /// The reporting consumer reads the replay topic on a real Kafka (REP-09).
 /// </summary>
-public sealed class ReportingReplayConsumerTests : IAsyncLifetime
+public sealed class ReportingReplayConsumerTests : IClassFixture<KafkaFixture>, IAsyncLifetime
 {
-    private const string MainTopic = "reporting-events";
-    private const string ReplayTopic = "reporting-events-replay";
-    private const string DeadLetterTopic = "reporting-events-dead-letter";
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
 
-    private readonly KafkaContainer _kafka = new KafkaBuilder("confluentinc/cp-kafka:7.6.0").Build();
+    private readonly KafkaFixture _kafka;
+
+    // One Kafka for the class; each test has its own topics, so one test never reads the other's messages.
+    private readonly string _suffix = Guid.NewGuid().ToString("N");
+    private string MainTopic => $"reporting-events-{_suffix}";
+    private string ReplayTopic => $"reporting-events-replay-{_suffix}";
+    private string DeadLetterTopic => $"reporting-events-dead-letter-{_suffix}";
+
+    public ReportingReplayConsumerTests(KafkaFixture kafka)
+    {
+        _kafka = kafka;
+    }
 
     public async Task InitializeAsync()
     {
-        await _kafka.StartAsync();
-        using var admin = new AdminClientBuilder(new AdminClientConfig { BootstrapServers = _kafka.GetBootstrapAddress() }).Build();
+        using var admin = new AdminClientBuilder(new AdminClientConfig { BootstrapServers = _kafka.BootstrapServers })
+            .Build();
         await admin.CreateTopicsAsync(new[] { MainTopic, ReplayTopic, DeadLetterTopic }.Select(topic =>
             new TopicSpecification { Name = topic, NumPartitions = 1, ReplicationFactor = 1 }));
     }
 
-    public Task DisposeAsync() => _kafka.DisposeAsync().AsTask();
+    public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
     public async Task ReplayedPayload_IsProcessed()
@@ -74,7 +82,7 @@ public sealed class ReportingReplayConsumerTests : IAsyncLifetime
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Kafka:BootstrapServers"] = _kafka.GetBootstrapAddress(),
+            ["Kafka:BootstrapServers"] = _kafka.BootstrapServers,
             ["Kafka:Topic"] = MainTopic,
             ["Kafka:ReplayTopic"] = ReplayTopic,
             ["Kafka:DeadLetterTopic"] = DeadLetterTopic,
@@ -99,7 +107,7 @@ public sealed class ReportingReplayConsumerTests : IAsyncLifetime
     {
         using var producer = new ProducerBuilder<Null, string>(new ProducerConfig
         {
-            BootstrapServers = _kafka.GetBootstrapAddress(),
+            BootstrapServers = _kafka.BootstrapServers,
             Acks = Acks.All
         }).Build();
         await producer.ProduceAsync(topic, new Message<Null, string> { Value = value });
@@ -109,7 +117,7 @@ public sealed class ReportingReplayConsumerTests : IAsyncLifetime
     {
         using var reader = new ConsumerBuilder<Ignore, string>(new ConsumerConfig
         {
-            BootstrapServers = _kafka.GetBootstrapAddress(),
+            BootstrapServers = _kafka.BootstrapServers,
             GroupId = $"reporting-dlq-reader-{Guid.NewGuid():N}",
             AutoOffsetReset = AutoOffsetReset.Earliest
         }).Build();
@@ -175,4 +183,16 @@ public sealed class ReportingReplayConsumerTests : IAsyncLifetime
             await provider.DisposeAsync();
         }
     }
+}
+
+/// <summary>A Kafka shared by the tests of a class.</summary>
+public sealed class KafkaFixture : IAsyncLifetime
+{
+    private readonly KafkaContainer _container = new KafkaBuilder("confluentinc/cp-kafka:7.6.0").Build();
+
+    public string BootstrapServers => _container.GetBootstrapAddress();
+
+    public Task InitializeAsync() => _container.StartAsync();
+
+    public Task DisposeAsync() => _container.DisposeAsync().AsTask();
 }
