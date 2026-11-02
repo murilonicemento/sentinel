@@ -2,160 +2,246 @@ classDiagram
 %% =====================
 %% Namespace: Ingestion
 %% =====================
-namespace Ingestion {
-  class FonteDeDados {
-    +id: Guid
-    +nome: string
-    +tipo: string
-    +coletar(): void
+namespace Ingestion.Domain {
+  class DataSource {
+    +Id: Guid
+    +Name: string
+    +Type: DataSourceTypeEnum
+    +Endpoint: string
+    +CollectionFrequency: CollectionFrequencyEnum
   }
-  class Coleta {
-    +id: Guid
-    +dataHora: DateTime
-    +payload: string
+
+  class DataCollection {
+    +Id: Guid
+    +DataSourceId: Guid
+    +CollectedAt: DateTime
+    +Payload: string
   }
-  class AmostraSensor {
-    +id: Guid
-    +valor: double
-    +unidade: string
-    +timestamp: DateTime
-  }
-  class EventoClimaticoDTO {
-    +eventoId: Guid
-    +tipoEvento: string
-    +latitude: double
-    +longitude: double
-    +intensidade: double
-    +coletadoEm: DateTime
+
+  class SensorSample {
+    +Id: Guid
+    +DataCollectionId: Guid
+    +SensorValue: double
+    +Unit: string
+    +RecordedAt: DateTime
   }
 }
 
-Coleta --> FonteDeDados
-AmostraSensor --> Coleta
+%% Relações de aggregate
+DataSource "1" --> "N" DataCollection
+DataCollection "1" --> "N" SensorSample
+
+%% Enums
+namespace Ingestion.Domain.Enums {
+  class DataSourceType {
+    <<enumeration>>
+    Sensor
+    Api
+    File
+    ExternalSystem
+  }
+
+  class CollectionFrequency {
+    <<enumeration>>
+    Hourly
+    Daily
+    Weekly
+  }
+}
+
+%% Namespace de eventos (publicados para downstream)
+namespace Ingestion.Application.Events {
+    class SensorEventDetected {
+      +CollectionId: Guid
+      +EventType: string
+      +Intensity: double
+      +Latitude: double
+      +Longitude: double
+      +CollectedAt: DateTime
+    }
+}
+
+%% =====================
+%% Namespace: Risk Catalog
+%% =====================
+namespace RiskCatalog.Domain {
+  class EventType {
+    +Id: Guid
+    +Code: string
+    +Name: string
+    +Description: string
+    +IsActive: bool
+  }
+
+  class Severity {
+    +Id: Guid
+    +Level: SeverityLevelEnum
+    +Description: string
+  }
+
+  class SeverityCriterion {
+    +Id: Guid
+    +EventTypeId: Guid
+    +SeverityId: Guid
+    +MinValue: double
+    +MaxValue: double
+    +Unit: string
+    +Version: int
+  }
+
+  class RiskMatrix {
+    +Id: Guid
+    +EventTypeId: Guid
+    +SeverityLevel: SeverityLevelEnum
+    +RiskLevel: RiskLevelEnum
+    +Version: int
+  }
+
+  class IDFCurve {
+    +Id: Guid
+    +EventTypeId: Guid
+    +DurationMinutes: int
+    +Intensity: double
+    +ReturnPeriodYears: int
+    +Version: int
+  }
+
+  class RegionalParameter {
+    +Id: Guid
+    +RegionId: Guid
+    +AdjustmentFactor: double
+    +Description: string
+  }
+}
+
+EventType "1" --> "N" SeverityCriterion
+Severity "1" --> "N" SeverityCriterion
+EventType "1" --> "N" RiskMatrix
+EventType "1" --> "N" IDFCurve
+RiskMatrix --> EventType
+IDFCurve --> EventType
+RegionalParameter --> RiskMatrix
+
+namespace RiskCatalog.Domain.Enums {
+  class SeverityLevel {
+    <<enumeration>>
+    Low
+    Moderate
+    High
+    Extreme
+  }
+
+  class RiskLevel {
+    <<enumeration>>
+    Low
+    Medium
+    High
+    Critical
+  }
+}
+
+namespace RiskCatalog.Application.DTOs {
+  class EventTypeDTO {
+    +Id: Guid
+    +Code: string
+    +Name: string
+  }
+
+  class SeverityCriterionDTO {
+    +EventTypeCode: string
+    +SeverityLevel: string
+    +MinValue: double
+    +MaxValue: double
+    +Unit: string
+    +Version: int
+  }
+
+  class RiskMatrixDTO {
+    +EventTypeCode: string
+    +SeverityLevel: string
+    +RiskLevel: string
+    +Version: int
+  }
+}
+
+EventType --> EventTypeDTO
+SeverityCriterion --> SeverityCriterionDTO
+RiskMatrix --> RiskMatrixDTO
 
 %% =====================
 %% Namespace: Geospatial
 %% =====================
 namespace Geospatial {
-  class Regiao {
-    +id: Guid
-    +nome: string
-    +poligonoGeoJSON: string
-  }
-  class ZonaRisco {
-    +id: Guid
-    +regiaoId: Guid
-    +nivel: string
-  }
-  class EventoNormalizadoDTO {
-    +eventoId: Guid
-    +tipoEvento: string
-    +regiaoId: Guid
-    +payloadNormalizado: string
-  }
-  class RegiaoIntersectadaDTO {
-    +eventoId: Guid
-    +regiaoId: Guid
-    +nomeRegiao: string
-    +nivelSuscetibilidade: string
-  }
-}
-
-ZonaRisco --> Regiao
-
-%% =====================
-%% Namespace: Risk
-%% =====================
-namespace Risk {
-  class TipoEvento {
-    +id: Guid
-    +nome: string
-    +descricao: string
-  }
-  class MatrizRisco {
-    +id: Guid
-    +tipoEventoId: Guid
-    +nivelSeveridade: string
-    +curvaIDF: string
-  }
-}
-
-MatrizRisco --> TipoEvento
-
-%% =====================
-%% Namespace: RiskScoring
-%% =====================
-namespace RiskScoring {
-  class AvaliacaoRisco {
-    +id: Guid
-    +regiaoId: Guid
-    +score: int
-    +nivel: string
-    +justificativa: string
-  }
-  class RiscoAtualizadoDTO {
-    +regiaoId: Guid
-    +tipoEvento: string
-    +score: int
-    +nivel: string
-    +justificativa: string
-  }
-}
-
-AvaliacaoRisco --> RiscoAtualizadoDTO
-
-%% =====================
-%% Namespace: Alerting
-%% =====================
-namespace Alerting {
-  class Alerta {
-    +id: Guid
-    +regiaoId: Guid
-    +tipoEvento: string
-    +nivel: string
-    +emitidoEm: DateTime
-  }
-  class Destinatario {
-    +id: Guid
-    +nome: string
-    +canalPreferido: string
-  }
-  class AlertaDTO {
-    +alertaId: Guid
-    +regiaoId: Guid
-    +tipoEvento: string
-    +nivel: string
-    +canais: string[]
-  }
-  class ConfirmacaoAlertaDTO {
-    +alertaId: Guid
-    +destinatarioId: Guid
-    +canal: string
-    +confirmadoEm: DateTime
+  class RegionContext {
+    +Latitude: int
+    +Longitude: int
+    +RegionId: Guid
+    +TerrainType: string
+    +Elevation: double
+    +RiskZones: string[]
   }
 
-}
-
-Alerta --> Destinatario
-
-%% =====================
-%% Namespace: Compliance
-%% =====================
-namespace Compliance {
-  class EventoAuditoria {
-    +id: Guid
-    +tipoEvento: string
-    +payload: string
-    +criadoEm: DateTime
+  class RegionIntersected {
+    +EventId: Guid
+    +RegionId: Guid
+    +RegionName: string
+    +SusceptibilityLevel: string
   }
 }
 
 %% =====================
-%% Dependências / Fluxo de Eventos
+%% Namespace: Risk Evaluation
 %% =====================
-EventoClimaticoDTO --> EventoNormalizadoDTO : publicacao
-EventoNormalizadoDTO --> RegiaoIntersectadaDTO : interseção
-RegiaoIntersectadaDTO --> RiscoAtualizadoDTO : scoring
-RiscoAtualizadoDTO --> AlertaDTO : orquestração
-AlertaDTO --> ConfirmacaoAlertaDTO : confirmação
-AlertaDTO --> EventoAuditoria : auditoria
+namespace RiskEvaluation {
+  class RiskEvaluationEntity {
+    +Id: Guid
+    +Latitude: int
+    +Longitude: int
+    +Score: double
+    +Level: string
+    +Timestamp: DateTime
+  }
+
+  class RiskEvaluatedEvent {
+    +EvaluationId: Guid
+    +Latitude: int
+    +Longitude: int
+    +Score: double
+    +Level: string
+    +Timestamp: DateTime
+  }
+
+  class HighRiskDetectedEvent {
+    +EvaluationId: Guid
+    +Latitude: int
+    +Longitude: int
+    +Score: double
+    +Level: string
+    +Timestamp: DateTime
+  }
+}
+
+%% =====================
+%% Namespace: Alert Orchestrator
+%% =====================
+namespace AlertOrchestrator {
+  class RiskUpdatedEvent {
+    +EventId: Guid
+    +Region: string
+    +RiskType: string
+    +RiskScore: double
+    +TenantId: string?
+    +Timestamp: DateTime
+    +Metadata: Dictionary<string, string>
+  }
+
+  class AlertWindow {
+    +Id: Guid
+    +Region: string
+    +RiskType: string
+    +Status: string
+  }
+}
+
+RiskEvaluation.RiskEvaluatedEvent --> AlertOrchestrator.RiskUpdatedEvent : fluxo esperado
+RiskEvaluation.HighRiskDetectedEvent --> AlertOrchestrator.RiskUpdatedEvent : fluxo esperado

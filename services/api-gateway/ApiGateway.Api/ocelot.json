@@ -1,0 +1,369 @@
+{
+  "Routes": [
+    {
+      "UpstreamPathTemplate": "/gateway/ingestion/data-source",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/ingestion/data-source",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ingestion",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/ingestion/sensor-collection",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/ingestion/sensor-collection",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ingestion",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/ingestion/last-detected-events",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/ingestion/last-detected-events",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ingestion",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/ingestion/collection-statistics",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/ingestion/collection-statistics",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "ingestion",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-catalog/event-types",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/event-types",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-catalog",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-catalog/event-types/event-type-by-code",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/event-types/event-type-by-code",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-catalog",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-catalog/event-types/severity-criterion",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/event-types/severity-criterion",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-catalog",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-catalog/event-types/severity",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/event-types/severity",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-catalog",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-catalog/event-types/{id}/status",
+      "UpstreamHttpMethod": [
+        "Patch",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/event-types/{id}/status",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-catalog",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-catalog/risk-model/risk-matrix",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-model/risk-matrix",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-catalog",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-catalog/risk-model/idf-curves",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-model/idf-curves",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-catalog",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-catalog/risk-model/regional-risk-parameters",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-model/regional-risk-parameters",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-catalog",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-catalog/risk-model/catalog/publish",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-model/catalog/publish",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-catalog",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/geospatial/contains-point",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/geospatial/contains-point",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "geospatial",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/geospatial/within-radius",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/geospatial/within-radius",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "geospatial",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/geospatial/intersects",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/geospatial/intersects",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "geospatial",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/geospatial/distance",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/geospatial/distance",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "geospatial",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/geospatial/evaluate-batch",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/geospatial/evaluate-batch",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "geospatial",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/geospatial/query/search-by-radius",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/geospatial/query/search-by-radius",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "geospatial",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/geospatial/query/search-by-polygon",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/geospatial/query/search-by-polygon",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "geospatial",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-evaluation/evaluate",
+      "UpstreamHttpMethod": [
+        "Post",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-evaluation/evaluate",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-evaluation",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-evaluation/history",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-evaluation/history",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-evaluation",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-evaluation/{id}",
+      "UpstreamHttpMethod": [
+        "Get",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-evaluation/{id}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-evaluation",
+          "Port": 8080
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/risk-evaluation/model",
+      "UpstreamHttpMethod": [
+        "Put",
+        "Options"
+      ],
+      "DownstreamPathTemplate": "/api/risk-evaluation/model",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "risk-evaluation",
+          "Port": 8080
+        }
+      ]
+    }
+  ]
+}

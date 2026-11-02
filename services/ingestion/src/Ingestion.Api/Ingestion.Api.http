@@ -1,6 +1,48 @@
-@Ingestion.Api_HostAddress = http://localhost:5140
+# =====================================================
+# Ingestion API - Test Requests
+# =====================================================
 
-GET {{Ingestion.Api_HostAddress}}/weatherforecast/
+### GET: Últimos eventos detectados
+GET http://localhost:5000/api/ingestion/last-detected-events?limit=50
 Accept: application/json
 
-###
+### GET: Estatísticas de coleção
+GET http://localhost:5000/api/ingestion/collection-statistics?initialDate=2025-01-01&endDate=2025-12-14
+Accept: application/json
+
+### POST: Registrar Data Source
+POST http://localhost:5000/api/ingestion/data-source
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Estacao Meteorologica A",
+  "dataSourceType": "WeatherStation",
+  "measurementType": "Temperature",
+  "endpoint": "http://sensor.local/api",
+  "collectionFrequency": "10m"
+}
+
+### POST: Registrar Sensor Collection
+POST http://localhost:5000/api/ingestion/sensor-collection
+Content-Type: application/json
+Accept: application/json
+
+{
+  "datasourceId": "123e4567-e89b-12d3-a456-426614174000",
+  "tenantId": "987e6543-e21b-12d3-a456-426614174999",
+  "collectedAt": "2025-12-14T18:00:00",
+  "payload": "{ \"temperature\": 28.5 }",
+  "sampleSensors": [
+    {
+      "sensorId": "111e2222-e33b-44d5-a555-666777888999",
+      "value": 28.5,
+      "unit": "Celsius"
+    },
+    {
+      "sensorId": "222e3333-e44b-55d5-a666-777888999000",
+      "value": 29.1,
+      "unit": "Celsius"
+    }
+  ]
+}
