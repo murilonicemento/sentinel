@@ -1,6 +1,7 @@
 using Confluent.Kafka;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using TenantsBilling.Application.Auditing;
 using TenantsBilling.Domain.Events;
 using TenantsBilling.Domain.Repositories;
 using TenantsBilling.Infrastructure.HostedServices;
@@ -18,7 +19,8 @@ public static class ServiceCollectionExtensions
         string? connectionString,
         string kafkaBootstrapServers,
         string kafkaTopic,
-        bool usePostgres = true)
+        bool usePostgres = true,
+        string auditTopic = "audit-events")
     {
         if (usePostgres && !string.IsNullOrWhiteSpace(connectionString))
         {
@@ -40,6 +42,8 @@ public static class ServiceCollectionExtensions
             new ProducerBuilder<Null, string>(new ProducerConfig { BootstrapServers = kafkaBootstrapServers }).Build());
         services.AddSingleton<ITenantEventPublisher>(sp =>
             new KafkaTenantEventPublisher(sp.GetRequiredService<IProducer<Null, string>>(), kafkaTopic));
+        services.AddSingleton<IAuditEventPublisher>(_ =>
+            new KafkaAuditEventPublisher(kafkaBootstrapServers, auditTopic));
 
         services.AddHostedService<TenantUsageEventConsumerHostedService>();
         services.AddHostedService<TenantDeadLetterConsumerHostedService>();

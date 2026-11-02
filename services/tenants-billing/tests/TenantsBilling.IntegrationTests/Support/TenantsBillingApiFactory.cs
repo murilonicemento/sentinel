@@ -4,12 +4,17 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using System.Collections.Concurrent;
+using TenantsBilling.Application.Auditing;
 using TenantsBilling.Domain.Events;
 
 namespace TenantsBilling.IntegrationTests.Support;
 
 public sealed class TenantsBillingApiFactory : WebApplicationFactory<Program>
 {
+    /// <summary>Audit events the API published, in order.</summary>
+    public RecordingAuditPublisher Audit { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -27,6 +32,8 @@ public sealed class TenantsBillingApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IHostedService>();
             services.RemoveAll<ITenantEventPublisher>();
             services.AddSingleton<ITenantEventPublisher, NoOpTenantEventPublisher>();
+            services.RemoveAll<IAuditEventPublisher>();
+            services.AddSingleton<IAuditEventPublisher>(Audit);
         });
     }
 
@@ -34,5 +41,16 @@ public sealed class TenantsBillingApiFactory : WebApplicationFactory<Program>
     {
         public Task PublishAsync(string eventType, object payload, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
+    }
+}
+
+public sealed class RecordingAuditPublisher : IAuditEventPublisher
+{
+    public ConcurrentQueue<AuditEventEnvelope> Published { get; } = new();
+
+    public Task PublishAsync(AuditEventEnvelope auditEvent, CancellationToken cancellationToken = default)
+    {
+        Published.Enqueue(auditEvent);
+        return Task.CompletedTask;
     }
 }

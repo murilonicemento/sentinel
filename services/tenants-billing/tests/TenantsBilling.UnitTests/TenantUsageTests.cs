@@ -98,7 +98,7 @@ public class TenantUsageTests
         await plans.AddAsync(Plan);
         var publisher = new RecordingPublisher();
         var service = new TenantManagementService(new InMemoryTenantRepository(), plans, publisher,
-            new InMemoryTenantUsageRepository(), clock);
+            new InMemoryTenantUsageRepository(), new RecordingAuditPublisher(), new FixedActor(), clock);
         var tenant = await service.CreateTenantAsync(new CreateTenantCommand($"tenant-{Guid.NewGuid():N}", Plan.Id,
             TimeZone: "America/Sao_Paulo"));
         return (service, tenant, publisher);

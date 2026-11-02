@@ -1,3 +1,4 @@
+using TenantsBilling.Application.Auditing;
 using System.Text.Json;
 using Confluent.Kafka;
 using Microsoft.Extensions.DependencyInjection;
@@ -58,6 +59,8 @@ public sealed class TenantUsageConsumerTests
             .AddSingleton<IPlanRepository>(_plans)
             .AddSingleton<ITenantUsageRepository>(new InMemoryTenantUsageRepository())
             .AddSingleton(_publisher.Object)
+            .AddSingleton<IAuditEventPublisher>(new RecordingAuditPublisher())
+            .AddSingleton<ICurrentActor>(new FixedActor(AuditActor.System))
             .AddScoped<TenantManagementService>()
             .BuildServiceProvider();
         var hosted = new TenantUsageEventConsumerHostedService(consumer.Object, UsageTopic, ReplayTopic,

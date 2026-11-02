@@ -1,3 +1,4 @@
+using TenantsBilling.Application.Auditing;
 using TenantsBilling.Application.Errors;
 using TenantsBilling.Domain.Aggregates;
 using TenantsBilling.Domain.Enums;
@@ -16,10 +17,15 @@ public sealed class TenantManagementService
     private readonly ITenantEventPublisher _eventPublisher;
     private readonly ITenantUsageRepository _usageRepository;
     private readonly TimeProvider _timeProvider;
+    private readonly IAuditEventPublisher _auditPublisher;
+    private readonly ICurrentActor _currentActor;
 
     public TenantManagementService(ITenantRepository tenantRepository, IPlanRepository planRepository,
-        ITenantEventPublisher eventPublisher, ITenantUsageRepository usageRepository, TimeProvider? timeProvider = null)
+        ITenantEventPublisher eventPublisher, ITenantUsageRepository usageRepository,
+        IAuditEventPublisher auditPublisher, ICurrentActor currentActor, TimeProvider? timeProvider = null)
     {
+        _auditPublisher = auditPublisher;
+        _currentActor = currentActor;
         _tenantRepository = tenantRepository;
         _planRepository = planRepository;
         _eventPublisher = eventPublisher;
@@ -48,6 +54,8 @@ public sealed class TenantManagementService
         var tenant = Tenant.Create(command.Name, command.PlanId, command.Region, command.TimeZone);
         await _tenantRepository.AddAsync(tenant, cancellationToken);
         await _eventPublisher.PublishAsync("TenantCreated", new { tenant.Id, tenant.Name, tenant.PlanId, tenant.Region, tenant.TimeZone }, cancellationToken);
+        await _auditPublisher.PublishAsync(AuditEventEnvelope.TenantCreated(tenant, _currentActor.Get()),
+            cancellationToken);
 
         return tenant;
     }
@@ -129,7 +137,8 @@ public sealed class TenantManagementService
 
     /// <summary>
     /// Suspends, activates or cancels a tenant (see <see cref="Tenant.CanChangeStatusTo"/>) and publishes
-    /// <c>TenantSuspended</c>, <c>TenantReactivated</c> or <c>TenantCanceled</c>. Asking for the current status
+    /// <c>TenantSuspended</c>, <c>TenantReactivated</c> or <c>TenantCanceled</c>, plus the <c>TenantUpdated</c> audit
+    /// event with the acting identity and the status before and after. Asking for the current status
     /// changes nothing and publishes nothing, so a retried request is harmless. A status changed by someone else
     /// between the read and the write is a conflict, never overwritten.
     /// </summary>
@@ -159,6 +168,8 @@ public sealed class TenantManagementService
             _ => "TenantReactivated"
         };
         await _eventPublisher.PublishAsync(eventType, new { tenant.Id, tenant.Name, tenant.Status }, cancellationToken);
+        await _auditPublisher.PublishAsync(
+            AuditEventEnvelope.TenantStatusChanged(tenant, current, _currentActor.Get()), cancellationToken);
         return tenant;
     }
 }

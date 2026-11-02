@@ -56,9 +56,11 @@ public class TenantStatusServiceTests
 {
     private readonly InMemoryTenantRepository _tenants = new();
     private readonly RecordingPublisher _publisher = new();
+    private readonly RecordingAuditPublisher _audit = new();
 
     private TenantManagementService Service(ITenantRepository? tenants = null) =>
-        new(tenants ?? _tenants, new InMemoryPlanRepository(), _publisher, new InMemoryTenantUsageRepository());
+        new(tenants ?? _tenants, new InMemoryPlanRepository(), _publisher, new InMemoryTenantUsageRepository(), _audit,
+            new FixedActor());
 
     private async Task<Tenant> StoredAsync(TenantStatus status)
     {

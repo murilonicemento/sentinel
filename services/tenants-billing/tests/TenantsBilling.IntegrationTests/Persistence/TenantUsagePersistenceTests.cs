@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using TenantsBilling.Application.Auditing;
 using TenantsBilling.Application.Services;
 using TenantsBilling.Domain.Aggregates;
 using TenantsBilling.Domain.Enums;
@@ -53,7 +54,7 @@ public class TenantUsagePersistenceTests : IClassFixture<TenantsBillingPostgresF
 
     private static TenantManagementService Service(TenantsBillingDbContext context) => new(
         new PostgresTenantRepository(context), new PostgresPlanRepository(context), new NullPublisher(),
-        new PostgresTenantUsageRepository(context));
+        new PostgresTenantUsageRepository(context), new NullAudit(), new NullAudit());
 
     [Fact]
     public async Task Schema_MatchesTheModel()
@@ -125,6 +126,14 @@ public class TenantUsagePersistenceTests : IClassFixture<TenantsBillingPostgresF
         secondUsage!.Record(20, 0, 0, 0, plan, DateTime.UtcNow);
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => secondRepository.SaveAsync(secondUsage, "evt-b"));
+    }
+
+    private sealed class NullAudit : IAuditEventPublisher, ICurrentActor
+    {
+        public Task PublishAsync(AuditEventEnvelope auditEvent, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public AuditActor Get() => AuditActor.System;
     }
 
     private sealed class NullPublisher : ITenantEventPublisher

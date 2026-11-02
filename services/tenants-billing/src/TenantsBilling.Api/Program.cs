@@ -4,6 +4,7 @@ using Scalar.AspNetCore;
 using TenantsBilling.Api.Endpoints;
 using TenantsBilling.Api.Observability;
 using TenantsBilling.Api.Security;
+using TenantsBilling.Application.Auditing;
 using TenantsBilling.Application.Services;
 using TenantsBilling.Infrastructure;
 
@@ -26,12 +27,17 @@ var postgresConnectionString = builder.Configuration.GetConnectionString("Tenant
 var kafkaBootstrapServers = builder.Configuration["Kafka:BootstrapServers"]
     ?? throw new InvalidOperationException("Configuration 'Kafka:BootstrapServers' is required.");
 var kafkaTopic = builder.Configuration["Kafka:Topic"] ?? "tenants-billing-events";
+var auditTopic = builder.Configuration["Kafka:AuditTopic"] ?? "audit-events";
 
 builder.Services.AddTenantsBillingInfrastructure(
     postgresConnectionString,
     kafkaBootstrapServers,
     kafkaTopic,
-    usePostgres: !string.IsNullOrWhiteSpace(postgresConnectionString));
+    usePostgres: !string.IsNullOrWhiteSpace(postgresConnectionString),
+    auditTopic: auditTopic);
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentActor, HttpCurrentActor>();
 
 builder.Services.AddScoped<TenantManagementService>();
 builder.Services.AddScoped<PlanManagementService>();

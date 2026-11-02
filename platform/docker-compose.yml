@@ -253,6 +253,7 @@ services:
       - ConnectionStrings__TenantsBillingDatabase=Host=postgres;Port=5432;Database=tenants_billing;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - Kafka__BootstrapServers=kafka:9092
       - Kafka__Topic=tenants-billing-events
+      - Kafka__AuditTopic=audit-events
       - Kafka__UsageTopic=tenant-usage-events
       - Kafka__DeadLetterTopic=tenant-usage-events-dlq
       - Kafka__ReplayTopic=tenant-usage-events-replay

@@ -263,6 +263,23 @@ public class TenantsBillingV1LifecycleTests : IClassFixture<TenantsBillingApiFac
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"{BasePath}/plans")).StatusCode);
     }
 
+    [Fact]
+    public async Task CreationAndStatusChanges_AreAuditedWithTheTokensSubject()
+    {
+        var tenantId = await CreateTenantAsync();
+
+        Assert.Equal(HttpStatusCode.OK, (await ChangeStatusAsync(AdminOf(tenantId), tenantId, "Suspended")).StatusCode);
+
+        var audits = _factory.Audit.Published.Where(a => a.TenantId == tenantId.ToString()).ToList();
+        Assert.Equal(["TenantCreated", "TenantUpdated"], audits.Select(a => a.EventType));
+        Assert.All(audits, audit =>
+        {
+            Assert.Equal("User", audit.Actor.Type);
+            Assert.Equal("user-1", audit.Actor.Id);
+            Assert.Equal("tenants-billing", audit.SourceService);
+        });
+    }
+
     private static List<Guid> Ids(JsonElement page) =>
         page.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetGuid()).ToList();
 }
