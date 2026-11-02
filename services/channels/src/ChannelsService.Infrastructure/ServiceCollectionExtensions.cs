@@ -88,6 +88,7 @@ public static class ServiceCollectionExtensions
                 return new ProducerBuilder<Null, string>(config).Build();
             })
             .AddSingleton<INotificationPublisher, KafkaNotificationPublisher>()
+            .AddSingleton<ITenantUsagePublisher, KafkaTenantUsagePublisher>()
             .AddSingleton<IDeadLetterPublisher, KafkaDeadLetterPublisher>();
 
     private static IServiceCollection AddServices(this IServiceCollection services, IConfiguration configuration)

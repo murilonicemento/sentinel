@@ -291,6 +291,7 @@ services:
       - Kafka__DeadLetterTopic=notification-events-dlq
       - Kafka__ConsumerDeadLetterTopic=channels-dead-letter
       - Kafka__AlertCommandsTopic=alert-commands
+      - Kafka__TenantUsageTopic=tenant-usage-events
       - Loki__Url=http://loki:3100
       - OpenTelemetry__OtlpEndpoint=http://tempo:4317
       # Provider credentials are optional locally; without them deliveries fail and go to notification-events-dlq.

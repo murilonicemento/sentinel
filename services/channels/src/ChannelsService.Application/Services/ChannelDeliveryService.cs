@@ -19,6 +19,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
     private readonly IChannelMetrics _metrics;
     private readonly ILogger<ChannelDeliveryService> _logger;
     private readonly ITenantBillingGateway _tenantBillingGateway;
+    private readonly ITenantUsagePublisher _usagePublisher;
 
     public ChannelDeliveryService(
         IEnumerable<IChannelProvider> providers,
@@ -28,7 +29,8 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
         IFallbackExecutor fallbackExecutor,
         IChannelMetrics metrics,
         ILogger<ChannelDeliveryService> logger,
-        ITenantBillingGateway tenantBillingGateway)
+        ITenantBillingGateway tenantBillingGateway,
+        ITenantUsagePublisher usagePublisher)
     {
         _providers = providers;
         _deliveryRepository = deliveryRepository;
@@ -38,6 +40,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
         _metrics = metrics;
         _logger = logger;
         _tenantBillingGateway = tenantBillingGateway;
+        _usagePublisher = usagePublisher;
     }
 
     public async Task<DeliveryResultDTO> DeliverAsync(NotificationEvent notification, CancellationToken cancellationToken)
@@ -102,6 +105,9 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                 _logger.LogInformation("Event {EventId} was already delivered on channel {Channel}; skipping",
                     notification.EventId, channel);
                 successfulProviders.Add(deliveredBy);
+                // Reported again in case the earlier attempt delivered but failed before reporting; the usage id
+                // is the same, so tenants-billing counts the channel once.
+                await ReportChannelUsageAsync(notification, channel, cancellationToken);
                 continue;
             }
 
@@ -158,6 +164,7 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                     notification.EventId,
                     channel,
                     attemptResult.ProviderName);
+                await ReportChannelUsageAsync(notification, channel, cancellationToken);
             }
             else
             {
@@ -188,5 +195,24 @@ public sealed class ChannelDeliveryService : IChannelDeliveryService
                 ? $"All configured channels failed: {string.Join(",", failedChannels)}"
                 : "No channels were attempted."
         };
+    }
+
+    /// <summary>
+    /// Counts a delivered channel for the notification's tenant (X-24). A failure propagates, so the notification is
+    /// retried: the channel is not resent, only reported again.
+    /// </summary>
+    private async Task ReportChannelUsageAsync(NotificationEvent notification, ChannelTypeEnum channel,
+        CancellationToken cancellationToken)
+    {
+        var usage = TenantUsageEventDTO.ForDeliveredChannel(notification.TenantId, notification.EventId, channel);
+        if (usage is null)
+        {
+            _logger.LogWarning(
+                "Notification {EventId} has no tenant id or event id; its delivery on {Channel} is not reported as usage",
+                notification.EventId, channel);
+            return;
+        }
+
+        await _usagePublisher.PublishAsync(usage, cancellationToken);
     }
 }
