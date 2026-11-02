@@ -40,6 +40,8 @@ dotnet ef migrations add <Name> \
 
 Tests use xUnit and Moq. Integration tests use `WebApplicationFactory`, and some use Testcontainers (Postgres, Redis, Kafka).
 
+CI (`.github/workflows/ci.yml`) runs on pushes and pull requests to `develop` and `master`: a **build** job (`dotnet restore`, `dotnet build -c Release -warnaserror`, `dotnet format whitespace --verify-no-changes` on the solution) and a **test** job (`dotnet test -c Release` with TRX results and Cobertura coverage uploaded as the `test-results` artifact). Integration tests run their Testcontainers on the runner's Docker, so a new warning, a formatting change or a failing test fails the pipeline.
+
 NuGet versions are managed centrally in `Directory.Packages.props` (`ManagePackageVersionsCentrally`). `PackageReference` items in `.csproj` files carry no `Version`; add or bump versions only in `Directory.Packages.props`. A per-project exception uses `VersionOverride` and must be documented in `docs/compliance/services-validation.md` (X-06). Every Dockerfile copies that file from the `repo-root` build context, which `platform/docker-compose.yml` defines for each service.
 
 **Solution and Project Organization**
