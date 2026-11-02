@@ -1,0 +1,25 @@
+# Requer um JWT (HS256) assinado com Jwt:SigningKey, contendo "sub", "role" (Audit.Read/Audit.Export/...)
+# e "tenant_id" com o mesmo valor enviado em X-Tenant-Id.
+@host = http://localhost:5051
+@token = <jwt>
+@tenantId = 00000000-0000-0000-0000-000000000001
+
+GET {{host}}/api/v1/audit-compliance/records?from=2026-01-01T00:00:00Z&to=2026-01-31T00:00:00Z&page=1&pageSize=10
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenantId}}
+Accept: application/json
+
+###
+
+POST {{host}}/api/v1/audit-compliance/exports
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenantId}}
+Content-Type: application/json
+
+{
+  "format": "csv",
+  "from": "2026-01-01T00:00:00Z",
+  "to": "2026-01-31T00:00:00Z"
+}
+
+###

@@ -1,3 +1,5 @@
+using Ingestion.Api.Contracts;
+using Ingestion.Api.Security;
 using Ingestion.Application.Commands;
 using Ingestion.Application.DTO;
 using Ingestion.Application.Events;
@@ -9,15 +11,18 @@ using Microsoft.AspNetCore.Mvc;
 namespace Ingestion.Api.Controllers;
 
 [Route("api/ingestion")]
+[DeprecatedRoute("/" + IngestionV1Controller.BasePath)]
 [ApiController]
 [Authorize]
 public class IngestionController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly TenantAccessEvaluator _tenantAccess;
 
-    public IngestionController(IMediator mediator)
+    public IngestionController(IMediator mediator, TenantAccessEvaluator tenantAccess)
     {
         _mediator = mediator;
+        _tenantAccess = tenantAccess;
     }
 
     [HttpGet("last-detected-events")]
@@ -48,6 +53,8 @@ public class IngestionController : ControllerBase
     public async Task<ActionResult<ResponseBaseDTO<RegisterDatasourceResponseDTO>>> RegisterDatasource(
         [FromBody] RegisterDataSourceCommand command)
     {
+        if (!_tenantAccess.CanAccessTenant(User, command.TenantId)) return Forbid();
+
         var (dataSourceId, tenantId) = await _mediator.Send(command);
 
         return Created(
@@ -61,6 +68,8 @@ public class IngestionController : ControllerBase
     public async Task<ActionResult<ResponseBaseDTO<Guid>>> RegisterClimaticEvent(
         [FromBody] RegisterClimaticEventCommand command)
     {
+        if (!_tenantAccess.CanAccessTenant(User, command.TenantId)) return Forbid();
+
         var climaticEventId = await _mediator.Send(command);
 
         return Created("api/ingestion/climatic", new { ClimaticEventId = climaticEventId });
@@ -71,18 +80,22 @@ public class IngestionController : ControllerBase
     public async Task<ActionResult<ResponseBaseDTO<Guid>>> RegisterDisasterEvent(
         [FromBody] RegisterDisasterEventCommand command)
     {
+        if (!_tenantAccess.CanAccessTenant(User, command.TenantId)) return Forbid();
+
         var disasterEventId = await _mediator.Send(command);
 
         return Created("api/ingestion/disaster", new { DisasterEventId = disasterEventId });
     }
 
-    // [HttpPost("sensor-collection")]
-    // [Authorize(Policy = "IngestionWrite")]
-    // public async Task<ActionResult<ResponseBaseDTO<Guid>>> RegisterSensorCollection(
-    //     [FromBody] RegisterSensorCollectionCommand command)
-    // {
-    //     var sensorCollectionId = await _mediator.Send(command);
+    [HttpPost("sensor-collection")]
+    [Authorize(Policy = "IngestionWrite")]
+    public async Task<ActionResult<ResponseBaseDTO<Guid>>> RegisterSensorCollection(
+        [FromBody] RegisterSensorCollectionCommand command)
+    {
+        if (!_tenantAccess.CanAccessTenant(User, command.TenantId)) return Forbid();
 
-    //     return Created("api/ingestion/sensor-collection", new { SensorCollectionId = sensorCollectionId });
-    // }
+        var sensorCollectionId = await _mediator.Send(command);
+
+        return Created("api/ingestion/sensor-collection", new { SensorCollectionId = sensorCollectionId });
+    }
 }

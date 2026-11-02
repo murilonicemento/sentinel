@@ -15,7 +15,7 @@ public class RegisterDisasterEventHandler : IRequestHandler<RegisterDisasterEven
     }
 
     public async Task<Guid> Handle(RegisterDisasterEventCommand request, CancellationToken cancellationToken)
-        => await _sensorCollectionService.ProcessSensorCollection<SensorEventDetected>(
+        => await _sensorCollectionService.ProcessSensorCollection(
             request.DatasourceId, request.TenantId, request.CollectedAt,
             request.Payload, request.SampleSensors, "Disaster", cancellationToken);
 }

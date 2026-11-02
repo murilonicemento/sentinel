@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TenantsBilling.Api\TenantsBilling.Api.csproj" />
+    <ProjectReference Include="..\..\src\TenantsBilling.Application\TenantsBilling.Application.csproj" />
+    <ProjectReference Include="..\..\src\TenantsBilling.Domain\TenantsBilling.Domain.csproj" />
+    <ProjectReference Include="..\..\src\TenantsBilling.Infrastructure\TenantsBilling.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,16 +1,18 @@
-using Geospatial.Api.Attributes;
+using Geospatial.Api.Contracts;
+using Geospatial.Api.Security;
 using Geospatial.Application.DTOs;
 using Geospatial.Application.Interfaces.UseCases;
 using Geospatial.Application.Mappers;
 using Geospatial.Domain.Events;
-using Geospatial.Domain.Repositories;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Geospatial.Api.Controllers;
 
 [ApiController]
 [Route("api/geospatial")]
-[ApiKeyAuth]
+[Authorize(Policy = GeospatialPolicies.Read)]
+[DeprecatedRoute("/" + GeospatialV1Controller.BasePath)]
 public class GeospatialController : ControllerBase
 {
     private readonly IContainsPointUseCase _containsPointUseCase;
@@ -18,7 +20,7 @@ public class GeospatialController : ControllerBase
     private readonly IIntersectsUseCase _intersectsUseCase;
     private readonly IDistanceUseCase _distanceUseCase;
     private readonly IBatchEvaluateUseCase _batchEvaluateUseCase;
-    private readonly IGeospatialEventRepository _repository;
+    private readonly ISearchGeospatialEventsUseCase _searchGeospatialEventsUseCase;
 
     public GeospatialController(
         IContainsPointUseCase containsPointUseCase,
@@ -26,14 +28,14 @@ public class GeospatialController : ControllerBase
         IIntersectsUseCase intersectsUseCase,
         IDistanceUseCase distanceUseCase,
         IBatchEvaluateUseCase batchEvaluateUseCase,
-        IGeospatialEventRepository repository)
+        ISearchGeospatialEventsUseCase searchGeospatialEventsUseCase)
     {
         _containsPointUseCase = containsPointUseCase;
         _withinRadiusUseCase = withinRadiusUseCase;
         _intersectsUseCase = intersectsUseCase;
         _distanceUseCase = distanceUseCase;
         _batchEvaluateUseCase = batchEvaluateUseCase;
-        _repository = repository;
+        _searchGeospatialEventsUseCase = searchGeospatialEventsUseCase;
     }
 
     [HttpPost("query/search-by-radius")]
@@ -41,7 +43,7 @@ public class GeospatialController : ControllerBase
         [FromBody] SearchByRadiusRequestDTO request,
         CancellationToken cancellationToken)
     {
-        var events = await _repository.SearchByPointAsync(
+        var events = await _searchGeospatialEventsUseCase.SearchByRadiusAsync(
             request.Center.Latitude,
             request.Center.Longitude,
             request.RadiusMeters,
@@ -61,7 +63,7 @@ public class GeospatialController : ControllerBase
         }
 
         var polygon = request.Polygon.Select(p => (p.Latitude, p.Longitude)).ToList();
-        var events = await _repository.SearchByPolygonAsync(polygon, cancellationToken);
+        var events = await _searchGeospatialEventsUseCase.SearchByPolygonAsync(polygon, cancellationToken);
 
         return Ok(events);
     }

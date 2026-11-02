@@ -1,56 +1,56 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
+using RiskEvaluation.Application.Interfaces.HttpClients;
 using RiskEvaluation.Domain.Entities;
+using RiskEvaluation.Domain.Interfaces;
 using RiskEvaluation.Domain.Repositories;
 
 namespace RiskEvaluation.Application.Handlers;
 
+/// <summary>
+/// Records the published catalog version, copies its regional parameters, severity criteria and matrix entries into a
+/// local snapshot used by every evaluation, and drops scores cached under the previous version. If risk-catalog cannot
+/// answer, the exception reaches the consumer, which retries the publication.
+/// </summary>
 public class RiskCatalogPublishedEventHandler : INotificationHandler<RiskCatalogPublishedEvent>
 {
-    private readonly IRiskModelRepository _riskModelRepository;
+    private readonly IRecentScoresCache _cache;
+    private readonly IRiskCatalogClient _catalogClient;
+    private readonly ICatalogSnapshotRepository _catalogSnapshots;
+    private readonly ICatalogVersionRepository _catalogVersions;
     private readonly ILogger<RiskCatalogPublishedEventHandler> _logger;
+    private readonly TimeProvider _timeProvider;
 
     public RiskCatalogPublishedEventHandler(
-        IRiskModelRepository riskModelRepository,
-        ILogger<RiskCatalogPublishedEventHandler> logger)
+        ICatalogVersionRepository catalogVersions,
+        ICatalogSnapshotRepository catalogSnapshots,
+        IRiskCatalogClient catalogClient,
+        IRecentScoresCache cache,
+        ILogger<RiskCatalogPublishedEventHandler> logger,
+        TimeProvider? timeProvider = null)
     {
-        _riskModelRepository = riskModelRepository;
+        _catalogVersions = catalogVersions;
+        _catalogSnapshots = catalogSnapshots;
+        _catalogClient = catalogClient;
+        _cache = cache;
         _logger = logger;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task Handle(RiskCatalogPublishedEvent notification, CancellationToken cancellationToken)
     {
-        if (notification == null)
-        {
-            _logger.LogError("RiskCatalogPublishedEvent received but notification is null");
-            return;
-        }
+        await _catalogVersions.SaveAsync(new CatalogVersion(notification.Version, notification.Notes,
+            notification.PublishedAt, notification.PublishedBy, _timeProvider.GetUtcNow().UtcDateTime),
+            cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(notification.Version))
-        {
-            _logger.LogWarning("Risk catalog published event rejected: Version is required");
-            return;
-        }
+        var snapshot = await _catalogClient.FetchSnapshotAsync(notification.Version, cancellationToken);
+        await _catalogSnapshots.SaveAsync(snapshot, cancellationToken);
 
-        try
-        {
-            var riskModel = new RiskModel(
-                notification.Version,
-                notification.Parameters,
-                notification.Formula);
+        var removed = await _cache.InvalidateAllAsync(cancellationToken);
 
-            await _riskModelRepository.SaveAsync(riskModel, cancellationToken);
-
-            _logger.LogInformation(
-                "Risk catalog published and saved. Version: {Version}, Parameters: {ParameterCount}, Formula: {Formula}",
-                riskModel.Version,
-                riskModel.Parameters.Count,
-                riskModel.Formula);
-        }
-        catch (ArgumentException ex)
-        {
-            _logger.LogError(ex, "Failed to create RiskModel from catalog event. Version: {Version}",
-                notification.Version);
-        }
+        _logger.LogInformation(
+            "Risk catalog version {Version} copied ({Regions} regions, {Criteria} severity criteria, {Matrix} matrix entries); {Removed} cached scores invalidated",
+            notification.Version, snapshot.Regions.Count, snapshot.SeverityRules.Count, snapshot.MatrixRules.Count,
+            removed);
     }
 }

@@ -1,22 +1,24 @@
 using System.Net;
-using System.Text;
+using Ingestion.Api.Contracts;
 using Ingestion.Api.Filters;
 using Ingestion.Api.Middlewares;
+using Ingestion.Api.Observability;
+using Ingestion.Api.Security;
 using Ingestion.Application;
 using Ingestion.Infrastructure.Read;
+using Ingestion.Infrastructure.Read.HealthChecks;
 using Ingestion.Infrastructure.Write;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Ingestion.Infrastructure.Write.HostedServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Configuration.Json;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Bson.Serialization.Serializers;
 using Scalar.AspNetCore;
-using Serilog;
-using Serilog.Sinks.Elasticsearch;
 
 namespace Ingestion.Api;
 
@@ -25,6 +27,7 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        AddPollingSubscriptionsFile(builder);
 
         Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
@@ -32,33 +35,17 @@ public class Program
         {
             new IgnoreExtraElementsConvention(true)
         };
-        BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+        BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
         ConventionRegistry.Register("IgnoreExtra", pack, _ => true);
 
-        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+        builder.AddSentinelObservability("ingestion", meters: [PollingMetrics.MeterName, OutboxMetrics.MeterName]);
+        AddReadinessChecks(builder);
 
-        Log.Logger = new LoggerConfiguration()
-            .Enrich.FromLogContext()
-            .Enrich.WithEnvironmentName()
-            .Enrich.WithThreadId()
-            .WriteTo.Console()
-            .WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(builder.Configuration["ElasticSearch:URI"]!))
-            {
-                AutoRegisterTemplate = true,
-                IndexFormat = $"ingestion-logs-{environment.ToLower()}-{DateTime.UtcNow:yyyy-MM}",
-                NumberOfShards = 1,
-                NumberOfReplicas = 1,
-                MinimumLogEventLevel = Serilog.Events.LogEventLevel.Information,
-                FailureCallback = e =>
-                    Console.WriteLine("An error occurred while sending logs to Elasticsearch: " + e.MessageTemplate)
-            })
-            .CreateLogger();
-
-        builder.Host.UseSerilog();
         builder.Services.AddControllers(options => { options.Filters.Add<ResponseWrapperFilter>(); });
         builder.Services
             .AddOpenApi(options =>
             {
+                options.MarkDeprecatedOperations();
                 options.AddDocumentTransformer((document, context, cancellationToken) =>
                 {
                     document.Components ??= new OpenApiComponents();
@@ -108,6 +95,8 @@ public class Program
             {
                 options.InvalidModelStateResponseFactory = context =>
                 {
+                    if (ApiProblems.IsVersionedApi(context.HttpContext)) return ModelValidationProblems.For(context);
+
                     var errors = context.ModelState
                         .Values
                         .SelectMany(v => v.Errors)
@@ -130,34 +119,24 @@ public class Program
                 };
             });
 
-        builder.Services
-            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options =>
+        builder.Services.AddProblemDetails(options =>
+        {
+            options.CustomizeProblemDetails = context =>
             {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                    ValidAudience = builder.Configuration["Jwt:Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
-                };
-            });
-
-        builder.Services.AddAuthorizationBuilder()
-            .AddPolicy("IngestionRead", policy =>
-                policy.RequireRole("Ingestion.Admin", "Ingestion.Read"))
-            .AddPolicy("IngestionWrite", policy =>
-                policy.RequireRole("Ingestion.Admin", "Ingestion.Write"));
+                var status = context.ProblemDetails.Status ?? StatusCodes.Status500InternalServerError;
+                ApiProblems.Enrich(context.ProblemDetails, context.HttpContext, ApiProblems.DefaultCodeFor(status));
+            };
+        });
+        builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+        builder.Services.AddIngestionAuthentication(builder.Configuration);
 
         var app = builder.Build();
 
+        app.UseSentinelRequestLogging();
+
         if (app.Environment.IsDevelopment())
         {
-            app.MapOpenApi();
+            app.MapOpenApi().AllowAnonymous();
             app.MapScalarApiReference(options =>
             {
                 options
@@ -166,14 +145,57 @@ public class Program
                     .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
                     .AddPreferredSecuritySchemes("BearerAuth")
                     .AddHttpAuthentication("BearerAuth", auth => { auth.Token = builder.Configuration["Scalar:AuthToken"]; });
-            });
+            }).AllowAnonymous();
         }
 
+        app.UseExceptionHandler();
+        app.UseWhen(ApiProblems.IsVersionedApi, versioned => versioned.UseStatusCodePages());
         app.UseHttpsRedirection();
         app.UseAuthentication();
         app.UseAuthorization();
         app.UseMiddleware<ExceptionHandlingMiddleware>();
         app.MapControllers();
+        app.MapSentinelOperationalEndpoints();
         app.Run();
+    }
+
+    /// <summary>
+    /// Polling subscriptions (tenants, data sources, areas) come from an optional <c>appsettings.Polling.json</c>
+    /// mounted by the deployment. It sits right after <c>appsettings.{Environment}.json</c>, so User Secrets and
+    /// environment variables, where the provider keys live, still override it.
+    /// </summary>
+    private static void AddPollingSubscriptionsFile(WebApplicationBuilder builder)
+    {
+        var sources = builder.Configuration.Sources;
+        var environmentFile = $"appsettings.{builder.Environment.EnvironmentName}.json";
+        var anchor = sources.OfType<JsonConfigurationSource>().LastOrDefault(source =>
+            source.Path is "appsettings.json" || source.Path == environmentFile);
+        var file = new JsonConfigurationSource
+        {
+            Path = "appsettings.Polling.json",
+            Optional = true,
+            ReloadOnChange = false,
+            FileProvider = builder.Environment.ContentRootFileProvider
+        };
+        sources.Insert(anchor is null ? 0 : sources.IndexOf(anchor) + 1, file);
+    }
+
+    /// <summary>Postgres (collections and outbox) and MongoDB (queries) gate readiness; Redis only deduplicates
+    /// polled samples, so it is reported on /health without gating readiness.</summary>
+    private static void AddReadinessChecks(WebApplicationBuilder builder)
+    {
+        var timeout = TimeSpan.FromSeconds(3);
+        var checks = builder.Services.AddHealthChecks()
+            .AddCheck<ReadDatabaseHealthCheck>("mongodb", tags: [ObservabilityExtensions.ReadinessTag],
+                timeout: timeout);
+
+        var writeDatabase = builder.Configuration.GetConnectionString("IngestionWriteDatabase");
+        if (!string.IsNullOrWhiteSpace(writeDatabase))
+            checks.AddNpgSql(writeDatabase, name: "postgresql", tags: [ObservabilityExtensions.ReadinessTag],
+                timeout: timeout);
+
+        var redis = builder.Configuration.GetConnectionString("Redis");
+        if (!string.IsNullOrWhiteSpace(redis))
+            checks.AddRedis(redis, name: "redis", failureStatus: HealthStatus.Degraded, timeout: timeout);
     }
 }

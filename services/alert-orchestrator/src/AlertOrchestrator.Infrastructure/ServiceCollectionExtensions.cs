@@ -10,15 +10,19 @@ using AlertOrchestrator.Infrastructure.HostedServices;
 using AlertOrchestrator.Infrastructure.Idempotency;
 using AlertOrchestrator.Infrastructure.Messaging.Consumers;
 using AlertOrchestrator.Infrastructure.Messaging.Publishers;
+using AlertOrchestrator.Infrastructure.Messaging.Reliability;
 using AlertOrchestrator.Infrastructure.Observability;
 using AlertOrchestrator.Infrastructure.Options;
 using AlertOrchestrator.Infrastructure.Persistence;
 using AlertOrchestrator.Infrastructure.Persistence.Repositories;
+using AlertOrchestrator.Infrastructure.Security;
+using AlertOrchestrator.Infrastructure.Services;
+using Confluent.Kafka;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 
 namespace AlertOrchestrator.Infrastructure;
 
@@ -52,11 +56,15 @@ public static class ServiceCollectionExtensions
             {
                 redisOptions.Configuration = options.RedisConnectionString;
             });
-            services.AddSingleton<IIdempotencyService>(sp =>
+            services.AddSingleton<IConnectionMultiplexer>(_ =>
             {
-                var cache = sp.GetRequiredService<IDistributedCache>();
-                return new RedisIdempotencyService(cache, options.IdempotencyExpiration);
+                var redisOptions = ConfigurationOptions.Parse(options.RedisConnectionString);
+                redisOptions.AbortOnConnectFail = false;
+                return ConnectionMultiplexer.Connect(redisOptions);
             });
+            services.AddSingleton<IIdempotencyService>(sp =>
+                new RedisIdempotencyService(sp.GetRequiredService<IConnectionMultiplexer>(),
+                    options.IdempotencyExpiration));
         }
         else
         {
@@ -68,6 +76,18 @@ public static class ServiceCollectionExtensions
 
         // Application Services
         services.AddScoped<IAlertWindowQueryService, AlertWindowQueryService>();
+
+        // Tenant Billing Gateway
+        if (!Uri.TryCreate(options.TenantsBillingBaseUrl, UriKind.Absolute, out var tenantsBillingBaseUrl))
+            throw new InvalidOperationException("Configuration 'Services:TenantsBillingBaseUrl' must be an absolute URL.");
+        services.AddHttpClient<TenantBillingGateway>((sp, client) =>
+        {
+            client.BaseAddress = tenantsBillingBaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(10);
+        })
+        .AddHttpMessageHandler<ServiceTokenHandler>();
+        services.AddScoped<ITenantBillingGateway>(sp =>
+            sp.GetRequiredService<TenantBillingGateway>());
 
         // Cooldown Service
         services.AddSingleton<IAlertCooldownService, DistributedAlertCooldownService>();
@@ -88,28 +108,37 @@ public static class ServiceCollectionExtensions
             return new KafkaCommandPublisher(options.KafkaBootstrapServers, options.CommandTopic, logger);
         });
 
-        // Consumers (Background Services)
-        services.AddHostedService<RiskUpdatedEventConsumer>(sp =>
-        {
-            var logger = sp.GetRequiredService<ILogger<RiskUpdatedEventConsumer>>();
-            return new RiskUpdatedEventConsumer(
-                options.KafkaBootstrapServers,
-                options.RiskUpdatedTopic,
-                options.ConsumerGroupId,
-                sp,
-                logger);
-        });
+        services.AddSingleton<ITenantUsagePublisher>(sp => new KafkaTenantUsagePublisher(
+            options.KafkaBootstrapServers, options.TenantUsageTopic,
+            sp.GetRequiredService<ILogger<KafkaTenantUsagePublisher>>()));
+        services.AddSingleton<IReportingEventPublisher>(sp => new KafkaReportingEventPublisher(
+            options.KafkaBootstrapServers, options.ReportingTopic,
+            sp.GetRequiredService<ILogger<KafkaReportingEventPublisher>>()));
+        services.AddSingleton<TriggeredAlertReporter>();
 
-        services.AddHostedService<RegionIntersectedEventConsumer>(sp =>
-        {
-            var logger = sp.GetRequiredService<ILogger<RegionIntersectedEventConsumer>>();
-            return new RegionIntersectedEventConsumer(
-                options.KafkaBootstrapServers,
-                options.RegionIntersectedTopic,
-                options.ConsumerGroupId,
-                sp,
-                logger);
-        });
+        // Consumers (Background Services)
+        var reliabilityOptions = new ConsumerReliabilityOptions();
+        services.AddSingleton<IDeadLetterSink>(_ =>
+            new KafkaDeadLetterSink(options.KafkaBootstrapServers, options.DeadLetterTopic));
+        services.AddSingleton(sp => new ReliableMessageProcessor(sp.GetRequiredService<IDeadLetterSink>(),
+            options.ConsumerGroupId, reliabilityOptions,
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger<ReliableMessageProcessor>()));
+
+        services.AddHostedService(sp => new RiskUpdatedEventConsumer(
+            BuildConsumer(options),
+            options.RiskUpdatedTopic,
+            sp,
+            sp.GetRequiredService<ReliableMessageProcessor>(),
+            reliabilityOptions,
+            sp.GetRequiredService<ILogger<RiskUpdatedEventConsumer>>()));
+
+        services.AddHostedService(sp => new RegionIntersectedEventConsumer(
+            BuildConsumer(options),
+            options.RegionIntersectedTopic,
+            sp,
+            sp.GetRequiredService<ReliableMessageProcessor>(),
+            reliabilityOptions,
+            sp.GetRequiredService<ILogger<RegionIntersectedEventConsumer>>()));
 
         // Background Workers
         services.AddHostedService<AlertWindowExpirationWorker>(sp =>
@@ -126,4 +155,8 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    private static IConsumer<string, string> BuildConsumer(AlertOrchestratorInfrastructureOptions options) =>
+        new ConsumerBuilder<string, string>(
+            ReliableConsumerLoop.CreateConfig(options.KafkaBootstrapServers, options.ConsumerGroupId)).Build();
 }

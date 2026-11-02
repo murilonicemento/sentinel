@@ -4,5 +4,5 @@ namespace Ingestion.Domain.Interfaces.Repositories;
 
 public interface ISampleSensorRepository
 {
-    public Task<Guid> RegisterAsync(SampleSensor sampleSensor);
+    public Task RegisterManyAsync(IEnumerable<SampleSensor> sampleSensors);
 }

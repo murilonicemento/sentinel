@@ -10,15 +10,22 @@ using RiskEvaluation.Infrastructure.Caching;
 using RiskEvaluation.Infrastructure.Messaging;
 using RiskEvaluation.Infrastructure.Persistence;
 using MediatR;
-using RiskEvaluation.Application.Interfaces.HttpClients;
 using RiskEvaluation.Application.Interfaces.Messaging;
-using RiskEvaluation.Infrastructure.HttpClients;
 using StackExchange.Redis;
+using RiskEvaluation.Infrastructure.Security;
+using RiskEvaluation.Infrastructure.HttpClients;
+using RiskEvaluation.Application.Interfaces.HttpClients;
+using RiskEvaluation.Infrastructure.Messaging.Reliability;
+using RiskEvaluation.Infrastructure.HostedServices;
+using Confluent.Kafka;
 
 namespace RiskEvaluation.Infrastructure;
 
 public static class ServiceCollectionExtension
 {
+    /// <summary>Last day <c>risk-events</c> is published by default (deprecated on 2026-11-02, X-24).</summary>
+    public const string RiskEventsSunset = "2027-01-31";
+
     public static IServiceCollection AddInfrastructureServiceCollection(this IServiceCollection services, IConfiguration configuration)
     {
         // MongoDB
@@ -35,28 +42,34 @@ public static class ServiceCollectionExtension
         });
 
         // Redis
+        var redisConnectionString = configuration.GetConnectionString("Redis")
+            ?? throw new InvalidOperationException("Configuration 'ConnectionStrings:Redis' is required.");
         services.AddSingleton<IConnectionMultiplexer>(sp =>
         {
-            var connectionString = configuration.GetConnectionString("Redis") ?? "localhost:6379";
-            return ConnectionMultiplexer.Connect(connectionString);
+            var redisOptions = ConfigurationOptions.Parse(redisConnectionString);
+            // Keeps the service up while Redis is unavailable; the cache reconnects in the background.
+            redisOptions.AbortOnConnectFail = false;
+            return ConnectionMultiplexer.Connect(redisOptions);
         });
 
+        // risk-catalog: snapshot copied after each publication (RE-15). No retry policy here: the consumer retries the
+        // whole publication, and stacking retries would multiply the calls to risk-catalog.
+        if (!Uri.TryCreate(configuration["Services:RiskCatalog:BaseUrl"], UriKind.Absolute, out var riskCatalogBaseUrl))
+            throw new InvalidOperationException("Configuration 'Services:RiskCatalog:BaseUrl' must be an absolute URL.");
+        services.AddServiceTokens(configuration);
         services.AddHttpClient<IRiskCatalogClient, RiskCatalogHttpClient>(client =>
-        {
-            client.BaseAddress = new Uri(configuration["Services:RiskCatalog:BaseUrl"] ?? "http://localhost:5002/");
-            client.DefaultRequestHeaders.Add("Accept", "application/json");
-        });
-
-        services.AddHttpClient<IGeospatialClient, GeospatialHttpClient>(client =>
-        {
-            client.BaseAddress = new Uri(configuration["Services:Geospatial:BaseUrl"] ?? "http://localhost:5003/");
-            client.DefaultRequestHeaders.Add("Accept", "application/json");
-            client.DefaultRequestHeaders.Add("X-Api-Key", configuration["Services:Geospatial:ApiKey"] ?? string.Empty);
-        });
+            {
+                client.BaseAddress = riskCatalogBaseUrl;
+                client.Timeout = TimeSpan.FromSeconds(10);
+            })
+            .AddHttpMessageHandler<ServiceTokenHandler>();
+        services.AddHostedService<CatalogSnapshotBootstrapper>();
 
         // Repositories
         services.AddScoped<IRiskEvaluationRepository, RiskEvaluationRepository>();
         services.AddScoped<IRiskModelRepository, RiskModelRepository>();
+        services.AddScoped<ICatalogVersionRepository, CatalogVersionRepository>();
+        services.AddScoped<ICatalogSnapshotRepository, CatalogSnapshotRepository>();
         services.AddScoped<IRiskFactorRepository, RiskFactorRepository>();
 
         // Cache
@@ -66,25 +79,45 @@ public static class ServiceCollectionExtension
         services.AddScoped<RiskCalculationService>();
 
         // Messaging
-        services.AddSingleton<IEventPublisher>(sp =>
-        {
-            var bootstrapServers = configuration["Kafka:BootstrapServers"];
-            var topic = configuration["Kafka:Topic"];
-            var logger = sp.GetRequiredService<ILogger<KafkaEventPublisher>>();
-            
-            return new KafkaEventPublisher(bootstrapServers!, topic!, logger);
-        });
+        // risk-events is deprecated (sunset 2027-01-31, X-24): it has no consumer and risk-updated carries what
+        // alert-orchestrator needs. It is still published until Kafka:PublishRiskEvents is set to false.
+        if (configuration.GetValue("Kafka:PublishRiskEvents", true))
+            services.AddSingleton<IEventPublisher>(sp =>
+            {
+                var bootstrapServers = configuration["Kafka:BootstrapServers"];
+                var topic = configuration["Kafka:Topic"];
+                var logger = sp.GetRequiredService<ILogger<KafkaEventPublisher>>();
+                logger.LogWarning("Topic {Topic} is deprecated and stops being published after {Sunset}; set " +
+                                  "Kafka:PublishRiskEvents=false to stop now", topic, RiskEventsSunset);
+
+                return new KafkaEventPublisher(bootstrapServers!, topic!, logger);
+            });
+        else
+            services.AddSingleton<IEventPublisher, DisabledEventPublisher>();
+        services.AddSingleton<IRiskUpdatedPublisher>(sp => new KafkaRiskUpdatedPublisher(
+            configuration["Kafka:BootstrapServers"]
+            ?? throw new InvalidOperationException("Configuration 'Kafka:BootstrapServers' is required."),
+            configuration["Kafka:RiskUpdatedTopic"] ?? "risk-updated",
+            sp.GetRequiredService<ILogger<KafkaRiskUpdatedPublisher>>()));
 
         // Message Consumer
-        services.AddSingleton<IMessageConsumer>(sp =>
-        {
-            var bootstrapServers = configuration["Kafka:BootstrapServers"];
-            var groupId = configuration["Kafka:GroupId"];
-            var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
-            var logger = sp.GetRequiredService<ILogger<KafkaMessageConsumer>>();
-            
-            return new KafkaMessageConsumer(bootstrapServers!, groupId!, scopeFactory, logger);
-        });
+        var bootstrapServers = configuration["Kafka:BootstrapServers"]
+            ?? throw new InvalidOperationException("Configuration 'Kafka:BootstrapServers' is required.");
+        var groupId = configuration["Kafka:GroupId"] ?? "risk-evaluation-group";
+        var deadLetterTopic = configuration["Kafka:DeadLetterTopic"] ?? "risk-evaluation-dead-letter";
+        var reliabilityOptions = new ConsumerReliabilityOptions();
+        services.AddSingleton<IConsumedMessageGuard>(sp =>
+            new RedisConsumedMessageGuard(sp.GetRequiredService<IConnectionMultiplexer>()));
+        services.AddSingleton<IDeadLetterSink>(_ => new KafkaDeadLetterSink(bootstrapServers, deadLetterTopic));
+        services.AddHostedService(sp => new RiskEvaluationEventConsumer(
+            new ConsumerBuilder<string?, string>(ReliableConsumerLoop.CreateConfig(bootstrapServers, groupId)).Build(),
+            new RiskEvaluationConsumerTopics(),
+            sp.GetRequiredService<IConsumedMessageGuard>(),
+            new ReliableMessageProcessor(sp.GetRequiredService<IDeadLetterSink>(), groupId, reliabilityOptions,
+                sp.GetRequiredService<ILogger<ReliableMessageProcessor>>()),
+            reliabilityOptions,
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            sp.GetRequiredService<ILogger<RiskEvaluationEventConsumer>>()));
 
         return services;
     }

@@ -10,4 +10,7 @@ public class SensorCollectionDTO
     public string Payload { get; set; } = string.Empty;
     public DateTime? CollectedAt { get; init; }
     public List<SampleSensorDTO> Samples { get; init; } = [];
+
+    /// <summary>Provider's identity of the reading (e.g. the USGS event id); the deduplication key for polling.</summary>
+    public string? SourceEventId { get; init; }
 }

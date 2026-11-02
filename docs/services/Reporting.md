@@ -1,0 +1,249 @@
+# 6. Reporting Service
+
+O **Reporting Service** é responsável por consolidar, processar e disponibilizar dados analíticos produzidos pelos microsserviços do Sentinel.
+
+Seu objetivo é fornecer consultas otimizadas para leitura, dashboards, indicadores operacionais (KPIs), auditoria e integração com ferramentas de Business Intelligence, sem impactar os serviços responsáveis pelas operações de escrita.
+
+## 6.1 Consolidação de Dados
+
+O serviço atua como um **Read Model** especializado, consumindo eventos publicados pelos demais microsserviços para construir modelos analíticos.
+
+**Principais fontes de dados:**
+
+- Alert Orchestrator
+- Channels Service
+- Risk Evaluation Service
+- Ingestion Service
+- Geospatial Service
+
+**Fluxo:**
+
+1. Consome eventos publicados no broker de mensagens.
+2. Valida e normaliza os dados recebidos.
+3. Atualiza modelos analíticos.
+4. Persiste informações otimizadas para consulta.
+5. Disponibiliza dados para APIs, dashboards e ferramentas externas.
+
+**Fluxo simplificado:**
+
+```mermaid
+sequenceDiagram
+    participant Broker
+    participant Reporting
+    participant Database
+
+    Broker->>Reporting: Evento publicado
+    Reporting->>Reporting: Normaliza dados
+    Reporting->>Reporting: Atualiza métricas
+    Reporting->>Database: Persiste Read Model
+```
+
+---
+
+## 6.2 Indicadores (KPIs)
+
+O serviço consolida indicadores utilizados para monitoramento operacional.
+
+**Exemplos de KPIs:**
+
+- Total de alertas disparados
+- Alertas por severidade
+- Alertas por região
+- Alertas por tenant
+- Taxa de entrega por canal
+- Taxa de falha das notificações
+- Tempo médio de entrega
+- Tempo médio de processamento
+- Eventos processados por período
+- Risco médio por região
+- Risco máximo registrado
+- Utilização por tenant
+
+Todos os indicadores devem ser derivados exclusivamente de eventos publicados pelos demais serviços.
+
+---
+
+## 6.3 Consultas Analíticas
+
+O Reporting Service disponibiliza APIs especializadas para consultas de alta performance.
+
+As consultas devem permitir filtros por:
+
+- Tenant
+- Região
+- Tipo de evento
+- Severidade
+- Canal
+- Intervalo de datas
+- Status da entrega
+
+As estruturas de persistência devem ser modeladas para leitura, evitando consultas complexas durante a execução.
+
+---
+
+## 6.4 Dashboards e Integrações
+
+O serviço fornece dados para diferentes consumidores.
+
+**Integrações suportadas:**
+
+- Dashboard Web do Sentinel
+- Painéis administrativos
+- Grafana
+- Power BI
+- Sistemas de auditoria
+
+As informações disponibilizadas devem refletir o estado atual da plataforma com consistência eventual.
+
+---
+
+## 6.5 Exportação de Relatórios
+
+O serviço deve permitir exportação dos dados consolidados.
+
+**Formatos suportados:**
+
+- CSV
+- JSON
+
+Formatos futuros:
+
+- XLSX
+- PDF
+
+A exportação deve utilizar as mesmas consultas disponibilizadas pela API, respeitando filtros e permissões do tenant.
+
+---
+
+## 6.6 Persistência
+
+O Reporting Service utiliza armazenamento otimizado para leitura.
+
+| Tecnologia        | Responsabilidade                                              |
+| ----------------- | ------------------------------------------------------------- |
+| **Elasticsearch** | Índices analíticos, agregações e consultas rápidas            |
+| **PostgreSQL**    | Relatórios estruturados e armazenamento relacional (opcional) |
+| **Redis**         | Cache de consultas frequentes                                 |
+
+O modelo de persistência deve ser desacoplado dos bancos utilizados pelos demais microsserviços.
+
+---
+
+## 6.7 Comunicação com Outros Serviços
+
+| Serviço                     | Papel                                                         |
+| --------------------------- | ------------------------------------------------------------- |
+| **Alert Orchestrator**      | Publica eventos relacionados ao ciclo de vida dos alertas     |
+| **Channels Service**        | Publica eventos de entrega e falha das notificações           |
+| **Risk Evaluation Service** | Publica alterações nos níveis de risco                        |
+| **Ingestion Service**       | Publica eventos normalizados provenientes das fontes externas |
+| **Geospatial Service**      | Publica informações sobre regiões afetadas                    |
+| **Frontend / BI**           | Consome consultas e métricas disponibilizadas pela API        |
+
+---
+
+## 6.8 Eventos Consumidos
+
+O Reporting Service consome eventos publicados pelos demais serviços.
+
+**Eventos principais:**
+
+- `AlertTriggered`
+- `AlertDispatched`
+- `NotificationSent`
+- `NotificationFailed`
+- `RiskUpdated`
+- `SensorEventDetected`
+- `SensorOffline`
+- `SensorRecovered`
+
+Todos os eventos consumidos devem ser processados de forma **idempotente**, evitando inconsistências em caso de reprocessamento.
+
+---
+
+## 6.9 Regras de Processamento
+
+O serviço deve seguir as seguintes regras:
+
+- Todo processamento é assíncrono.
+- O serviço nunca deve bloquear o fluxo principal da plataforma.
+- Eventos duplicados não podem alterar métricas.
+- Os dados são eventualmente consistentes.
+- Falhas temporárias devem permitir reprocessamento.
+- Todo processamento deve ser auditável.
+
+---
+
+## 6.10 Observabilidade
+
+O Reporting Service deve disponibilizar métricas para monitoramento operacional.
+
+**Métricas recomendadas:**
+
+- Eventos consumidos
+- Eventos processados
+- Eventos rejeitados
+- Lag dos consumidores
+- Tempo médio de processamento
+- Tempo médio das consultas
+- Falhas de agregação
+- Utilização do cache
+
+Além disso, o serviço deve possuir:
+
+- Logs estruturados
+- Tracing distribuído (OpenTelemetry)
+- Health Checks
+- Métricas Prometheus
+
+---
+
+## 6.11 Escalabilidade
+
+O serviço deve suportar:
+
+- Processamento assíncrono
+- Escalabilidade horizontal dos consumers
+- Particionamento por tenant
+- Particionamento por região
+- Múltiplas instâncias simultâneas
+
+Como o serviço atua apenas como **Read Model**, sua escalabilidade deve ocorrer de forma independente dos microsserviços transacionais.
+
+---
+
+## 6.12 Estado da implementação (verificado em 2026-10-29)
+
+As seções anteriores descrevem o desenho. Esta descreve o que o código em `services/reporting` faz hoje, e substitui o antigo `docs/reporting-service-status.md`, que nunca existiu (REP-07).
+
+**API.** Base `/api/v1/reporting`, contrato comum de `docs/compliance/services-validation.md` §4.2 e autenticação JWT (ADR-0002). O `tenantId` da rota ou do corpo precisa estar nas claims `tenant_id`; se não estiver, a resposta é 403 `TENANT_ACCESS_DENIED`.
+
+| Rota | Papel | Resultado |
+|---|---|---|
+| `GET /tenants/{tenantId}/summary` | Read | resumo do painel do tenant |
+| `GET /tenants/{tenantId}/analytics` | Read | consulta analítica com filtros (`startDate` não pode ser depois de `endDate`) |
+| `GET /tenants/{tenantId}/exports` | Read | exportação dos eventos do tenant em CSV (padrão) ou JSON |
+| `GET /tenants/{tenantId}/processing-status` | Read | situação do processamento do tenant |
+| `POST /events` | Write | `202`: grava um evento de relatório |
+| `POST /events/envelope` | Write | `202`: processa um `ReportingEventEnvelope` pelo mesmo caminho do consumidor Kafka |
+| `POST /events/replay` | Admin | `202`: publica o payload no tópico de replay |
+
+As rotas antigas `/api/reporting/*` estão depreciadas até 2027-01-23 (ADR-0007).
+
+**Mensageria.**
+
+| Tópico | Papel |
+|---|---|
+| `reporting-events` | consumido: `ReportingEventEnvelope { EventId, EventType, TenantId, Region, Severity, Channel, RiskScore, Status, Timestamp, Source }` |
+| `reporting-events-dead-letter` | publicado quando o envelope é inválido ou o processamento falha, com o tópico de origem; também consumido: falhas terminais são só registradas, as demais são republicadas no replay. Uma falha que veio do próprio replay é terminal |
+| `reporting-events-replay` | publicado pelo consumidor do DLQ e pelo `POST /events/replay` (`{ sourceTopic, reprocessedBy, replayRequested, requestedAtUtc, originalPayload }`); consumido pelo mesmo consumidor de `reporting-events`, que processa o `originalPayload` (REP-09, resolvido em 2026-11-02). A gravação é idempotente por `event_id`, então reprocessar um evento já gravado não o duplica |
+
+Desde 2026-11-02 (ADR-0010), o alert-orchestrator publica `AlertTriggered` a cada janela disparada e o channels publica `NotificationSent` ou `NotificationFailed` para cada canal tentado. Os dois usam `EventId` determinístico, e o reporting grava cada `event_id` uma vez. `Channel` aceita `sms`, `email`, `push`, `webhook`, `whatsapp`, `mqtt`, `siren` e, para eventos que não são entrega, `none`; uma notificação com `none` é rejeitada. `RiskUpdated` e os eventos de sensor da seção 6.8 não são publicados.
+
+**Persistência.**
+
+- Elasticsearch, índice `reporting-events` (`Elasticsearch:IndexName`), fonte das consultas.
+- Redis: lista de eventos por tenant em `reporting:events:{tenantId}` (TTL de 5 min) e evento individual em `reporting:event:{tenantId}:{eventId}` (TTL de 10 min).
+- PostgreSQL não é usado.
+
+`Elasticsearch:Uri`, `Redis:Configuration` e `Kafka:BootstrapServers` são obrigatórios: sem eles, o serviço não sobe. Os health checks de prontidão verificam Elasticsearch e Redis.

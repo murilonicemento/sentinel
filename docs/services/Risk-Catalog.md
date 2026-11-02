@@ -112,6 +112,8 @@ Este contexto responde:
 | **CurvaIDF**          | Modela comportamento pluviométrico                         |
 | **ParametroRegional** | Ajusta critérios conforme localidade                       |
 
+**Identidade da região (RC-14, ADR-0005):** cada parâmetro regional tem um `regionCode` único, sem diferenciar maiúsculas, com 1 a 64 letras, dígitos, `.`, `_`, `:` ou `-` (ex.: código IBGE `3550308` ou `sp-capital`). Duas regiões são a mesma quando o código coincide; o fator de ajuste é só um valor e pode se repetir entre regiões. O código é obrigatório no v1; a rota legada gera `legacy-<id>` quando ele não é informado.
+
 ---
 
 ### **Características**
@@ -178,3 +180,23 @@ Qualquer alteração neste serviço pode impactar diretamente:
 - decisões automatizadas downstream
 
 Por esse motivo, mudanças devem ser controladas, versionadas e auditáveis.
+
+---
+
+## **10. Estado da implementação (verificado em 2026-10-29)**
+
+**API.** Base `/api/v1/risk-catalog`, contrato comum de `docs/compliance/services-validation.md` §4.2 e autenticação JWT (ADR-0002). Leitura com `RiskCatalog.Read`, escrita com `RiskCatalog.Write`.
+
+| Grupo | Rotas |
+|---|---|
+| Tipos de evento e severidade | `GET/POST /event-types`, `GET /event-types/{code}`, `GET /event-types/{code}/severity-criteria`, `PATCH /event-types/{id}/status`, `POST /severities`, `POST /severity-criteria` |
+| Modelo de risco | `GET/POST /risk-matrices`, `GET/POST /idf-curves`, `GET /regional-risk-parameters/{regionId}`, `POST /regional-risk-parameters` (com `regionCode` obrigatório, RC-14), `POST /catalog-publications` |
+| Listagens de uma versão publicada | `GET /regional-risk-parameters`, `GET /risk-matrix-entries`, `GET /severity-criteria` (paginadas, usadas pelo risk-evaluation) |
+
+As rotas antigas `/api/event-types/*` e `/api/risk-model/*` estão depreciadas até 2027-01-23 (ADR-0007). Os códigos de erro do serviço estão no §4.2 do relatório.
+
+**Publicação.** `POST /catalog-publications` publica `{ Version, Notes, PublishedAt, PublishedBy }` em `risk-catalog-published`. O risk-evaluation reage copiando a versão pelas listagens.
+
+**Validação geográfica.** Ao criar um parâmetro regional, o serviço chama o geospatial: `contains-point` para o centro e `intersects` para o polígono, contra os limites do Brasil. Usa as rotas v1 (`/api/v1/geospatial/operations/*`, X-25).
+
+**Persistência.** PostgreSQL `risk_catalog` (`event_type`, `severity`, `severity_criterion`, `idf_curve`, `regional_parameter`, `risk_matrix`, `users`; migrations EF Core, seção do `2-schema.sql`) e Redis como cache de leitura de matrizes e curvas IDF (TTL de 1 hora).

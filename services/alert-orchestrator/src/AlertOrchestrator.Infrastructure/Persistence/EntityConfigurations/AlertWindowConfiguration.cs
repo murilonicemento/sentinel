@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AlertOrchestrator.Domain.Aggregates;
+using AlertOrchestrator.Domain.Enums;
 using AlertOrchestrator.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -46,6 +47,7 @@ public sealed class AlertWindowConfiguration : IEntityTypeConfiguration<AlertWin
         builder.Property(x => x.Status)
             .HasColumnName("status")
             .IsRequired()
+            .HasMaxLength(20)
             .HasConversion<string>();
 
         builder.Property(x => x.Threshold)
@@ -61,6 +63,8 @@ public sealed class AlertWindowConfiguration : IEntityTypeConfiguration<AlertWin
         builder.Property(x => x.CurrentEscalationLevel)
             .HasColumnName("current_escalation_level")
             .IsRequired()
+            .HasMaxLength(20)
+            .HasDefaultValue(AlertEscalationLevel.Level1)
             .HasConversion<string>();
 
         builder.Property(x => x.ConfirmedAt)
@@ -77,10 +81,22 @@ public sealed class AlertWindowConfiguration : IEntityTypeConfiguration<AlertWin
             .HasColumnName("close_reason")
             .HasMaxLength(500);
 
-        builder.HasIndex(x => new { x.Region, x.RiskType, x.Status });
-        builder.HasIndex(x => x.Status);
-        builder.HasIndex(x => x.ExpiresAt);
-        builder.HasIndex(x => x.TenantId);
+        // Optimistic concurrency on the Postgres system column xmin (no schema change).
+        builder.Property<uint>("Version")
+            .IsRowVersion();
+
+        // Index names match platform/init-db/postgres/2-schema.sql, where the schema originated.
+        builder.HasIndex(x => new { x.Region, x.RiskType, x.Status })
+            .HasDatabaseName("idx_alert_windows_region_risk_status");
+        builder.HasIndex(x => x.Status)
+            .HasDatabaseName("idx_alert_windows_status");
+        builder.HasIndex(x => x.ExpiresAt)
+            .HasDatabaseName("idx_alert_windows_expires_at");
+        builder.HasIndex(x => x.TenantId)
+            .HasDatabaseName("idx_alert_windows_tenant_id");
+        builder.HasIndex(x => x.ConfirmedAt)
+            .HasDatabaseName("idx_alert_windows_confirmed_at")
+            .HasFilter("confirmed_at IS NULL");
 
         builder.OwnsMany(x => x.Signals, signals =>
         {
@@ -90,11 +106,12 @@ public sealed class AlertWindowConfiguration : IEntityTypeConfiguration<AlertWin
 
             signals.Property<Guid>("Id")
                 .HasColumnName("id")
-                .ValueGeneratedOnAdd();
+                .HasDefaultValueSql("gen_random_uuid()");
 
             signals.Property(x => x.Source)
                 .HasColumnName("source")
                 .IsRequired()
+                .HasMaxLength(20)
                 .HasConversion<string>();
 
             signals.Property(x => x.Timestamp)
@@ -119,13 +136,15 @@ public sealed class AlertWindowConfiguration : IEntityTypeConfiguration<AlertWin
 
             signals.Property(x => x.Metadata)
                 .HasColumnName("metadata")
+                .HasColumnType("jsonb")
                 .HasConversion(
                     v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
                     v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, (JsonSerializerOptions?)null) ??
                          new Dictionary<string, string>());
 
             signals.HasIndex(x => x.EventId)
-                .IsUnique();
+                .IsUnique()
+                .HasDatabaseName("alert_signals_event_id_key");
 
             signals.WithOwner()
                 .HasForeignKey("AlertWindowId");

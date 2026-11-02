@@ -149,6 +149,31 @@ O serviço é responsável por:
 
 ## **11. Status**
 
-- Serviço definido
-- Responsabilidades claramente delimitadas
-- Arquitetura preparada para expansão conforme novos requisitos geoespaciais surgirem
+Estado verificado em 2026-10-29 no código de `services/geospatial`.
+
+**API.** Base `/api/v1/geospatial`, papel `Geospatial.Read` em todas as operações (ADR-0002), contrato comum de `docs/compliance/services-validation.md` §4.2. As operações são cálculos sobre a entrada e não dependem de tenant:
+
+| Rota | Operação |
+|---|---|
+| `POST /operations/contains-point` | ponto dentro do polígono |
+| `POST /operations/within-radius` | ponto dentro do raio de um centro |
+| `POST /operations/intersects` | interseção de dois polígonos |
+| `POST /operations/distance` | distância entre dois pontos |
+| `POST /operations/evaluate-batch` | lote das operações acima |
+| `POST /events/search-by-radius` | eventos indexados dentro de um raio (paginado) |
+| `POST /events/search-by-polygon` | eventos indexados dentro de um polígono (paginado) |
+
+As rotas antigas `/api/geospatial/*` estão depreciadas até 2027-01-23 (ADR-0007). Ingestion e risk-catalog chamam as rotas v1 (`/operations/*`) desde 2026-11-01 e ainda aceitam o corpo da rota antiga (X-25). Nenhum consumidor interno conhecido usa mais `/api/geospatial/*`.
+
+**Mensageria.**
+
+| Tópico | Papel | Conteúdo |
+|---|---|---|
+| `disaster-event-detected`, `climatic-event-detected` (`KafkaConsumerOptions:Topics`) | consumido | `SensorEventDetected` do outbox do ingestion; cada evento com coordenadas válidas é indexado em `geospatial-events` com `OperationType` `sensor-event-detected` (ADR-0012). O tópico `sensor-event-detected`, que ninguém publicava, está depreciado |
+| `geospatial-dead-letter` | publicado | mensagens inválidas ou que esgotaram as tentativas (ADR-0003) |
+
+O geospatial não publica em `region-intersected`. Até 2026-11-01, cada `intersects` HTTP verdadeiro publicava um `GeospatialOperationEvent` nesse tópico, mas uma interseção pedida por HTTP é um cálculo, não uma detecção (ADR-0008). A operação continua indexada em `geospatial-events`.
+
+**Persistência.** Elasticsearch, índice `geospatial-events` (operações executadas e eventos consumidos). É dado derivado: o serviço não é fonte de verdade de eventos.
+
+**Chamadores.** ingestion e risk-catalog, com token de serviço próprio listado em `Jwt:TrustedServices` (ADR-0002).

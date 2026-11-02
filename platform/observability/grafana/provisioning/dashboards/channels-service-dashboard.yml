@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  - name: Channels Service dashboards
+    orgId: 1
+    folder: Channels Service
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/provisioning/dashboards/channels-service

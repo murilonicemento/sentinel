@@ -7,4 +7,6 @@ public record DeadLetterEnvelope
     public long OriginalOffset { get; init; }
     public string Payload { get; init; } = default!;
     public DateTime FailedAt { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorReason { get; init; }
 }

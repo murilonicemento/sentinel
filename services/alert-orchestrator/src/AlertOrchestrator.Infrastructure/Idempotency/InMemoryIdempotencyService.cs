@@ -2,51 +2,57 @@ using AlertOrchestrator.Application.Interfaces.Messaging;
 
 namespace AlertOrchestrator.Infrastructure.Idempotency;
 
+/// <summary>Single-instance fallback used when Redis is disabled; claims do not survive a restart.</summary>
 public sealed class InMemoryIdempotencyService : IIdempotencyService
 {
-    private readonly Dictionary<Guid, DateTime> _eventTimestamps = new();
-    private readonly TimeSpan _expirationTime;
+    private readonly Dictionary<Guid, (bool Done, DateTime ExpiresAt)> _claims = new();
+    private readonly TimeSpan _lease;
     private readonly Lock _lock = new();
-    private readonly HashSet<Guid> _processedEvents = new();
+    private readonly TimeSpan _retention;
+    private readonly TimeProvider _timeProvider;
 
-    public InMemoryIdempotencyService(TimeSpan? expirationTime = null)
+    public InMemoryIdempotencyService(TimeSpan? retention = null, TimeSpan? lease = null,
+        TimeProvider? timeProvider = null)
     {
-        _expirationTime = expirationTime ?? TimeSpan.FromHours(24);
+        _retention = retention ?? TimeSpan.FromHours(24);
+        _lease = lease ?? TimeSpan.FromMinutes(5);
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
-    public Task<bool> IsProcessedAsync(Guid eventId, CancellationToken cancellationToken = default)
+    public Task<IdempotencyClaimResult> TryBeginAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
         lock (_lock)
         {
-            CleanupExpired();
-            return Task.FromResult(_processedEvents.Contains(eventId));
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            if (_claims.TryGetValue(eventId, out var claim) && claim.ExpiresAt > now)
+                return Task.FromResult(claim.Done
+                    ? IdempotencyClaimResult.AlreadyProcessed
+                    : IdempotencyClaimResult.InProgress);
+
+            RemoveExpired(now);
+            _claims[eventId] = (false, now.Add(_lease));
+            return Task.FromResult(IdempotencyClaimResult.Acquired);
         }
     }
 
-    public Task MarkAsProcessedAsync(Guid eventId, CancellationToken cancellationToken = default)
+    public Task CompleteAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
         lock (_lock)
-        {
-            CleanupExpired();
-            _processedEvents.Add(eventId);
-            _eventTimestamps[eventId] = DateTime.UtcNow;
-        }
-
+            _claims[eventId] = (true, _timeProvider.GetUtcNow().UtcDateTime.Add(_retention));
         return Task.CompletedTask;
     }
 
-    private void CleanupExpired()
+    public Task AbandonAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
-        var cutoff = DateTime.UtcNow - _expirationTime;
-        var expired = _eventTimestamps
-            .Where(x => x.Value < cutoff)
-            .Select(x => x.Key)
-            .ToList();
+        lock (_lock)
+            if (_claims.TryGetValue(eventId, out var claim) && !claim.Done)
+                _claims.Remove(eventId);
+        return Task.CompletedTask;
+    }
 
-        foreach (var eventId in expired)
-        {
-            _processedEvents.Remove(eventId);
-            _eventTimestamps.Remove(eventId);
-        }
+    private void RemoveExpired(DateTime now)
+    {
+        foreach (var expired in _claims.Where(c => c.Value.ExpiresAt <= now).Select(c => c.Key).ToList())
+            _claims.Remove(expired);
     }
 }

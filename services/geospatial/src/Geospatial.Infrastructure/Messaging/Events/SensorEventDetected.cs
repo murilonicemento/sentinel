@@ -6,4 +6,5 @@ public record SensorEventDetected(
     double Intensity,
     double Latitude,
     double Longitude,
-    DateTime CollectedAt);
+    DateTime CollectedAt,
+    Guid? EventId = null);

@@ -22,6 +22,15 @@ public interface IAlertWindowRepository
     public Task<IReadOnlyList<AlertWindow>> GetTriggeredUnconfirmedWindowsAsync(
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Windows matching the filters, newest first (ties broken by id). <paramref name="tenantIds"/> null means every
+    /// tenant; otherwise only windows of those tenants (compared case-insensitively) are returned.
+    /// </summary>
+    public Task<AlertWindowPage> SearchAsync(string? region, AlertStatus? status,
+        IReadOnlyCollection<string>? tenantIds, int page, int pageSize, CancellationToken cancellationToken = default);
+
     public Task AddAsync(AlertWindow window, CancellationToken cancellationToken = default);
     public Task UpdateAsync(AlertWindow window, CancellationToken cancellationToken = default);
 }
+
+public sealed record AlertWindowPage(IReadOnlyList<AlertWindow> Items, long TotalItems);

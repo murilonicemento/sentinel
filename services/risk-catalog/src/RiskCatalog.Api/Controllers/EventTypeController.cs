@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RiskCatalog.Api.Contracts;
 using RiskCatalog.Application.DTO;
 using RiskCatalog.Application.Services.Interfaces;
 
@@ -7,6 +8,7 @@ namespace RiskCatalog.Api.Controllers;
 
 [Route("api/event-types")]
 [ApiController]
+[DeprecatedRoute("/api/v1/risk-catalog/event-types")]
 [Authorize]
 public class EventTypeController : ControllerBase
 {

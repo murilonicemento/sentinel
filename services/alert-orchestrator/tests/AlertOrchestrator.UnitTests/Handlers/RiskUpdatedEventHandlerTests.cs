@@ -1,9 +1,12 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using AlertOrchestrator.Application.Services;
 using AlertOrchestrator.Application.Commands;
 using AlertOrchestrator.Application.DTOs;
 using AlertOrchestrator.Application.Events;
 using AlertOrchestrator.Application.Handlers;
 using AlertOrchestrator.Application.Interfaces.Messaging;
 using AlertOrchestrator.Application.Interfaces.Observability;
+using AlertOrchestrator.Application.Interfaces.Services;
 using AlertOrchestrator.Application.Ports;
 using AlertOrchestrator.Domain.Aggregates;
 using AlertOrchestrator.Domain.Configuration;
@@ -24,6 +27,17 @@ public class RiskUpdatedEventHandlerTests
     private readonly Mock<IAlertConfigurationPort> _configurationPort = new();
     private readonly Mock<IAlertMetrics> _metrics = new();
     private readonly Mock<ILogger<RiskUpdatedEventHandler>> _logger = new();
+    private readonly Mock<ITenantBillingGateway> _tenantBillingGateway = new();
+    private readonly Mock<ITenantUsagePublisher> _usagePublisher = new();
+    private readonly Mock<IReportingEventPublisher> _reportingPublisher = new();
+
+    public RiskUpdatedEventHandlerTests()
+    {
+        // Default tenant billing gateway to return true (active tenant)
+        _tenantBillingGateway
+            .Setup(x => x.ValidateTenantAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+    }
 
     private RiskUpdatedEventHandler CreateHandler() => new(
         _windowRepository.Object,
@@ -32,7 +46,10 @@ public class RiskUpdatedEventHandlerTests
         _idempotencyService.Object,
         _configurationPort.Object,
         _metrics.Object,
-        _logger.Object);
+        _logger.Object,
+        _tenantBillingGateway.Object,
+        new TriggeredAlertReporter(_usagePublisher.Object, _reportingPublisher.Object,
+            NullLogger<TriggeredAlertReporter>.Instance));
 
     [Fact]
     public async Task Handle_WhenRiskScoreBelowThreshold_ShouldOpenWindowWithoutTriggeringAlert()
@@ -47,8 +64,8 @@ public class RiskUpdatedEventHandlerTests
             new Dictionary<string, string>());
 
         _idempotencyService
-            .Setup(x => x.IsProcessedAsync(notification.EventId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .Setup(x => x.TryBeginAsync(notification.EventId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdempotencyClaimResult.Acquired);
 
         _configurationPort
             .Setup(x => x.GetConfigurationAsync(notification.RiskType, notification.TenantId, It.IsAny<CancellationToken>()))
@@ -79,24 +96,79 @@ public class RiskUpdatedEventHandlerTests
         _windowRepository.Verify(x => x.UpdateAsync(It.IsAny<AlertWindow>(), It.IsAny<CancellationToken>()), Times.Never);
         _eventPublisher.Verify(x => x.PublishAsync(It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Never);
         _commandPublisher.Verify(x => x.PublishAsync(It.IsAny<TriggerAlertCommand>(), It.IsAny<CancellationToken>()), Times.Never);
-        _idempotencyService.Verify(x => x.MarkAsProcessedAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
+        _idempotencyService.Verify(x => x.CompleteAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task Handle_WhenRiskScoreAboveThreshold_ShouldTriggerAlertAndPublishCommand()
+    {
+        await TriggerAsync("tenant-1");
+
+        _commandPublisher.Verify(x => x.PublishAsync(
+            It.Is<TriggerAlertCommand>(c => c.TenantId == "tenant-1" && c.Region == "region-1"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        // "tenant-1" is not a tenant id, so there is no tenant to bill; reporting only needs the tenant.
+        _usagePublisher.Verify(x => x.PublishAsync(It.IsAny<TenantUsageEvent>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _reportingPublisher.Verify(x => x.PublishAsync(
+            It.Is<ReportingEventEnvelope>(e => e.TenantId == "tenant-1" && e.EventType == "AlertTriggered"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WhenAlertTriggers_SendsAlertTriggeredToReporting()
+    {
+        var reported = new List<ReportingEventEnvelope>();
+        _reportingPublisher.Setup(x => x.PublishAsync(It.IsAny<ReportingEventEnvelope>(), It.IsAny<CancellationToken>()))
+            .Callback<ReportingEventEnvelope, CancellationToken>((e, _) => reported.Add(e))
+            .Returns(Task.CompletedTask);
+        TriggerAlertCommand? command = null;
+        _commandPublisher.Setup(x => x.PublishAsync(It.IsAny<TriggerAlertCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<TriggerAlertCommand, CancellationToken>((c, _) => command = c)
+            .Returns(Task.CompletedTask);
+
+        await TriggerAsync("tenant-1", setupCommandPublisher: false);
+
+        var reportingEvent = Assert.Single(reported);
+        Assert.Equal(new ReportingEventEnvelope($"alert-triggered:{command!.AlertWindowId:N}", "AlertTriggered",
+            "tenant-1", "region-1", "HIGH", "none", command.RiskScore, "SUCCESS", command.TriggeredAt,
+            "alert-orchestrator"), reportingEvent);
+    }
+
+    [Fact]
+    public async Task Handle_WhenAlertTriggers_ReportsOneAlertOfUsageForTheWindowsTenant()
+    {
+        var tenantId = Guid.NewGuid();
+        var usages = new List<TenantUsageEvent>();
+        _usagePublisher.Setup(x => x.PublishAsync(It.IsAny<TenantUsageEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<TenantUsageEvent, CancellationToken>((usage, _) => usages.Add(usage))
+            .Returns(Task.CompletedTask);
+        Guid? windowId = null;
+        _commandPublisher.Setup(x => x.PublishAsync(It.IsAny<TriggerAlertCommand>(), It.IsAny<CancellationToken>()))
+            .Callback<TriggerAlertCommand, CancellationToken>((command, _) => windowId = command.AlertWindowId)
+            .Returns(Task.CompletedTask);
+
+        await TriggerAsync(tenantId.ToString(), setupCommandPublisher: false);
+
+        var usage = Assert.Single(usages);
+        Assert.Equal(TenantUsageEvent.ForTriggeredAlert(tenantId.ToString(), windowId!.Value), usage);
+        Assert.Equal(new TenantUsageEvent(tenantId, 0, 1, 0, 0, usage.EventId), usage);
+    }
+
+    private async Task TriggerAsync(string tenantId, bool setupCommandPublisher = true)
     {
         var notification = new RiskUpdatedEvent(
             Guid.NewGuid(),
             "region-1",
             "flood",
             150,
-            "tenant-1",
+            tenantId,
             DateTime.UtcNow,
             new Dictionary<string, string>());
 
         _idempotencyService
-            .Setup(x => x.IsProcessedAsync(notification.EventId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .Setup(x => x.TryBeginAsync(notification.EventId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdempotencyClaimResult.Acquired);
 
         _configurationPort
             .Setup(x => x.GetConfigurationAsync(notification.RiskType, notification.TenantId, It.IsAny<CancellationToken>()))
@@ -124,9 +196,10 @@ public class RiskUpdatedEventHandlerTests
             .Setup(x => x.PublishAsync(It.IsAny<object>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        _commandPublisher
-            .Setup(x => x.PublishAsync(It.IsAny<TriggerAlertCommand>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+        if (setupCommandPublisher)
+            _commandPublisher
+                .Setup(x => x.PublishAsync(It.IsAny<TriggerAlertCommand>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
 
         var handler = CreateHandler();
         await handler.Handle(notification, CancellationToken.None);
@@ -134,7 +207,54 @@ public class RiskUpdatedEventHandlerTests
         _windowRepository.Verify(x => x.AddAsync(It.IsAny<AlertWindow>(), It.IsAny<CancellationToken>()), Times.Once);
         _windowRepository.Verify(x => x.UpdateAsync(It.IsAny<AlertWindow>(), It.IsAny<CancellationToken>()), Times.Once);
         _eventPublisher.Verify(x => x.PublishAsync(It.Is<object>(o => o is AlertTriggeredEvent), It.IsAny<CancellationToken>()), Times.Once);
-        _commandPublisher.Verify(x => x.PublishAsync(It.IsAny<TriggerAlertCommand>(), It.IsAny<CancellationToken>()), Times.Once);
-        _idempotencyService.Verify(x => x.MarkAsProcessedAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
+        _idempotencyService.Verify(x => x.CompleteAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private static RiskUpdatedEvent Event() =>
+        new(Guid.NewGuid(), "region-1", "flood", 90, "tenant-1", DateTime.UtcNow, new Dictionary<string, string>());
+
+    [Fact]
+    public async Task Handle_WhenEventAlreadyProcessed_SkipsWithoutTouchingWindows()
+    {
+        var notification = Event();
+        _idempotencyService
+            .Setup(x => x.TryBeginAsync(notification.EventId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdempotencyClaimResult.AlreadyProcessed);
+
+        await CreateHandler().Handle(notification, CancellationToken.None);
+
+        _windowRepository.VerifyNoOtherCalls();
+        _idempotencyService.Verify(x => x.CompleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenAnotherConsumerHoldsTheClaim_ThrowsSoTheMessageIsRetried()
+    {
+        var notification = Event();
+        _idempotencyService
+            .Setup(x => x.TryBeginAsync(notification.EventId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdempotencyClaimResult.InProgress);
+
+        await Assert.ThrowsAsync<MessageInProgressException>(
+            () => CreateHandler().Handle(notification, CancellationToken.None));
+
+        _windowRepository.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Handle_WhenProcessingFails_AbandonsTheClaimAndRethrows()
+    {
+        var notification = Event();
+        _idempotencyService
+            .Setup(x => x.TryBeginAsync(notification.EventId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdempotencyClaimResult.Acquired);
+        _configurationPort
+            .Setup(x => x.GetConfigurationAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TimeoutException("configuration store timeout"));
+
+        await Assert.ThrowsAsync<TimeoutException>(() => CreateHandler().Handle(notification, CancellationToken.None));
+
+        _idempotencyService.Verify(x => x.AbandonAsync(notification.EventId, It.IsAny<CancellationToken>()), Times.Once);
+        _idempotencyService.Verify(x => x.CompleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

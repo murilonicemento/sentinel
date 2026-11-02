@@ -176,7 +176,7 @@ O serviço suporta múltiplas abordagens de modelagem:
 
 - **Ingestion Service** → fornecimento de dados brutos
 - **Risk Catalog Service** → regras e parâmetros
-- **Geospatial Service** → contexto espacial
+- **Geospatial Service** → contexto espacial (previsto; hoje não há chamada, ver seção 15)
 
 ---
 
@@ -254,3 +254,53 @@ Sua confiabilidade impacta diretamente:
 - a credibilidade do sistema como um todo
 
 Por esse motivo, deve ser tratado como componente crítico, com forte controle de versionamento, observabilidade e governança de mudanças.
+
+---
+
+## **15. Estado da implementação (verificado em 2026-10-29)**
+
+As seções anteriores descrevem o desenho. Esta descreve o que o código em `services/risk-evaluation` faz hoje.
+
+**API.** Base `/api/v1/risk-evaluation`, contrato comum de `docs/compliance/services-validation.md` §4.2 e autenticação JWT (ADR-0002):
+
+| Rota | Papel | Resultado |
+|---|---|---|
+| `POST /evaluations` | Write | avalia um ponto e grava a avaliação |
+| `GET /evaluations?latitude=&longitude=&page=&pageSize=` | Read | histórico paginado da célula de um grau inteiro |
+| `GET /evaluations/{id}` | Read | uma avaliação |
+| `PUT /model` | Admin | substitui o modelo de pesos (`INVALID_RISK_MODEL` em 400) |
+
+As rotas antigas `/api/risk-evaluation/*` estão depreciadas até 2027-01-23 (ADR-0007).
+
+**Mensageria.**
+
+| Tópico | Papel | Conteúdo |
+|---|---|---|
+| `disaster-event-detected`, `climatic-event-detected` | consumidos | `SensorEventDetected` do ingestion, com `TenantId` desde o ADR-0008; cada mensagem é processada uma vez (`risk-evaluation:consumed:v1:{key}` no Redis) |
+| `risk-catalog-published` | consumido | nova versão do catálogo: copia regiões, critérios de severidade e matriz pelas listagens v1 do risk-catalog para `CatalogSnapshots` |
+| `risk-events` (`Kafka:Topic`) | publicado | `RiskEvaluatedEvent { EvaluationId, Latitude, Longitude, Score, Level, Timestamp }` e, para nível alto ou crítico, `HighRiskDetectedEvent` com os mesmos campos |
+| `risk-updated` (`Kafka:RiskUpdatedTopic`) | publicado | `RiskUpdatedEvent { EventId, Region, RiskType, RiskScore, TenantId, Timestamp, Metadata }` para o alert-orchestrator (ADR-0008) |
+| `risk-evaluation-dead-letter` | publicado | mensagens inválidas ou que esgotaram as tentativas (ADR-0003) |
+
+Cada avaliação de um evento de sensor com tenant, dentro de uma região da cópia do catálogo, publica `risk-updated`:
+
+- `EventId` é o id do evento do sensor, então uma reentrega publica o mesmo id;
+- `Region` é o `regionCode` da região que contém o ponto (a de maior fator; o empate é desfeito pelo código; cópias antigas sem código usam `legacy-<id>`);
+- `RiskType` é o tipo do evento em minúsculas;
+- `Metadata` leva o id e o nível da avaliação, o tipo de evento, a posição original, a intensidade e a versão do catálogo;
+- a chave da mensagem é `{tenant}:{região}`.
+
+Avaliações sem tenant, sem id de evento (como o `POST /evaluations`) ou fora de todas as regiões não publicam `risk-updated`. O cache de scores recentes também publica: a avaliação que reaproveita o score do cache gera o evento do mesmo jeito.
+
+`risk-events` está **depreciado** (ADR-0012): repete o que `risk-updated` leva e não tem consumidor conhecido. Continua sendo publicado até 2027-01-31, com um aviso no log ao subir. `Kafka:PublishRiskEvents=false` (`RISK_EVALUATION_PUBLISH_RISK_EVENTS` no compose) para de publicar antes disso.
+
+**Avaliação.** O score combina os pesos do modelo, o fator regional da versão do catálogo copiada (região que contém o ponto) e a matriz do catálogo, que pode subir o nível para o tipo de evento e a intensidade, nunca baixar. As avaliações leem só a cópia local do catálogo.
+
+**Coordenadas (RE-18, corrigido em 2026-11-01).** A avaliação de um evento de sensor usa e grava a posição exata: a entidade no Mongo, o cache de scores recentes e `RiskEvaluatedEvent` / `HighRiskDetectedEvent` levam latitude e longitude em `double`. Avaliações gravadas antes guardam o grau inteiro e continuam legíveis. Os contratos HTTP não mudaram: recebem e devolvem graus inteiros (a resposta trunca a posição exata), e o histórico (`GET /evaluations?latitude=&longitude=`) devolve a célula do grau, isto é, as posições que truncam para aqueles graus, incluindo as avaliações antigas.
+
+**Persistência.**
+
+- MongoDB: `RiskEvaluations`, `RiskModels`, `RiskFactors`, `CatalogVersions` e `CatalogSnapshots` (com o `regionCode` de cada região desde o ADR-0008; uma versão anterior do serviço não lê essas cópias).
+- Redis: scores recentes por posição exata em `risk:score:v2:{latitude}:{longitude}` (TTL de 5 minutos; as chaves antigas `risk:score:{grau}:{grau}` expiram sozinhas) e as reservas de consumo `risk-evaluation:consumed:v1:{key}`.
+
+**Chamadas a outros serviços.** Só o risk-catalog, com o papel `RiskCatalog.Read`, para copiar a versão publicada (ADR-0002, RE-15). O geospatial não é chamado.

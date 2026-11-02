@@ -40,8 +40,8 @@ public class RegisterClimaticEventHandlerTests
             SampleSensors = sampleSensors
         };
 
-        _mockSensorCollectionService.Setup(x => x.ProcessSensorCollection<object>(
-            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Climatic", 
+        _mockSensorCollectionService.Setup(x => x.ProcessSensorCollection(
+            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Climatic",
             It.IsAny<CancellationToken>()))
             .ReturnsAsync(datasourceId);
 
@@ -50,8 +50,8 @@ public class RegisterClimaticEventHandlerTests
 
         // Assert
         Assert.Equal(datasourceId, result);
-        _mockSensorCollectionService.Verify(x => x.ProcessSensorCollection<object>(
-            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Climatic", 
+        _mockSensorCollectionService.Verify(x => x.ProcessSensorCollection(
+            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Climatic",
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -78,8 +78,8 @@ public class RegisterClimaticEventHandlerTests
             SampleSensors = sampleSensors
         };
 
-        _mockSensorCollectionService.Setup(x => x.ProcessSensorCollection<object>(
-            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Climatic", 
+        _mockSensorCollectionService.Setup(x => x.ProcessSensorCollection(
+            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Climatic",
             It.IsAny<CancellationToken>()))
             .ReturnsAsync(datasourceId);
 
@@ -88,8 +88,8 @@ public class RegisterClimaticEventHandlerTests
 
         // Assert
         Assert.Equal(datasourceId, result);
-        _mockSensorCollectionService.Verify(x => x.ProcessSensorCollection<object>(
-            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Climatic", 
+        _mockSensorCollectionService.Verify(x => x.ProcessSensorCollection(
+            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Climatic",
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -116,8 +116,8 @@ public class RegisterClimaticEventHandlerTests
         };
 
         var expectedException = new InvalidOperationException("Service error");
-        _mockSensorCollectionService.Setup(x => x.ProcessSensorCollection<object>(
-            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Climatic", 
+        _mockSensorCollectionService.Setup(x => x.ProcessSensorCollection(
+            datasourceId, tenantId, collectedAt, payload, sampleSensors, "Climatic",
             It.IsAny<CancellationToken>()))
             .ThrowsAsync(expectedException);
 

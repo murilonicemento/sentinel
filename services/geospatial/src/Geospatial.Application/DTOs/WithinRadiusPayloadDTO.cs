@@ -2,7 +2,7 @@
 
 public class WithinRadiusPayloadDTO
 {
-    public PointDTO Center { get; set; }
-    public PointDTO Point { get; set; }
-    public RadiusDTO Radius { get; set; }
+    public required PointDTO Center { get; set; }
+    public required PointDTO Point { get; set; }
+    public required RadiusDTO Radius { get; set; }
 }

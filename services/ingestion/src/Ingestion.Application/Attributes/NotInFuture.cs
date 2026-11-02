@@ -16,6 +16,12 @@ public class NotInFuture : ValidationAttribute
         if (value is not DateTime dateTime)
             return new ValidationResult("Date is not in a valid format.");
 
-        return dateTime > DateTime.Now ? new ValidationResult(ErrorMessage) : ValidationResult.Success;
+        // Compare instants in UTC: DateTime comparison ignores Kind, so comparing a UTC value with DateTime.Now
+        // shifts the limit by the server's offset. Values without a Kind are UTC per the API contract.
+        var instant = dateTime.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
+            : dateTime.ToUniversalTime();
+
+        return instant > DateTime.UtcNow ? new ValidationResult(ErrorMessage) : ValidationResult.Success;
     }
 }

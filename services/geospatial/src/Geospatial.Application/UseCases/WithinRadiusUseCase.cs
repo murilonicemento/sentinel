@@ -11,7 +11,7 @@ public class WithinRadiusUseCase : IWithinRadiusUseCase
 {
     private readonly IGeospatialCalculator _calculator;
     private readonly IGeospatialEventRepository _eventRepository;
-    private readonly ILogger <WithinRadiusUseCase> _logger;
+    private readonly ILogger<WithinRadiusUseCase> _logger;
 
     public WithinRadiusUseCase(
         IGeospatialCalculator calculator,

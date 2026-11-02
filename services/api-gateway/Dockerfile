@@ -7,6 +7,7 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
+COPY --from=repo-root Directory.Packages.props /
 COPY ["ApiGateway.Api/ApiGateway.Api.csproj", "ApiGateway.Api/"]
 RUN dotnet restore "ApiGateway.Api/ApiGateway.Api.csproj"
 COPY . .

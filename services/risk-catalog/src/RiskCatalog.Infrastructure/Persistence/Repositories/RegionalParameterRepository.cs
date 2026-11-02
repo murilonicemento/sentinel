@@ -22,12 +22,12 @@ public class RegionalParameterRepository : IRegionalParameterRepository
                 cancellationToken: cancellationToken);
     }
 
-    public async Task<RegionalParameter?> GetByAdjustmentFactorAsync(
-        double adjustmentFactor,
+    public async Task<RegionalParameter?> GetByRegionCodeAsync(
+        string regionCode,
         CancellationToken cancellationToken = default)
     {
         return await _dbContext.RegionalParameters.FirstOrDefaultAsync(regionalParameter =>
-            regionalParameter.AdjustmentFactor == adjustmentFactor, cancellationToken);
+            regionalParameter.RegionCode == regionCode, cancellationToken);
     }
 
     public async Task<bool> AddRegionalParameterAsync(
@@ -39,5 +39,15 @@ public class RegionalParameterRepository : IRegionalParameterRepository
         var result = await _dbContext.SaveChangesAsync(cancellationToken);
 
         return result > 0;
+    }
+
+    public async Task<(IReadOnlyList<RegionalParameter> Items, long TotalItems)> GetPageAsync(int page, int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.RegionalParameters.AsNoTracking();
+        var total = await query.LongCountAsync(cancellationToken);
+        var items = await query.OrderBy(r => r.Id).Skip((page - 1) * pageSize).Take(pageSize)
+            .ToListAsync(cancellationToken);
+        return (items, total);
     }
 }

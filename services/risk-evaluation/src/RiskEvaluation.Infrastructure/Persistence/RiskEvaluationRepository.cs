@@ -40,10 +40,22 @@ public class RiskEvaluationRepository : IRiskEvaluationRepository
     public async Task<List<RiskEvaluationEntity>> GetByLocationAsync(int latitude, int longitude)
     {
         _logger.LogInformation("Querying risk evaluations by Lat: {Latitude}, Lon: {Longitude}", latitude, longitude);
-        var results = await _collection.Find(e => e.Latitude == latitude && e.Longitude == longitude).ToListAsync();
+        var filter = Builders<RiskEvaluationEntity>.Filter;
+        var results = await _collection
+            .Find(filter.And(Cell(filter, e => e.Latitude, latitude), Cell(filter, e => e.Longitude, longitude)))
+            .ToListAsync();
         _logger.LogInformation("Found {Count} risk evaluations for Lat: {Latitude}, Lon: {Longitude}", results.Count, latitude, longitude);
         return results;
     }
+
+    // Positions that truncate toward zero to the degree: [d, d + 1) above zero, (d - 1, d] below it, (-1, 1) at zero.
+    private static FilterDefinition<RiskEvaluationEntity> Cell(FilterDefinitionBuilder<RiskEvaluationEntity> filter,
+        System.Linq.Expressions.Expression<Func<RiskEvaluationEntity, double>> field, int degree) => degree switch
+        {
+            > 0 => filter.And(filter.Gte(field, degree), filter.Lt(field, degree + 1)),
+            < 0 => filter.And(filter.Gt(field, degree - 1), filter.Lte(field, degree)),
+            _ => filter.And(filter.Gt(field, -1), filter.Lt(field, 1))
+        };
 
     public async Task UpdateAsync(RiskEvaluationEntity evaluation)
     {

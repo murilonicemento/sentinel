@@ -44,4 +44,18 @@ public class RiskMatrixRepository : IRiskMatrixRepository
 
         return matricesWithVersion.Count != 0;
     }
+
+    public async Task<(IReadOnlyList<RiskMatrix> Items, long TotalItems)> GetPageAsync(int? version, int page,
+        int pageSize, CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.RiskMatrices.AsNoTracking().Include(m => m.EventType).AsQueryable();
+        if (version.HasValue) query = query.Where(m => m.Version == version.Value);
+
+        var total = await query.LongCountAsync(cancellationToken);
+        var items = await query
+            .OrderBy(m => m.EventType.Code).ThenBy(m => m.SeverityLevel).ThenBy(m => m.Version).ThenBy(m => m.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .ToListAsync(cancellationToken);
+        return (items, total);
+    }
 }

@@ -9,13 +9,15 @@ public sealed class InMemoryConfigurationPort : IAlertConfigurationPort
 {
     private readonly IMemoryCache _cache;
 
+    // Every signal comes from risk-updated for now, and risk-evaluation does not say whether a reading came from a
+    // sensor or a satellite, so the quorum counts risk signals only: one source, no satellite requirement (X-24).
     private readonly Dictionary<string, TriggerRuleConfiguration> _defaultConfigurations = new()
     {
         ["flood"] = new TriggerRuleConfiguration(0.7, TimeSpan.FromMinutes(30), 2, 1, false, false),
-        ["wildfire"] = new TriggerRuleConfiguration(0.8, TimeSpan.FromMinutes(15), 3, 2, true, true),
+        ["wildfire"] = new TriggerRuleConfiguration(0.8, TimeSpan.FromMinutes(15), 3, 1, true, false),
         ["earthquake"] = new TriggerRuleConfiguration(0.6, TimeSpan.FromMinutes(10), 2, 1, true, false),
-        ["landslide"] = new TriggerRuleConfiguration(0.75, TimeSpan.FromMinutes(20), 2, 1, true, true),
-        ["storm"] = new TriggerRuleConfiguration(0.65, TimeSpan.FromMinutes(25), 2, 1, false, true),
+        ["landslide"] = new TriggerRuleConfiguration(0.75, TimeSpan.FromMinutes(20), 2, 1, true, false),
+        ["storm"] = new TriggerRuleConfiguration(0.65, TimeSpan.FromMinutes(25), 2, 1, false, false),
         ["heatwave"] = new TriggerRuleConfiguration(0.7, TimeSpan.FromMinutes(60), 2, 1, false, false)
     };
 

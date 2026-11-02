@@ -1,79 +1,28 @@
-using System.Text.Json;
 using AlertOrchestrator.Application.Events;
+using AlertOrchestrator.Infrastructure.Messaging.Reliability;
 using Confluent.Kafka;
-using MediatR;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace AlertOrchestrator.Infrastructure.Messaging.Consumers;
 
-public sealed class RegionIntersectedEventConsumer : BackgroundService
+/// <summary>
+/// Deprecated since 2026-11-02, sunset 2027-01-31 (X-24): nothing publishes <c>region-intersected</c> and no producer
+/// is planned (ADR-0008). After the sunset, and once the topic and its dead letters are confirmed empty, this consumer,
+/// <see cref="RegionIntersectedEvent"/> and its handler are removed. Until then a message is still processed.
+/// </summary>
+public sealed class RegionIntersectedEventConsumer : KafkaEventConsumer<RegionIntersectedEvent>
 {
-    private readonly IConsumer<string, string> _consumer;
-    private readonly ILogger<RegionIntersectedEventConsumer> _logger;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly string _topic;
+    public const string Sunset = "2027-01-31";
 
-    public RegionIntersectedEventConsumer(
-        string bootstrapServers,
-        string topic,
-        string groupId,
-        IServiceProvider serviceProvider,
+    public RegionIntersectedEventConsumer(IConsumer<string, string> consumer, string topic,
+        IServiceProvider serviceProvider, ReliableMessageProcessor processor, ConsumerReliabilityOptions options,
         ILogger<RegionIntersectedEventConsumer> logger)
+        : base(consumer, topic, serviceProvider, processor, options, logger)
     {
-        var config = new ConsumerConfig
-        {
-            BootstrapServers = bootstrapServers,
-            GroupId = groupId,
-            AutoOffsetReset = AutoOffsetReset.Earliest,
-            EnableAutoCommit = false
-        };
-        _consumer = new ConsumerBuilder<string, string>(config).Build();
-        _topic = topic;
-        _serviceProvider = serviceProvider;
-        _logger = logger;
+        logger.LogWarning("The {Topic} consumer is deprecated and will be removed after {Sunset}", topic, Sunset);
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _consumer.Subscribe(_topic);
-        _logger.LogInformation("RegionIntersectedEventConsumer started. Subscribed to topic: {Topic}", _topic);
-
-        while (!stoppingToken.IsCancellationRequested)
-            try
-            {
-                var consumeResult = _consumer.Consume(TimeSpan.FromSeconds(5));
-
-                if (consumeResult == null)
-                {
-                    _logger.LogInformation("No messages received yet");
-                    return;
-                }
-
-                _logger.LogInformation("Received message from topic: {Topic}, Partition: {Partition}, Offset: {Offset}",
-                    consumeResult.Topic, consumeResult.Partition, consumeResult.Offset);
-
-                var @event = JsonSerializer.Deserialize<RegionIntersectedEvent>(consumeResult.Message.Value);
-
-                if (@event is null) continue;
-
-                using var scope = _serviceProvider.CreateScope();
-                var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-                await mediator.Publish(@event, stoppingToken);
-
-                _consumer.Commit(consumeResult);
-                _logger.LogDebug("Processed and committed message: {MessageKey}", consumeResult.Message.Key);
-            }
-            catch (ConsumeException ex)
-            {
-                _logger.LogError(ex, "Error consuming message from topic: {Topic}", _topic);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error processing message");
-            }
-
-        _consumer.Close();
-    }
+    protected override bool IsValid(RegionIntersectedEvent @event) =>
+        @event.EventId != Guid.Empty && !string.IsNullOrWhiteSpace(@event.Region) &&
+        !string.IsNullOrWhiteSpace(@event.RiskType);
 }

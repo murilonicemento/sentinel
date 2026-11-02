@@ -96,4 +96,39 @@ public class BatchRequestMapperTests
         var ex = Assert.Throws<ArgumentException>(() => BatchRequestMapper.ToDomain(dto));
         Assert.Contains("not supported", ex.Message);
     }
+
+    /// <summary>Regression: a null payload threw NullReferenceException (500) instead of a client error.</summary>
+    [Theory]
+    [InlineData("contains-point")]
+    [InlineData("within-radius")]
+    public void ToDomain_WithNullPayload_ThrowsArgumentException(string type)
+    {
+        var dto = new BatchRequestDTO
+        {
+            Evaluations = [new() { Type = type, Payload = JsonSerializer.Deserialize<JsonElement>("null") }]
+        };
+
+        var ex = Assert.Throws<ArgumentException>(() => BatchRequestMapper.ToDomain(dto));
+        Assert.Contains("requires a payload", ex.Message);
+    }
+
+    [Fact]
+    public void ToDomain_WithMissingPayload_ThrowsArgumentException()
+    {
+        var dto = new BatchRequestDTO { Evaluations = [new() { Type = "contains-point", Payload = null! }] };
+
+        Assert.Throws<ArgumentException>(() => BatchRequestMapper.ToDomain(dto));
+    }
+
+    [Fact]
+    public void ToDomain_WithMalformedPayload_ThrowsArgumentExceptionKeepingTheCause()
+    {
+        var dto = new BatchRequestDTO
+        {
+            Evaluations = [new() { Type = "within-radius", Payload = JsonSerializer.Deserialize<JsonElement>("\"x\"") }]
+        };
+
+        var ex = Assert.Throws<ArgumentException>(() => BatchRequestMapper.ToDomain(dto));
+        Assert.IsType<JsonException>(ex.InnerException);
+    }
 }

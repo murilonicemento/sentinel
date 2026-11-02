@@ -10,5 +10,6 @@ public static class ApplicationServiceCollectionExtension
         services
             .AddScoped<IRiskModelService, RiskModelService>()
             .AddScoped<IEventTypeService, EventTypeService>()
+            .AddScoped<CatalogListingService>()
             .AddScoped<IGeospatialValidationService, GeospatialValidationService>();
 }

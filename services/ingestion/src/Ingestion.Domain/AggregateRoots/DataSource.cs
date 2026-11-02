@@ -6,13 +6,13 @@ namespace Ingestion.Domain.AggregateRoots;
 public class DataSource
 {
     public Guid Id { get; }
-    public string Name { get; }
-    public string Endpoint { get; }
-    public string DataSourceType { get; }
-    public string MeasurementType { get; }
-    public string CollectionFrequency { get; }
+    public string Name { get; } = string.Empty;
+    public string Endpoint { get; } = string.Empty;
+    public string DataSourceType { get; } = string.Empty;
+    public string MeasurementType { get; } = string.Empty;
+    public string CollectionFrequency { get; } = string.Empty;
     public Guid TenantId { get; }
-    public DateTime CreatedAt { get; } = DateTime.Now;
+    public DateTime CreatedAt { get; } = DateTime.UtcNow;
     public IEnumerable<DataCollection> DataCollections { get; set; } = [];
     public IEnumerable<EventTypePermission> EventPermissions { get; set; } = [];
 
@@ -70,11 +70,19 @@ public class DataSource
             },
         };
 
-        if (!mapping.ContainsKey(MeasurementType))
+        var measurementType = ValueObjects.MeasurementType.From(MeasurementType).Value;
+        if (!mapping.ContainsKey(measurementType))
             throw new ArgumentException($"Invalid measurement type: {MeasurementType}");
 
-        return mapping[MeasurementType](value, baseline);
+        return mapping[measurementType](value, baseline);
     }
+
+    public SensorDomainEnum ResolveSensorDomain() => ValueObjects.MeasurementType.From(MeasurementType).Value switch
+    {
+        "Temperature" or "Humidity" or "WindSpeed" or "Rainfall" or "Pressure" => SensorDomainEnum.Climatic,
+        "Fire" or "Earthquake" => SensorDomainEnum.Disaster,
+        _ => throw new ArgumentException($"Invalid measurement type: {MeasurementType}")
+    };
 
     public bool CanSendEvent(string eventDomain, string eventType)
     {

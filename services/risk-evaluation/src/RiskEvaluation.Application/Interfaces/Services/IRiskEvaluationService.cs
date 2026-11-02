@@ -3,8 +3,17 @@ namespace RiskEvaluation.Application.Interfaces.Services;
 public interface IRiskEvaluationService
 {
     public Task<RiskEvaluationEntity> EvaluateRiskAsync(
-        int latitude,
-        int longitude,
+        double latitude,
+        double longitude,
         RiskMetrics metrics,
-        RiskEvents events);
+        RiskEvents events,
+        EvaluationSource? source = null);
 }
+
+/// <summary>
+/// What produced the evaluation: the position and, for sensor
+/// events, the event type and intensity used to look up the catalog risk matrix, the sensor event's id and its
+/// tenant. Only an evaluation with the event id and the tenant can raise an alert (<c>risk-updated</c>).
+/// </summary>
+public sealed record EvaluationSource(double Latitude, double Longitude, string? EventType = null,
+    double? Intensity = null, Guid? SourceEventId = null, string? TenantId = null);

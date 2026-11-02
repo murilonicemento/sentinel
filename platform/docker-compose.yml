@@ -4,9 +4,13 @@ services:
     build:
       context: ../services/api-gateway
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: api-gateway
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7000:8080"
     restart: unless-stopped
@@ -17,18 +21,49 @@ services:
     build:
       context: ../services/ingestion
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: ingestion
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__IngestionWriteDatabase=${ConnectionStrings__IngestionWriteDatabase}
-      - ConnectionStrings__IngestionReadDatabase=${ConnectionStrings__IngestionReadDatabase}
-      - ConnectionStrings__Redis=${ConnectionStrings__Redis}
-      - ConnectionStrings__Kafka=${ConnectionStrings__Kafka}
-      - MinIO__Host=${MinIO__Host}
-      - MinIO__Port=${MinIO__Port}
-      - MinIO__AccessKey=${MINIO_ROOT_USER}
-      - MinIO__SecretKey=${MINIO_ROOT_PASSWORD}
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
+      - ServiceToken__SigningKey=${INGESTION_SERVICE_TOKEN_SIGNING_KEY}
+      - ConnectionStrings__IngestionWriteDatabase=${ConnectionStrings__IngestionWriteDatabase:-Host=postgres;Port=5432;Database=ingestion;Username=postgres;Password=postgres}
+      - ConnectionStrings__IngestionReadDatabase=${ConnectionStrings__IngestionReadDatabase:-Host=postgres;Port=5432;Database=ingestion;Username=postgres;Password=postgres}
+      - ConnectionStrings__Redis=${ConnectionStrings__Redis:-redis:6379}
+      - ConnectionStrings__Kafka=${ConnectionStrings__Kafka:-kafka:9092}
+      - MinIO__Host=${MinIO__Host:-minio}
+      - MinIO__Port=${MinIO__Port:-9000}
+      - MinIO__AccessKey=${MINIO_ROOT_USER:-minioadmin}
+      - MinIO__SecretKey=${MINIO_ROOT_PASSWORD:-minioadmin}
       - Geospatial__BaseUrl=http://geospatial:8080
+      - TenantsBilling__BaseUrl=http://tenants-billing:8080
+      # Polling (ADR-0005): assinaturas em platform/config/ingestion-polling.json; as chaves vêm do .env.
+      - Polling__Fire__Enabled=${POLLING_FIRE_ENABLED:-false}
+      - Polling__Fire__ApiKey=${POLLING_FIRMS_MAP_KEY:-}
+      - Polling__Earthquake__Enabled=${POLLING_EARTHQUAKE_ENABLED:-false}
+      - Polling__Flood__Enabled=${POLLING_FLOOD_ENABLED:-false}
+      - Polling__Flood__ApiKey=${POLLING_NOAA_TOKEN:-}
+      - Polling__Landslide__Enabled=${POLLING_LANDSLIDE_ENABLED:-false}
+      - Polling__Landslide__ApiKey=${POLLING_NOAA_TOKEN:-}
+      - Polling__TemperatureAnomaly__Enabled=${POLLING_TEMPERATURE_ANOMALY_ENABLED:-false}
+      - Polling__TemperatureAnomaly__ApiKey=${POLLING_NOAA_TOKEN:-}
+      - Polling__HumidityAnomaly__Enabled=${POLLING_HUMIDITY_ANOMALY_ENABLED:-false}
+      - Polling__HumidityAnomaly__ApiKey=${POLLING_NOAA_TOKEN:-}
+      - Polling__WindGust__Enabled=${POLLING_WIND_GUST_ENABLED:-false}
+      - Polling__WindGust__ApiKey=${POLLING_STORMGLASS_API_KEY:-}
+      - Polling__Rainfall__Enabled=${POLLING_RAINFALL_ENABLED:-false}
+      - Polling__Rainfall__ApiKey=${POLLING_STORMGLASS_API_KEY:-}
+      - Polling__PressureChange__Enabled=${POLLING_PRESSURE_CHANGE_ENABLED:-false}
+      - Polling__PressureChange__ApiKey=${POLLING_STORMGLASS_API_KEY:-}
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
+    volumes:
+      # Assinaturas de polling (tenant, fonte de dados, área); sem segredos. Ver ADR-0005.
+      - ./config/ingestion-polling.json:/app/appsettings.Polling.json:ro
     ports:
       - "7001:8080"
     depends_on:
@@ -47,15 +82,28 @@ services:
     build:
       context: ../services/risk-catalog
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: risk-catalog
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__RiskCatalogDatabase=${ConnectionStrings__IngestionDatabase}
-      - ConnectionStrings__Redis=${ConnectionStrings__Redis}
-      - ConnectionStrings__Kafka=${ConnectionStrings__Kafka}
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - Jwt__TrustedServices__0__Name=risk-evaluation
+      - Jwt__TrustedServices__0__Issuer=sentinel-service:risk-evaluation
+      - Jwt__TrustedServices__0__SigningKey=${RISK_EVALUATION_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__0__AllowedRoles__0=RiskCatalog.Read
+      - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
+      - ServiceToken__SigningKey=${RISK_CATALOG_SERVICE_TOKEN_SIGNING_KEY}
+      - ConnectionStrings__RiskCatalogDatabase=${ConnectionStrings__IngestionDatabase:-Host=postgres;Port=5432;Database=risk_catalog;Username=postgres;Password=postgres}
+      - ConnectionStrings__Redis=${ConnectionStrings__Redis:-redis:6379}
+      - ConnectionStrings__Kafka=${ConnectionStrings__Kafka:-kafka:9092}
       - Redis__MaxMemory=256mb
       - Redis__EvictionPolicy=allkeys-lru
       - GEOSPATIAL_SERVICE_URL=http://geospatial:8080
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7002:8080"
     depends_on:
@@ -72,13 +120,27 @@ services:
     build:
       context: ../services/geospatial
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: geospatial
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - Jwt__TrustedServices__0__Name=ingestion
+      - Jwt__TrustedServices__0__Issuer=sentinel-service:ingestion
+      - Jwt__TrustedServices__0__SigningKey=${INGESTION_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__0__AllowedRoles__0=Geospatial.Read
+      - Jwt__TrustedServices__1__Name=risk-catalog
+      - Jwt__TrustedServices__1__Issuer=sentinel-service:risk-catalog
+      - Jwt__TrustedServices__1__SigningKey=${RISK_CATALOG_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__1__AllowedRoles__0=Geospatial.Read
       - Elasticsearch__Url=http://elasticsearch:9200
       - Elasticsearch__DefaultIndex=geospatial-events
-      - Loki__Url=http://loki:3100
       - ConnectionStrings__Kafka=kafka:9092
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7003:8080"
     depends_on:
@@ -93,20 +155,33 @@ services:
     build:
       context: ../services/risk-evaluation
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: risk-evaluation
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
+      - ServiceToken__SigningKey=${RISK_EVALUATION_SERVICE_TOKEN_SIGNING_KEY}
+      - Services__RiskCatalog__BaseUrl=http://risk-catalog:8080
       - ConnectionStrings__MongoDb=mongodb://mongodb:27017
+      - ConnectionStrings__Redis=redis:6379
       - Kafka__BootstrapServers=kafka:9092
       - Kafka__Topic=risk-events
+      - Kafka__PublishRiskEvents=${RISK_EVALUATION_PUBLISH_RISK_EVENTS:-true}
+      - Kafka__RiskUpdatedTopic=risk-updated
       - Kafka__GroupId=risk-evaluation-group
       - Loki__Url=http://loki:3100
-      - LOKI_URL=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7004:8080"
     depends_on:
       - mongodb
+      - redis
       - kafka
+      - risk-catalog
       - loki
     restart: unless-stopped
     networks:
@@ -116,18 +191,32 @@ services:
     build:
       context: ../services/alert-orchestrator
       dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
     container_name: alert-orchestrator
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__PostgreSql=Host=postgres;Port=5432;Database=alert_orchestrator;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      - ConnectionStrings__Redis=redis:6379
-      - ConnectionStrings__Kafka=kafka:9092
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
+      - ServiceToken__SigningKey=${ALERT_ORCHESTRATOR_SERVICE_TOKEN_SIGNING_KEY}
+      - Database__UsePostgreSql=true
+      - Database__PostgreSqlConnectionString=Host=postgres;Port=5432;Database=alert_orchestrator;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - Cache__UseRedis=true
+      - Cache__RedisConnectionString=redis:6379
+      - Services__TenantsBillingBaseUrl=http://tenants-billing:8080
       - Kafka__BootstrapServers=kafka:9092
       - Kafka__ConsumerGroupId=alert-orchestrator-group
-      - Kafka__RiskUpdatedTopic=risk-updated
-      - Kafka__RegionIntersectedTopic=region-intersected
-      - Kafka__EventTopic=alert-orchestrator-events
-      - Kafka__CommandTopic=alert-commands
+      - Kafka__Topics__RiskUpdated=risk-updated
+      - Kafka__Topics__RegionIntersected=region-intersected
+      - Kafka__Topics__Event=alert-orchestrator-events
+      - Kafka__Topics__Command=alert-commands
+      - Kafka__Topics__DeadLetter=alert-orchestrator-dead-letter
+      - Kafka__Topics__TenantUsage=tenant-usage-events
+      - Kafka__Topics__Reporting=reporting-events
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
     ports:
       - "7005:8080"
     depends_on:
@@ -137,13 +226,168 @@ services:
     restart: unless-stopped
     networks:
       - sentinel-network
+  tenants-billing:
+    image: tenants-billing
+    build:
+      context: ../services/tenants-billing
+      dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
+    container_name: tenants-billing
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - Jwt__TrustedServices__0__Name=ingestion
+      - Jwt__TrustedServices__0__Issuer=sentinel-service:ingestion
+      - Jwt__TrustedServices__0__SigningKey=${INGESTION_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__0__AllowedRoles__0=TenantsBilling.Read
+      - Jwt__TrustedServices__1__Name=alert-orchestrator
+      - Jwt__TrustedServices__1__Issuer=sentinel-service:alert-orchestrator
+      - Jwt__TrustedServices__1__SigningKey=${ALERT_ORCHESTRATOR_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__1__AllowedRoles__0=TenantsBilling.Read
+      - Jwt__TrustedServices__2__Name=channels
+      - Jwt__TrustedServices__2__Issuer=sentinel-service:channels
+      - Jwt__TrustedServices__2__SigningKey=${CHANNELS_SERVICE_TOKEN_SIGNING_KEY}
+      - Jwt__TrustedServices__2__AllowedRoles__0=TenantsBilling.Read
+      - ConnectionStrings__TenantsBillingDatabase=Host=postgres;Port=5432;Database=tenants_billing;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__Topic=tenants-billing-events
+      - Kafka__AuditTopic=audit-events
+      - Kafka__UsageTopic=tenant-usage-events
+      - Kafka__DeadLetterTopic=tenant-usage-events-dlq
+      - Kafka__ReplayTopic=tenant-usage-events-replay
+      - Kafka__ConsumerGroupId=tenants-billing-consumer-group
+      - Kafka__DeadLetterConsumerGroupId=tenants-billing-dlq-group
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
+    ports:
+      - "7006:8080"
+    depends_on:
+      - postgres
+      - kafka
+    restart: unless-stopped
+    networks:
+      - sentinel-network
+  channels:
+    image: channels
+    build:
+      context: ../services/channels
+      dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
+    container_name: channels
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - ServiceToken__Audience=${JWT_AUDIENCE:-sentinel}
+      - ServiceToken__SigningKey=${CHANNELS_SERVICE_TOKEN_SIGNING_KEY}
+      - ConnectionStrings__ChannelsServiceDatabase=Host=postgres;Port=5432;Database=channels;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - Redis__Configuration=redis:6379
+      - Services__TenantsBillingBaseUrl=http://tenants-billing:8080
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__ConsumerGroupId=channels-service-group
+      - Kafka__Topic=notification-events
+      - Kafka__DeadLetterTopic=notification-events-dlq
+      - Kafka__ConsumerDeadLetterTopic=channels-dead-letter
+      - Kafka__AlertCommandsTopic=alert-commands
+      - Kafka__TenantUsageTopic=tenant-usage-events
+      - Kafka__ReportingTopic=reporting-events
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
+      # Provider credentials are optional locally; without them deliveries fail and go to notification-events-dlq.
+      - ChannelsService__Providers__Email__Options__ApiKey=${SENDGRID_API_KEY:-}
+      - ChannelsService__Providers__Sms__Options__AccountSid=${TWILIO_ACCOUNT_SID:-}
+      - ChannelsService__Providers__Sms__Options__AuthToken=${TWILIO_AUTH_TOKEN:-}
+      - ChannelsService__Providers__WhatsApp__Options__AccountSid=${TWILIO_ACCOUNT_SID:-}
+      - ChannelsService__Providers__WhatsApp__Options__AuthToken=${TWILIO_AUTH_TOKEN:-}
+      - ChannelsService__Providers__Push__Options__ApiKey=${PUSH_API_KEY:-}
+      - ChannelsService__Providers__Siren__Options__ApiKey=${SIREN_API_KEY:-}
+    ports:
+      - "7008:8080"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - tenants-billing
+    restart: unless-stopped
+    networks:
+      - sentinel-network
+
+  reporting:
+    image: reporting
+    build:
+      context: ../services/reporting
+      dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
+    container_name: reporting
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${JWT_SIGNING_KEY}
+      - Elasticsearch__Uri=http://elasticsearch:9200
+      - Elasticsearch__IndexName=reporting-events
+      - Redis__Configuration=redis:6379
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__Topic=reporting-events
+      - Kafka__DeadLetterTopic=reporting-events-dead-letter
+      - Kafka__ReplayTopic=reporting-events-replay
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
+    ports:
+      - "7009:8080"
+    depends_on:
+      - elasticsearch
+      - redis
+      - kafka
+    restart: unless-stopped
+    networks:
+      - sentinel-network
+
+  audit-compliance:
+    image: audit-compliance
+    build:
+      context: ../services/audit-compliance
+      dockerfile: Dockerfile
+      additional_contexts:
+        repo-root: ..
+    container_name: audit-compliance
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - MongoDb__ConnectionString=mongodb://audit_compliance_app:${AUDIT_COMPLIANCE_DB_PASSWORD:-audit_compliance_local}@mongodb:27017/AuditComplianceDatabase?authSource=AuditComplianceDatabase
+      - MongoDb__DatabaseName=AuditComplianceDatabase
+      - MongoDb__EnsureIndexesOnStartup=false
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__ConsumerGroupId=audit-compliance-group
+      - Kafka__AuditEventsTopic=audit-events
+      - Kafka__ReplayTopic=audit-events-replay
+      - Kafka__DeadLetterTopic=audit-events-dlq
+      - Jwt__Issuer=${JWT_ISSUER:-sentinel}
+      - Jwt__Audience=${JWT_AUDIENCE:-sentinel}
+      - Jwt__SigningKey=${AUDIT_COMPLIANCE_JWT_SIGNING_KEY:-${JWT_SIGNING_KEY}}
+      - Loki__Url=http://loki:3100
+      - OpenTelemetry__OtlpEndpoint=http://tempo:4317
+    ports:
+      - "7007:8080"
+    depends_on:
+      - mongodb
+      - kafka
+      - loki
+    restart: unless-stopped
+    networks:
+      - sentinel-network
   postgres:
     image: postgres:15.5
     container_name: postgres
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-sentinel}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -156,8 +400,9 @@ services:
     image: mongo:7
     container_name: mongodb
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME:-mongoadmin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD:-mongoadmin}
+      - AUDIT_COMPLIANCE_DB_PASSWORD=${AUDIT_COMPLIANCE_DB_PASSWORD:-audit_compliance_local}
     ports:
       - "27017:27017"
     volumes:
@@ -178,11 +423,14 @@ services:
     networks:
       - sentinel-network
   minio:
-    image: minio/minio:RELEASE.2025-12-11T05-00-58Z
+    # As imagens públicas do MinIO deixaram de ser publicadas; esta é a build da Chainguard a partir do fonte
+    # (MinIO RELEASE.2026-10-23, AGPL), fixada por digest porque o plano gratuito só publica `latest`. Roda como
+    # uid 65532: um volume minio-data criado pela imagem antiga (root) precisa de chown ou ser recriado.
+    image: cgr.dev/chainguard/minio@sha256:e70b2b1e74d79457f808710483bd726ff364529ca30736eaa15a6ab547d3a5a7
     container_name: minio
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
     command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
@@ -240,6 +488,7 @@ services:
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic climatic-event-detected --partitions 1 --replication-factor 1
 
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-evaluated --partitions 1 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-events --partitions 1 --replication-factor 1
 
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic sensor-event-detected --partitions 1 --replication-factor 1
 
@@ -252,6 +501,36 @@ services:
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic alert-orchestrator-events --partitions 1 --replication-factor 1
 
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic alert-commands --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic tenants-billing-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic tenant-usage-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic tenant-usage-events-dlq --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic tenant-usage-events-replay --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic audit-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic audit-events-replay --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic audit-events-dlq --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic alert-orchestrator-dead-letter --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic risk-evaluation-dead-letter --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic notification-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic notification-events-dlq --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic channels-dead-letter --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic reporting-events --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic reporting-events-dead-letter --partitions 1 --replication-factor 1
+
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic reporting-events-replay --partitions 1 --replication-factor 1
 
       echo 'Tópicos criados:'
       kafka-topics --bootstrap-server kafka:9092 --list
@@ -310,6 +589,45 @@ services:
     networks:
       - sentinel-network
     restart: unless-stopped
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    networks:
+      - sentinel-network
+    restart: unless-stopped
+  tempo-init:
+    # Tempo roda com o uid 10001; o volume nomeado nasce com dono root.
+    image: grafana/tempo:2.6.1
+    user: root
+    entrypoint: ["chown", "10001:10001", "/var/tempo"]
+    volumes:
+      - tempo-data:/var/tempo
+    networks:
+      - sentinel-network
+  tempo:
+    container_name: tempo
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    depends_on:
+      tempo-init:
+        condition: service_completed_successfully
+    networks:
+      - sentinel-network
+    restart: unless-stopped
   grafana:
     container_name: grafana
     image: grafana/grafana:10.2.3
@@ -319,21 +637,28 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      # Destino dos alertas (ADR-0006); sem valor, as notificações falham e os alertas ficam só no Grafana.
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-http://alert-receiver.invalid/sentinel}
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - loki
+      - prometheus
+      - tempo
     networks:
       - sentinel-network
     restart: unless-stopped
 volumes:
+  prometheus-data:
   postgres-data:
   mongo-data:
+  mongo-config:
   redis-data:
   minio-data:
   elasticsearch-data:
   loki-data:
+  tempo-data:
   grafana-data:
 networks:
   sentinel-network:

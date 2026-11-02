@@ -12,19 +12,19 @@ public class EventTypeConfiguration : IEntityTypeConfiguration<EventType>
         builder.HasKey(et => et.Id);
         builder.Property(et => et.Id)
             .IsRequired()
-            .HasColumnType("uniqueidentifier")
+            .HasColumnType("uuid")
             .HasColumnName("id");
         builder.Property(et => et.Code)
             .IsRequired()
-            .HasColumnType("nvarchar(50)")
+            .HasColumnType("varchar(50)")
             .HasColumnName("code");
         builder.Property(et => et.Name)
             .IsRequired()
-            .HasColumnType("nvarchar(100)")
+            .HasColumnType("varchar(100)")
             .HasColumnName("name");
         builder.Property(et => et.Description)
             .IsRequired()
-            .HasColumnType("nvarchar(255)")
+            .HasColumnType("varchar(255)")
             .HasColumnName("description");
         builder.Property(et => et.IsActive)
             .IsRequired()

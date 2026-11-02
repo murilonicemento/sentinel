@@ -5,7 +5,7 @@ public class SampleSensor
     public Guid Id { get; set; }
     public Guid DataCollectionId { get; set; }
     public double SensorValue { get; set; }
-    public string Unit { get; set; }
+    public string Unit { get; set; } = string.Empty;
     public double Latitude { get; set; }
     public double Longitude { get; set; }
     public DateTime RecordedAt { get; set; }
