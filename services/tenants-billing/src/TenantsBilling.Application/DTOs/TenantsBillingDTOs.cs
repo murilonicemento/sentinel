@@ -1,5 +1,6 @@
 using TenantsBilling.Domain.Aggregates;
 using TenantsBilling.Domain.Enums;
+using TenantsBilling.Domain.Repositories;
 
 namespace TenantsBilling.Application.DTOs;
 
@@ -50,6 +51,24 @@ public sealed record PlanDTO(
 public sealed record UsageResultDTO(Guid TenantId, string QuotaStatus)
 {
     public static UsageResultDTO From(Guid tenantId, TenantQuotaStatus status) => new(tenantId, status.ToString());
+}
+
+public sealed record PagedResultDTO<T>
+{
+    public required IReadOnlyList<T> Items { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+    public long TotalItems { get; init; }
+    public int TotalPages { get; init; }
+
+    public static PagedResultDTO<T> From<TSource>(PagedList<TSource> list, int page, int pageSize, Func<TSource, T> map) => new()
+    {
+        Items = list.Items.Select(map).ToList(),
+        Page = page,
+        PageSize = pageSize,
+        TotalItems = list.TotalItems,
+        TotalPages = (int)Math.Ceiling(list.TotalItems / (double)pageSize)
+    };
 }
 
 public sealed record ResponseBaseDTO<T>

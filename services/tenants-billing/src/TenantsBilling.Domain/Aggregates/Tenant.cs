@@ -69,16 +69,35 @@ public sealed class Tenant
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void Suspend()
+    /// <summary>
+    /// Whether the tenant may move to <paramref name="target"/>: an active tenant can be suspended, a suspended or
+    /// pending one activated, and any tenant canceled. Canceled is terminal. Keeping the current status is allowed.
+    /// </summary>
+    public bool CanChangeStatusTo(TenantStatus target)
     {
-        Status = TenantStatus.Suspended;
-        UpdatedAt = DateTime.UtcNow;
+        if (target == Status) return true;
+        if (Status == TenantStatus.Canceled) return false;
+
+        return target switch
+        {
+            TenantStatus.Active => Status is TenantStatus.Suspended or TenantStatus.Pending,
+            TenantStatus.Suspended => Status == TenantStatus.Active,
+            TenantStatus.Canceled => true,
+            _ => false
+        };
     }
 
-    public void Reactivate()
+    /// <summary>Moves the tenant to <paramref name="target"/>; false when it already had that status.</summary>
+    public bool ChangeStatus(TenantStatus target)
     {
-        Status = TenantStatus.Active;
+        if (!CanChangeStatusTo(target))
+            throw new InvalidOperationException($"A {Status} tenant cannot become {target}.");
+
+        if (target == Status) return false;
+
+        Status = target;
         UpdatedAt = DateTime.UtcNow;
+        return true;
     }
 
     /// <summary>Suspended and canceled tenants are over quota regardless of their consumption.</summary>

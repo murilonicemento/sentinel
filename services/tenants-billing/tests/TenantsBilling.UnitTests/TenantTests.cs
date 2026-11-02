@@ -2,8 +2,8 @@ using TenantsBilling.Application.Services;
 using TenantsBilling.Domain.Aggregates;
 using TenantsBilling.Domain.Enums;
 using TenantsBilling.Domain.Events;
-using TenantsBilling.Domain.Repositories;
 using TenantsBilling.Infrastructure.HostedServices;
+using TenantsBilling.Infrastructure.InMemory;
 
 namespace TenantsBilling.UnitTests;
 
@@ -69,7 +69,7 @@ public class TenantManagementServiceTests
         var tenantRepository = new InMemoryTenantRepository();
         var planRepository = new InMemoryPlanRepository();
         var eventPublisher = new FakeTenantEventPublisher();
-        var service = new TenantManagementService(tenantRepository, planRepository, eventPublisher, new TenantsBilling.Infrastructure.InMemory.InMemoryTenantUsageRepository());
+        var service = new TenantManagementService(tenantRepository, planRepository, eventPublisher, new InMemoryTenantUsageRepository());
         var plan = new Plan(Guid.NewGuid(), "Pro", 1000, 200, 80, 25);
         await planRepository.AddAsync(plan);
 
@@ -82,17 +82,17 @@ public class TenantManagementServiceTests
     }
 
     [Fact]
-    public async Task SuspendTenantAsync_WhenTenantExists_SuspendsTenant()
+    public async Task ChangeStatusAsync_ToSuspended_SuspendsTenantAndPublishesTenantSuspended()
     {
         var tenantRepository = new InMemoryTenantRepository();
         var planRepository = new InMemoryPlanRepository();
         var eventPublisher = new FakeTenantEventPublisher();
-        var service = new TenantManagementService(tenantRepository, planRepository, eventPublisher, new TenantsBilling.Infrastructure.InMemory.InMemoryTenantUsageRepository());
+        var service = new TenantManagementService(tenantRepository, planRepository, eventPublisher, new InMemoryTenantUsageRepository());
         var plan = new Plan(Guid.NewGuid(), "Pro", 1000, 200, 80, 25);
         await planRepository.AddAsync(plan);
 
         var tenant = await service.CreateTenantAsync(new CreateTenantCommand("Contoso", plan.Id));
-        var suspended = await service.SuspendTenantAsync(tenant.Id);
+        var suspended = await service.ChangeStatusAsync(tenant.Id, TenantStatus.Suspended);
 
         Assert.Equal(TenantStatus.Suspended, suspended.Status);
         Assert.Contains("TenantSuspended", eventPublisher.Events);
@@ -103,7 +103,7 @@ public class TenantManagementServiceTests
     {
         var tenantRepository = new InMemoryTenantRepository();
         var planRepository = new InMemoryPlanRepository();
-        var service = new TenantManagementService(tenantRepository, planRepository, new FakeTenantEventPublisher(), new TenantsBilling.Infrastructure.InMemory.InMemoryTenantUsageRepository());
+        var service = new TenantManagementService(tenantRepository, planRepository, new FakeTenantEventPublisher(), new InMemoryTenantUsageRepository());
         var plan = new Plan(Guid.NewGuid(), "Pro", 1000, 200, 80, 25);
         await planRepository.AddAsync(plan);
         var tenant = await service.CreateTenantAsync(new CreateTenantCommand("Fabrikam", plan.Id));
@@ -114,29 +114,6 @@ public class TenantManagementServiceTests
         Assert.NotNull(found);
         Assert.Equal(tenant.Id, found.Id);
         Assert.Null(missing);
-    }
-
-    private sealed class InMemoryTenantRepository : ITenantRepository
-    {
-        private readonly Dictionary<Guid, Tenant> _items = new();
-
-        public Task<Tenant?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-            Task.FromResult(_items.TryGetValue(id, out var tenant) ? tenant : null);
-
-        public Task<Tenant?> GetByNameAsync(string name, CancellationToken cancellationToken = default) =>
-            Task.FromResult(_items.Values.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
-
-        public Task AddAsync(Tenant tenant, CancellationToken cancellationToken = default)
-        {
-            _items[tenant.Id] = tenant;
-            return Task.CompletedTask;
-        }
-
-        public Task UpdateAsync(Tenant tenant, CancellationToken cancellationToken = default)
-        {
-            _items[tenant.Id] = tenant;
-            return Task.CompletedTask;
-        }
     }
 
     [Fact]
@@ -151,20 +128,6 @@ public class TenantManagementServiceTests
         Assert.Equal("Enterprise", plan.Name);
         Assert.NotEqual(Guid.Empty, plan.Id);
         Assert.Equal(2, publisher.Events.Count);
-    }
-
-    private sealed class InMemoryPlanRepository : IPlanRepository
-    {
-        private readonly Dictionary<Guid, Plan> _items = new();
-
-        public Task<Plan?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-            Task.FromResult(_items.TryGetValue(id, out var plan) ? plan : null);
-
-        public Task AddAsync(Plan plan, CancellationToken cancellationToken = default)
-        {
-            _items[plan.Id] = plan;
-            return Task.CompletedTask;
-        }
     }
 
     private sealed class FakeTenantEventPublisher : ITenantEventPublisher

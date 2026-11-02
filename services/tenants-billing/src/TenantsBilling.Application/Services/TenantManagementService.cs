@@ -123,15 +123,42 @@ public sealed class TenantManagementService
     public Task<Tenant?> GetTenantAsync(Guid tenantId, CancellationToken cancellationToken = default)
         => _tenantRepository.GetByIdAsync(tenantId, cancellationToken);
 
-    public async Task<Tenant> SuspendTenantAsync(Guid tenantId, CancellationToken cancellationToken = default)
+    public Task<PagedList<Tenant>> ListTenantsAsync(IReadOnlyCollection<Guid>? tenantIds, TenantStatus? status, int page,
+        int pageSize, CancellationToken cancellationToken = default)
+        => _tenantRepository.ListAsync(tenantIds, status, page, pageSize, cancellationToken);
+
+    /// <summary>
+    /// Suspends, activates or cancels a tenant (see <see cref="Tenant.CanChangeStatusTo"/>) and publishes
+    /// <c>TenantSuspended</c>, <c>TenantReactivated</c> or <c>TenantCanceled</c>. Asking for the current status
+    /// changes nothing and publishes nothing, so a retried request is harmless. A status changed by someone else
+    /// between the read and the write is a conflict, never overwritten.
+    /// </summary>
+    public async Task<Tenant> ChangeStatusAsync(Guid tenantId, TenantStatus target,
+        CancellationToken cancellationToken = default)
     {
         var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
             ?? throw new TenantsBillingException(TenantsBillingErrorKind.NotFound, TenantsBillingErrorCodes.TenantNotFound,
                 "Tenant not found.");
 
-        tenant.Suspend();
-        await _tenantRepository.UpdateAsync(tenant, cancellationToken);
-        await _eventPublisher.PublishAsync("TenantSuspended", new { tenant.Id, tenant.Name, tenant.Status }, cancellationToken);
+        if (!tenant.CanChangeStatusTo(target))
+            throw new TenantsBillingException(TenantsBillingErrorKind.Conflict,
+                TenantsBillingErrorCodes.TenantStatusTransitionNotAllowed,
+                $"A {tenant.Status} tenant cannot become {target}.");
+
+        var current = tenant.Status;
+        if (!tenant.ChangeStatus(target)) return tenant;
+
+        if (!await _tenantRepository.UpdateStatusAsync(tenant, current, cancellationToken))
+            throw new TenantsBillingException(TenantsBillingErrorKind.Conflict, TenantsBillingErrorCodes.TenantStatusConflict,
+                "The tenant's status was changed by another request. Read it again and retry.");
+
+        var eventType = target switch
+        {
+            TenantStatus.Suspended => "TenantSuspended",
+            TenantStatus.Canceled => "TenantCanceled",
+            _ => "TenantReactivated"
+        };
+        await _eventPublisher.PublishAsync(eventType, new { tenant.Id, tenant.Name, tenant.Status }, cancellationToken);
         return tenant;
     }
 }

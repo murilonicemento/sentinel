@@ -83,7 +83,7 @@ public class TenantUsageTests
     public async Task RegisterUsage_ForASuspendedTenant_IsHardLimitWithoutQuotaEvents()
     {
         var (service, tenant, publisher) = await ServiceAsync();
-        await service.SuspendTenantAsync(tenant.Id);
+        await service.ChangeStatusAsync(tenant.Id, TenantStatus.Suspended);
 
         var status = await service.RegisterUsageAsync(tenant.Id, 1, 0, 0, 0, "evt-1");
 

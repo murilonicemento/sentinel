@@ -4,6 +4,9 @@ public static class TenantsBillingPolicies
 {
     public const string Read = "TenantsBillingRead";
     public const string Write = "TenantsBillingWrite";
+
+    /// <summary>Changing a tenant's status (suspend, activate, cancel) requires the Admin role.</summary>
+    public const string Admin = "TenantsBillingAdmin";
 }
 
 public static class TenantsBillingRoles

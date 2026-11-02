@@ -26,4 +26,6 @@ public static class TenantsBillingErrorCodes
     public const string TenantNotFound = "TENANT_NOT_FOUND";
     public const string TenantAlreadyExists = "TENANT_ALREADY_EXISTS";
     public const string PlanNotFound = "PLAN_NOT_FOUND";
+    public const string TenantStatusTransitionNotAllowed = "TENANT_STATUS_TRANSITION_NOT_ALLOWED";
+    public const string TenantStatusConflict = "TENANT_STATUS_CONFLICT";
 }

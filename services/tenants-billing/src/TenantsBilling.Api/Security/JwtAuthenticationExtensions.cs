@@ -73,7 +73,10 @@ public static class JwtAuthenticationExtensions
                 .RequireRole(TenantsBillingRoles.Admin, TenantsBillingRoles.Read))
             .AddPolicy(TenantsBillingPolicies.Write, policy => policy
                 .RequireClaim(SentinelClaims.Subject)
-                .RequireRole(TenantsBillingRoles.Admin, TenantsBillingRoles.Write));
+                .RequireRole(TenantsBillingRoles.Admin, TenantsBillingRoles.Write))
+            .AddPolicy(TenantsBillingPolicies.Admin, policy => policy
+                .RequireClaim(SentinelClaims.Subject)
+                .RequireRole(TenantsBillingRoles.Admin));
 
         services.AddSingleton<TenantAccessEvaluator>();
 

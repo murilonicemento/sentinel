@@ -58,6 +58,39 @@ public sealed class PostgresTenantRepository : ITenantRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<bool> UpdateStatusAsync(Tenant tenant, TenantStatus expectedStatus,
+        CancellationToken cancellationToken = default)
+    {
+        var expected = (int)expectedStatus;
+        var updated = await _dbContext.Tenants
+            .Where(x => x.Id == tenant.Id && x.Status == expected)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.Status, (int)tenant.Status)
+                .SetProperty(x => x.UpdatedAt, tenant.UpdatedAt), cancellationToken);
+
+        return updated == 1;
+    }
+
+    public async Task<PagedList<Tenant>> ListAsync(IReadOnlyCollection<Guid>? tenantIds, TenantStatus? status, int page,
+        int pageSize, CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.Tenants.AsNoTracking();
+        if (tenantIds is not null) query = query.Where(x => tenantIds.Contains(x.Id));
+        if (status is not null)
+        {
+            var value = (int)status.Value;
+            query = query.Where(x => x.Status == value);
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+        var entities = await query
+            .OrderBy(x => x.Name).ThenBy(x => x.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedList<Tenant>(entities.Select(MapToDomain).ToList(), total);
+    }
+
     private static Tenant MapToDomain(TenantEntity entity)
         => Tenant.Rehydrate(
             entity.Id,
