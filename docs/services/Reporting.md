@@ -235,8 +235,8 @@ As rotas antigas `/api/reporting/*` estão depreciadas até 2027-01-23 (ADR-0007
 | Tópico | Papel |
 |---|---|
 | `reporting-events` | consumido: `ReportingEventEnvelope { EventId, EventType, TenantId, Region, Severity, Channel, RiskScore, Status, Timestamp, Source }` |
-| `reporting-events-dead-letter` | publicado quando o envelope é inválido ou o processamento falha; também consumido: falhas terminais são só registradas, as demais são republicadas no replay |
-| `reporting-events-replay` | publicado pelo consumidor do DLQ e pelo `POST /events/replay`. **Nenhum consumidor lê este tópico**, então o replay não reprocessa nada (REP-09) |
+| `reporting-events-dead-letter` | publicado quando o envelope é inválido ou o processamento falha, com o tópico de origem; também consumido: falhas terminais são só registradas, as demais são republicadas no replay. Uma falha que veio do próprio replay é terminal |
+| `reporting-events-replay` | publicado pelo consumidor do DLQ e pelo `POST /events/replay` (`{ sourceTopic, reprocessedBy, replayRequested, requestedAtUtc, originalPayload }`); consumido pelo mesmo consumidor de `reporting-events`, que processa o `originalPayload` (REP-09, resolvido em 2026-11-02). A gravação é idempotente por `event_id`, então reprocessar um evento já gravado não o duplica |
 
 Nenhum serviço publica em `reporting-events` ainda. Os eventos da seção 6.8 (`AlertTriggered`, `NotificationSent`...) existem nos serviços de origem, mas em outros tópicos e formatos (X-24). Até haver produtor, os dados chegam só pela API.
 
