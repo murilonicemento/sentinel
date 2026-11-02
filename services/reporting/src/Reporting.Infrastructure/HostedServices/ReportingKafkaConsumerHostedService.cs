@@ -42,6 +42,7 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
         }
 
         var topic = _configuration["Kafka:Topic"] ?? "reporting-events";
+        var replayTopic = _configuration["Kafka:ReplayTopic"] ?? "reporting-events-replay";
         var groupId = _configuration["Kafka:ConsumerGroupId"] ?? "reporting-service-group";
 
         var config = new ConsumerConfig
@@ -64,8 +65,9 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
             .SetErrorHandler((_, error) => _logger.LogError("Kafka consumer error: {Reason}", error.Reason))
             .Build();
 
-        consumer.Subscribe(topic);
-        _logger.LogInformation("Reporting Kafka consumer subscribed to topic {Topic} with DLQ {DeadLetterTopic}", topic, deadLetterTopic);
+        consumer.Subscribe(new[] { topic, replayTopic });
+        _logger.LogInformation("Reporting Kafka consumer subscribed to topics {Topic} and {ReplayTopic} with DLQ {DeadLetterTopic}",
+            topic, replayTopic, deadLetterTopic);
 
         try
         {
@@ -82,14 +84,16 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
 
                     using var activity = KafkaTracing.StartProcess(consumeResult.Topic, consumeResult.Message.Headers,
                         consumeResult.Partition.Value, consumeResult.Offset.Value);
-                    var envelopes = ParseEnvelopes(consumeResult.Message.Value);
+                    var sourceTopic = consumeResult.Topic;
+                    var payload = ResolvePayload(sourceTopic, replayTopic, consumeResult.Message.Value);
+                    var envelopes = ParseEnvelopes(payload ?? string.Empty);
                     if (envelopes.Count == 0)
                     {
-                        _logger.LogWarning("Received invalid reporting envelope payload on topic {Topic}. Sending to dead-letter queue.", topic);
+                        _logger.LogWarning("Received invalid reporting envelope payload on topic {Topic}. Sending to dead-letter queue.", sourceTopic);
                         await PublishDeadLetterAsync(
-                            consumeResult.Message.Value,
+                            payload ?? consumeResult.Message.Value,
                             deadLetterTopic,
-                            topic,
+                            sourceTopic,
                             "Invalid payload structure",
                             consumeResult.Partition.Value,
                             consumeResult.Offset.Value,
@@ -108,7 +112,7 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                         eventConsumer,
                         auditRepository,
                         envelopes,
-                        topic,
+                        sourceTopic,
                         consumeResult.Partition.Value,
                         consumeResult.Offset.Value,
                         maxAttempts,
@@ -123,9 +127,9 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
                     else
                     {
                         await PublishDeadLetterAsync(
-                            consumeResult.Message.Value,
+                            payload!,
                             deadLetterTopic,
-                            topic,
+                            sourceTopic,
                             "Processing failed after retries",
                             consumeResult.Partition.Value,
                             consumeResult.Offset.Value,
@@ -157,6 +161,37 @@ public sealed class ReportingKafkaConsumerHostedService : BackgroundService
         {
             consumer.Close();
         }
+    }
+
+    /// <summary>
+    /// Returns the reporting payload carried by a consumed message. Messages on the replay topic wrap it in
+    /// <c>originalPayload</c> (<see cref="BuildReprocessingMessage"/>); messages on any other topic are the payload
+    /// itself. Returns <c>null</c> for a replay message without a payload.
+    /// </summary>
+    public static string? ResolvePayload(string consumedTopic, string replayTopic, string value)
+    {
+        if (!string.Equals(consumedTopic, replayTopic, StringComparison.Ordinal))
+        {
+            return value;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(value);
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && TryGetProperty(document.RootElement, "originalPayload", out var original)
+                && original.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(original.GetString()))
+            {
+                return original.GetString();
+            }
+        }
+        catch (JsonException)
+        {
+            // A replay message that is not JSON carries no payload.
+        }
+
+        return null;
     }
 
     public static List<ReportingEventEnvelope> ParseEnvelopes(string payload)

@@ -73,7 +73,7 @@ public sealed class ReportingDeadLetterConsumerHostedService : BackgroundService
                         continue;
                     }
 
-                    if (!ShouldReplay(deadLetter))
+                    if (!ShouldReplay(deadLetter, replayTopic))
                     {
                         _logger.LogWarning(
                             "Dead-letter payload from {SourceTopic} was classified as terminal. Reason: {Reason}, attempts: {Attempts}",
@@ -144,9 +144,19 @@ public sealed class ReportingDeadLetterConsumerHostedService : BackgroundService
         }
     }
 
-    public static bool ShouldReplay(DeadLetterEnvelope? deadLetter)
+    /// <summary>
+    /// Whether a dead letter goes back to the replay topic. A message that already failed on the replay topic is
+    /// terminal, so a payload that keeps failing is not replayed forever; it can still be replayed by hand
+    /// (<c>POST /api/v1/reporting/events/replay</c>).
+    /// </summary>
+    public static bool ShouldReplay(DeadLetterEnvelope? deadLetter, string? replayTopic = null)
     {
         if (deadLetter is null)
+        {
+            return false;
+        }
+
+        if (replayTopic is not null && string.Equals(deadLetter.SourceTopic, replayTopic, StringComparison.Ordinal))
         {
             return false;
         }
