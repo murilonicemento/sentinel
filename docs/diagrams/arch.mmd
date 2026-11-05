@@ -1,101 +1,91 @@
 flowchart TD
-%% =====================
-%% External Systems
-%% =====================
-subgraph External
-    WeatherAPI[APIs Meteorológicas]
-    IoT[IoT Sensors]
-    Satellite[Satélites]
-    WhatsApp[WhatsApp Business API]
-    Sirene[Sirenes IoT]
-end
+%% Arquitetura do Sentinel no estado atual (verificado no código e em platform/docker-compose.yml em 2026-11-04).
+%% Setas sólidas: HTTP síncrono. Setas tracejadas: tópicos Kafka (ADR-0008 a ADR-0012).
+%% Tópicos depreciados (sensor-event-detected, region-intersected, risk-events) e dead-letters por serviço não aparecem.
+    subgraph External[Fontes e provedores externos]
+        Sensors[Sensores e clientes HTTP]
+        USGS[USGS Earthquake]
+        FIRMS[NASA FIRMS]
+        NOAA[NOAA NCEI CDO]
+        Stormglass[Stormglass]
+        Twilio[Twilio SMS e WhatsApp]
+        SendGrid[SendGrid e-mail]
+        PushSiren[Push HTTP, sirene HTTP, broker MQTT]
+    end
 
-%% =====================
-%% API Gateway
-%% =====================
-subgraph API
-    APIGateway[API Gateway / BFF]
-end
+    Gateway[api-gateway<br/>Ocelot, rate limit por IP]
 
-%% =====================
-%% Ingestion Service
-%% =====================
-subgraph IngestionService
-    IS_Server[Ingestion Server]
-    IS_DB[MinIO / S3]
-    IS_Queue[Kafka / RabbitMQ]
-    IS_Cache[Redis]
-end
+    subgraph Pipeline[Pipeline de risco e alerta]
+        Ingestion[ingestion<br/>PostgreSQL + outbox, MongoDB leitura,<br/>MinIO payload bruto, Redis dedup]
+        Geospatial[geospatial<br/>NetTopologySuite, Elasticsearch]
+        RiskCatalog[risk-catalog<br/>PostgreSQL, Redis cache]
+        RiskEvaluation[risk-evaluation<br/>MongoDB, Redis]
+        AlertOrchestrator[alert-orchestrator<br/>PostgreSQL, Redis]
+        Channels[channels<br/>PostgreSQL, Redis]
+    end
 
-%% =====================
-%% Geospatial Service
-%% =====================
-subgraph GeospatialService
-    Geo_Server[Geospatial Server]
-    Geo_DB[PostGIS / Elasticsearch]
-end
+    subgraph Governance[Tenancy, relatórios e auditoria]
+        TenantsBilling[tenants-billing<br/>PostgreSQL]
+        Reporting[reporting<br/>PostgreSQL, Elasticsearch, Redis]
+        AuditCompliance[audit-compliance<br/>MongoDB + GridFS]
+    end
 
-%% =====================
-%% Risk Catalog Service
-%% =====================
-subgraph RiskCatalogService
-    RiskCatalog_DB[PostgreSQL]
-end
+    subgraph Observability[Observabilidade ADR-0004]
+        Loki[Loki]
+        Tempo[Tempo]
+        Prometheus[Prometheus]
+        Grafana[Grafana<br/>dashboards e alertas]
+    end
 
-%% =====================
-%% Risk Evaluation Service
-%% =====================
-subgraph RiskEvaluationService
-    RE_Server[Risk Evaluation Server]
-    RE_DB[MongoDB]
-end
+    %% Entrada
+    Sensors --> Gateway
+    Gateway --> Ingestion
+    Gateway --> RiskCatalog
+    Gateway --> Geospatial
+    Gateway --> RiskEvaluation
+    Gateway --> AlertOrchestrator
+    Gateway --> Channels
+    Gateway --> Reporting
+    Gateway --> TenantsBilling
+    Gateway --> AuditCompliance
+    USGS --> Ingestion
+    FIRMS --> Ingestion
+    NOAA --> Ingestion
+    Stormglass --> Ingestion
 
-%% =====================
-%% Alert Orchestrator
-%% =====================
-subgraph AlertOrchestrator
-    AO_Server[Alert Orchestrator Server]
-    AO_DB[PostgreSQL / MongoDB Sagas]
-end
+    %% HTTP entre serviços (token de serviço, ADR-0002)
+    Ingestion -->|operações v1| Geospatial
+    RiskCatalog -->|operações v1| Geospatial
+    RiskEvaluation -->|listagens v1 do catálogo publicado| RiskCatalog
+    Ingestion -->|tenant ativo?| TenantsBilling
+    AlertOrchestrator -->|tenant ativo?| TenantsBilling
+    Channels -->|tenant ativo?| TenantsBilling
 
-%% =====================
-%% Observability & Security
-%% =====================
-subgraph Observability
-    OTEL[OpenTelemetry Collector]
-    Prometheus[Prometheus]
-    Grafana[Grafana]
-    Loki[Loki]
-    Tempo[Tempo / Jaeger]
-    Keycloak[Keycloak / OAuth2]
-end
+    %% Eventos
+    Ingestion -.->|disaster-event-detected<br/>climatic-event-detected| RiskEvaluation
+    Ingestion -.->|disaster-event-detected<br/>climatic-event-detected| Geospatial
+    RiskCatalog -.->|risk-catalog-published| RiskEvaluation
+    RiskEvaluation -.->|risk-updated| AlertOrchestrator
+    AlertOrchestrator -.->|alert-commands| Channels
+    Ingestion -.->|tenant-usage-events| TenantsBilling
+    AlertOrchestrator -.->|tenant-usage-events| TenantsBilling
+    Channels -.->|tenant-usage-events| TenantsBilling
+    AlertOrchestrator -.->|reporting-events| Reporting
+    Channels -.->|reporting-events| Reporting
+    TenantsBilling -.->|audit-events| AuditCompliance
 
-%% =====================
-%% Event Flow
-WeatherAPI -->|Dados Meteorológicos| IS_Server
-IoT -->|Dados de Sensores| IS_Server
-Satellite -->|Imagens / Dados| IS_Server
+    %% Entrega
+    Channels --> Twilio
+    Channels --> SendGrid
+    Channels --> PushSiren
 
-IS_Server -->|SensorEventDetected| Geo_Server
-IS_Server -->|SensorEventDetected| RE_Server
-RiskCatalog_DB -->|RiskCatalogPublished| RE_Server
-Geo_Server -->|RegionIntersected| AO_Server
-RE_Server -->|RiskUpdated / RiskEvaluated / HighRiskDetected| AO_Server
-
-APIGateway --> IS_Server
-APIGateway --> Geo_Server
-APIGateway --> RiskCatalog_DB
-APIGateway --> RE_Server
-APIGateway --> AO_Server
-
-IS_Server --> OTEL
-Geo_Server --> OTEL
-RE_Server --> OTEL
-AO_Server --> OTEL
-
-OTEL --> Prometheus
-OTEL --> Grafana
-OTEL --> Loki
-OTEL --> Tempo
-APIGateway --> Keycloak
-AO_Server --> Keycloak
+    %% Telemetria: logs (Serilog), traces (OTLP) e métricas (/metrics) de cada serviço
+    Pipeline -.->|logs| Loki
+    Governance -.->|logs| Loki
+    Pipeline -.->|traces OTLP| Tempo
+    Governance -.->|traces OTLP| Tempo
+    Prometheus -->|scrape /metrics| Pipeline
+    Prometheus -->|scrape /metrics| Governance
+    Grafana --> Loki
+    Grafana --> Tempo
+    Grafana --> Prometheus

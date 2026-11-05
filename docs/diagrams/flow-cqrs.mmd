@@ -1,44 +1,48 @@
 graph LR
+%% Commands, queries e eventos do pipeline principal (nomes das classes do código, verificado em 2026-11-04).
+%% O ingestion é o único serviço com CQRS completo: escrita em PostgreSQL + outbox, leitura em MongoDB.
     %% Commands
-    CMD1["RegistrarColetaSensor"]
-    CMD2["RegistrarEventoNatural"]
-    CMD3["PublicarCatalogoRisco"]
-    CMD4["DispararAlerta"]
+    CMD1["RegisterSensorCollectionCommand"]
+    CMD2["RegisterClimaticEventCommand"]
+    CMD3["RegisterDisasterEventCommand"]
+    CMD4["PublishCatalogVersionAsync"]
+    CMD5["EvaluateRiskCommand"]
 
-    %% Events
-    EVT1["SensorEventDetected"]
-    EVT2["RiskCatalogPublished"]
-    EVT3["RegionIntersected"]
-    EVT4["RiskUpdated"]
-    EVT5["RiskEvaluated"]
-    EVT6["HighRiskDetected"]
-    EVT7["AlertTriggered"]
+    %% Queries do ingestion
+    QRY1["GetDetectedEventsPageQuery"]
+    QRY2["GetLatestDetectedEventsQuery"]
+    QRY3["GetDetectedEventStatisticsQuery"]
 
-    %% Serviços
-    IS["ingestion-service"]
-    GS["geospatial-service"]
-    RCS["risk-catalog-service"]
-    RES["risk-evaluation-service"]
+    %% Eventos e tópicos
+    EVT1["SensorEventDetected<br/>disaster-event-detected / climatic-event-detected"]
+    EVT2["RiskCatalogPublished<br/>risk-catalog-published"]
+    EVT3["RiskUpdatedEvent<br/>risk-updated"]
+    EVT4["TriggerAlertCommand<br/>alert-commands"]
+    EVT5["AlertWindowOpened, AlertTriggered, ...<br/>alert-orchestrator-events"]
+
+    %% Serviços e armazenamentos
+    ISW["ingestion (escrita)<br/>PostgreSQL + outbox"]
+    ISR["ingestion (leitura)<br/>MongoDB"]
+    RCS["risk-catalog"]
+    RES["risk-evaluation"]
     AO["alert-orchestrator"]
+    CH["channels"]
 
-    %% Fluxo de Commands
-    CMD1 --> IS
-    CMD2 --> IS
-    CMD3 --> RCS
-    CMD4 --> AO
+    CMD1 --> ISW
+    CMD2 --> ISW
+    CMD3 --> ISW
+    QRY1 --> ISR
+    QRY2 --> ISR
+    QRY3 --> ISR
+    CMD4 --> RCS
+    CMD5 --> RES
 
-    %% Fluxo de Events
-    IS --> EVT1
-    EVT1 --> GS
+    ISW --> EVT1
     EVT1 --> RES
     RCS --> EVT2
     EVT2 --> RES
-    GS --> EVT3
-    RES --> EVT4
-    RES --> EVT5
-    RES --> EVT6
+    RES --> EVT3
     EVT3 --> AO
-    EVT4 --> AO
-    EVT5 --> AO
-    EVT6 --> AO
-    AO --> EVT7
+    AO --> EVT4
+    AO --> EVT5
+    EVT4 --> CH

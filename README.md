@@ -93,6 +93,8 @@ dotnet test services/geospatial/tests/Geospatial.UnitTests --filter "FullyQualif
 
 As versões de pacotes NuGet ficam só em `Directory.Packages.props`.
 
+O CI (`.github/workflows/ci.yml`) roda em pushes e pull requests para `develop` e `master`: restore, `dotnet build -c Release -warnaserror`, `dotnet format whitespace --verify-no-changes` e `dotnet test` com resultados TRX e cobertura Cobertura publicados no artifact `test-results`.
+
 ## Estrutura do repositório
 
 ```text
@@ -112,6 +114,7 @@ sentinel/
 │  ├─ services/               # especificação e estado de cada serviço
 │  ├─ adr/                    # decisões de arquitetura
 │  ├─ compliance/             # relatório de validação dos serviços
+│  ├─ claude-code/            # hooks, agents e skills do Claude Code
 │  └─ diagrams/               # diagramas Mermaid
 ├─ Directory.Packages.props, global.json
 └─ Sentinel.sln
@@ -123,17 +126,18 @@ O `ingestion` é a exceção do CQRS completo: tem `Infrastructure.Write` (Postg
 
 - [Constituição do projeto](./docs/constitution.md): regras arquiteturais obrigatórias.
 - [RFC de arquitetura](./docs/RFC-Arquitetura.md).
-- [Especificações dos serviços](./docs/services/): cada uma tem uma seção "Estado da implementação".
-- [ADRs](./docs/adr/): autenticação, consumo Kafka, observabilidade, polling, alertas, versionamento de API e contratos do pipeline.
+- [Especificações dos serviços](./docs/services/): cada uma descreve o estado da implementação verificado no código (seção "Estado da implementação"; em channels, as próprias seções da especificação; em geospatial, a seção "Status").
+- [ADRs](./docs/adr/): audit-compliance, autenticação, consumo Kafka, observabilidade, polling, alertas, versionamento de API e contratos do pipeline (uso, relatórios e auditoria).
 - [Relatório de validação](./docs/compliance/services-validation.md): achados e decisões por serviço.
 - [CLAUDE.md](./CLAUDE.md): guia técnico condensado do repositório.
+- [Claude Code](./docs/claude-code/README.md): hooks, subagents e skills que aplicam a constituição no desenvolvimento assistido.
 
 ## Roadmap
 
 | Situação | Itens |
 |---|---|
-| Feito | Os 10 serviços com contrato `/api/v1`, autenticação JWT e isolamento por tenant; consumo Kafka confiável com DLQ; outbox no ingestion; polling de fontes externas; pipeline sensor → risco → alerta → notificação; medição de uso, relatórios e auditoria por eventos; observabilidade (logs, métricas, traces, dashboards, alertas) |
-| Planejado | Deploy em Kubernetes (Helm, autoescala); bibliotecas compartilhadas (hoje cada serviço tem sua cópia do código comum); outbox nos demais produtores; CI com build, testes e cobertura; provedor de identidade; remoção dos tópicos depreciados após 2027-01-31 (ADR-0012) |
+| Feito | Os 10 serviços com contrato `/api/v1`, autenticação JWT e isolamento por tenant; consumo Kafka confiável com DLQ; outbox no ingestion; polling de fontes externas; pipeline sensor → risco → alerta → notificação; medição de uso, relatórios e auditoria por eventos; observabilidade (logs, métricas, traces, dashboards, alertas); CI com build, formatação, testes e cobertura |
+| Planejado | Deploy em Kubernetes (Helm, autoescala); bibliotecas compartilhadas (hoje cada serviço tem sua cópia do código comum); outbox nos demais produtores; provedor de identidade; remoção dos tópicos depreciados após 2027-01-31 (ADR-0012) |
 
 ## Licença
 

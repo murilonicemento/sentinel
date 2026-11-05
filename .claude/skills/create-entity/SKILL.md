@@ -12,8 +12,9 @@ argument-hint: <serviço> <Conceito>
 2. Abra o Domain do serviço e siga o estilo existente (exemplo: `AlertOrchestrator.Domain/Aggregates/AlertWindow.cs`,
    `ValueObjects/RiskType.cs`). Pastas usuais: `Aggregates/` ou `Entities/`, `ValueObjects/`, `Enums/`, `Events/`,
    `Interfaces/Repositories/`.
-3. Nomes de enum: a constituição §5.1 pede o sufixo `Enum` e `.claude/rules/coding-standarts.md` o desaconselha;
-   siga a convenção já usada no serviço (ex.: `AlertStatus` em alert-orchestrator, `PriorityEnum` em channels).
+3. Nomes de enum: enum novo leva o sufixo `Enum` (constituição §5.1, decisão D-1 de
+   `docs/compliance/services-validation.md`). Os enums existentes sem sufixo (ex.: `AlertStatus` em
+   alert-orchestrator) não são renomeados, porque o nome entra na serialização de eventos e contratos (X-14).
 
 ## 2. Escolha o tipo
 

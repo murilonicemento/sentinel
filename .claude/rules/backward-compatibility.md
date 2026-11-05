@@ -6,7 +6,7 @@ Prevent unintended breakage for existing consumers, integrations, data contracts
 
 ## Compatibility Scope
 
-The tables below were verified against the code and `platform/docker-compose.yml` on 2026-10-29. Each service's `docs/services/*.md` has an "Estado da implementação" section with the details.
+The tables below were verified against the code and `platform/docker-compose.yml` on 2026-10-29. Each service's `docs/services/*.md` has the details in its "Estado da implementação" section (`Channels-Service.md` describes the implemented behavior in its own sections, and `Geospatial.md` in §11 "Status").
 
 ### Public APIs and External Integrations
 

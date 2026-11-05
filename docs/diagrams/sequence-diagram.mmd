@@ -1,35 +1,45 @@
 sequenceDiagram
+    %% Caminho sensor → risco → alerta → entrega no estado atual (ADR-0008 a ADR-0011, verificado em 2026-11-04).
     autonumber
-    participant Sensor
-    participant Ingestion as Ingestion Service
-    participant Kafka as Event Broker
-    participant Geospatial as Geospatial Service
-    participant RiskCatalog as Risk Catalog Service
-    participant RiskEvaluation as Risk Evaluation Service
+    participant Sensor as Sensor / fonte externa
+    participant Ingestion
+    participant Kafka
+    participant Geospatial
+    participant RiskCatalog as Risk Catalog
+    participant RiskEvaluation as Risk Evaluation
     participant Orchestrator as Alert Orchestrator
-    participant Channels as Alert Delivery
+    participant Channels
+    participant TenantsBilling as Tenants Billing
+    participant Reporting
 
-    %% 1. Sensor envia dados
-    Sensor->>Ingestion: RegistrarColetaSensor / RegistrarEventoNatural
-    Note right of Ingestion: Normaliza, valida e publica evento
-    Ingestion->>Kafka: SensorEventDetected
-
-    %% 2. Eventos chegam ao processamento
-    Kafka->>Geospatial: SensorEventDetected
-    Kafka->>RiskEvaluation: SensorEventDetected
-    Kafka->>RiskCatalog: (opcional) atualização de catálogo
-
-    %% 3. Geospatial processa contexto espacial
-    Geospatial->>Kafka: RegionIntersected
-    Kafka->>Orchestrator: RegionIntersected
-
-    %% 4. Risk Evaluation calcula risco
-    RiskCatalog->>Kafka: RiskCatalogPublished
+    Note over RiskCatalog,RiskEvaluation: A cada publicação do catálogo
+    RiskCatalog->>Kafka: RiskCatalogPublished (risk-catalog-published)
     Kafka->>RiskEvaluation: RiskCatalogPublished
-    RiskEvaluation->>Geospatial: GetSpatialContext
-    RiskEvaluation->>Kafka: RiskUpdated / RiskEvaluated / HighRiskDetected
-    Kafka->>Orchestrator: RiskUpdated
+    RiskEvaluation->>RiskCatalog: GET listagens v1 da versão publicada
+    Note right of RiskEvaluation: Copia para CatalogSnapshots locais
 
-    %% 5. Orquestrador avalia e dispara alerta
-    Orchestrator->>Channels: TriggerAlert
-    Channels->>Orchestrator: AlertConfirmed
+    Note over Sensor,Ingestion: Coleta HTTP ou polling por assinatura de tenant
+    Sensor->>Ingestion: Coleta (POST) ou resposta do polling
+    Ingestion->>Geospatial: Operações geométricas v1 (HTTP)
+    Note right of Ingestion: Coleta, amostras e outbox numa transação
+    Ingestion->>Kafka: SensorEventDetected (disaster- / climatic-event-detected)
+    Ingestion->>Kafka: TenantUsageEvent (tenant-usage-events)
+
+    Kafka->>Geospatial: SensorEventDetected
+    Note right of Geospatial: Indexa em geospatial-events
+    Kafka->>RiskEvaluation: SensorEventDetected
+    Note right of RiskEvaluation: Score com o snapshot local do catálogo
+    RiskEvaluation->>Kafka: RiskUpdatedEvent (risk-updated), só com tenant e região do catálogo
+
+    Kafka->>Orchestrator: RiskUpdatedEvent
+    Note right of Orchestrator: Janela de alerta: quorum, cooldown, escalonamento
+    Orchestrator->>Kafka: TriggerAlertCommand (alert-commands)
+    Orchestrator->>Kafka: AlertTriggered (reporting-events) e uso (tenant-usage-events)
+
+    Kafka->>Channels: TriggerAlertCommand
+    Note right of Channels: Notificação alert:{janela}:{nível}, retry e fallback por canal
+    Channels->>Kafka: NotificationSent / NotificationFailed (reporting-events)
+    Channels->>Kafka: Uso por canal entregue (tenant-usage-events)
+
+    Kafka->>TenantsBilling: TenantUsageEvent
+    Kafka->>Reporting: ReportingEventEnvelope

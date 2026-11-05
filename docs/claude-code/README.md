@@ -62,8 +62,8 @@ Claude Code. Nenhum deles mostra valores sensíveis nas mensagens.
   sensíveis (`*Password`, `*SigningKey`, `*ApiKey`, `*Token`...) de arquivos de configuração (`.json`, `.yml`, `.env*`).
 - **Não acusa**: placeholders (`${VAR}`, `<valor>`, `troque-por-...`, `TrocaEssaSenha123`, `your-...`, vazio),
   credenciais padrão de infraestrutura local (`postgres`, `minioadmin`, `guest`...), chaves de teste em `tests/`
-  e exemplos em Markdown, exceto os formatos de alta confiança. Calibrado contra os 1.175 arquivos versionados,
-  sem nenhum achado.
+  e exemplos em Markdown, exceto os formatos de alta confiança. Calibrado contra todos os arquivos versionados
+  (1.175 na criação do hook), sem nenhum achado.
 - **Resposta**: `deny` com a regra e a linha. Para um valor fictício que precisa ter formato real (ex.: fixture
   PEM), acrescente o marcador `sentinel:allow-secret` na mesma linha: o hook passa a pedir aprovação humana
   (`ask`) em vez de negar.

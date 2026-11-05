@@ -16,7 +16,8 @@ não edita arquivos, a menos que o pedido diga explicitamente que deve corrigir.
 2. Delimite o escopo: o alvo do pedido ou `git diff` + `git diff --cached` + arquivos não rastreados relevantes.
    Leia o arquivo inteiro ao redor de cada trecho alterado; um diff isolado esconde o contexto.
 3. Compare com o padrão do próprio serviço antes de apontar algo como errado (ex.: envelope `ResponseBaseDTO`,
-   `ApiProblems`, `ReliableMessageProcessor`, convenção de nomes de enum do serviço).
+   `ApiProblems`, `ReliableMessageProcessor`). Enum novo leva o sufixo `Enum`; os existentes sem sufixo ficam como
+   estão (decisão D-1 de `docs/compliance/services-validation.md`).
 
 ## O que procurar, em ordem de prioridade
 

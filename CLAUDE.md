@@ -82,7 +82,7 @@ The constitution enforces these rules:
 - **Application** holds commands, queries, handlers (MediatR in several services), DTOs and ports (interfaces). It has no infrastructure code.
 - **Infrastructure** implements the Application ports: EF Core and Npgsql, Kafka (Confluent.Kafka), Redis, HTTP clients and hosted services.
 - **Api** contains controllers, middleware, DI wiring, health checks and OpenAPI/Scalar, and nothing else. No business logic belongs here. The constitution says Api → Application only, but in practice every Api project also references Infrastructure so it can call the `Add...Infrastructure` DI extension. Keep that reference limited to DI registration.
-- Services share no databases and no code. There is no shared `libs/` yet, even though the README mentions it, so each service has its own copy of things like `ResponseBaseDTO`, `ResponseWrapperFilter`, `ExceptionHandlingMiddleware` and `TenantBillingGateway`.
+- Services share no databases and no code. There is no shared `libs/` yet (shared libraries are on the README roadmap), so each service has its own copy of things like `ResponseBaseDTO`, `ApiExceptionHandler`, `ResponseWrapperFilter`, `ExceptionHandlingMiddleware` and `TenantBillingGateway`.
 - New services must be scaffolded with `dotnet new` / `dotnet sln add` / `dotnet add reference` only (exact steps are in constitution §6).
 
 `ingestion` is the full-CQRS exception. It splits infrastructure into `Infrastructure.Write` (Postgres, outbox, Kafka publishing, polling clients for external APIs, MinIO, Redis dedup) and `Infrastructure.Read` (MongoDB).
@@ -91,7 +91,7 @@ The constitution enforces these rules:
 
 Topics are created by the `kafka-init` container in `platform/docker-compose.yml`. When you add a topic, add it there too.
 
-The sensor → risk → alert → delivery path is connected by `docs/adr/ADR-0008-event-pipeline-contracts.md`; usage, reporting and audit feeds are in ADR-0009 to ADR-0011, and the remaining topics were settled by `docs/adr/ADR-0012-remaining-pipeline-topics.md` (X-24 in `docs/compliance/services-validation.md`; topic map in `.claude/rules/backward-compatibility.md`). The steps below say what each service actually reads and writes; the "Estado da implementação" section of each `docs/services/*.md` has the details. A contract between two services is tested on both sides with the same JSON sample.
+The sensor → risk → alert → delivery path is connected by `docs/adr/ADR-0008-event-pipeline-contracts.md`; usage, reporting and audit feeds are in ADR-0009 to ADR-0011, and the remaining topics were settled by `docs/adr/ADR-0012-remaining-pipeline-topics.md` (X-24 in `docs/compliance/services-validation.md`; topic map in `.claude/rules/backward-compatibility.md`). The steps below say what each service actually reads and writes; each `docs/services/*.md` has the details in its "Estado da implementação" section (`Channels-Service.md` describes the implemented behavior in its own sections, and `Geospatial.md` in §11 "Status"). A contract between two services is tested on both sides with the same JSON sample.
 
 1. **ingestion** takes in sensor data over HTTP and polls external sources (USGS earthquakes, NASA FIRMS fire, NOAA CDO, Stormglass) per tenant subscription (`docs/adr/ADR-0005-external-polling-and-region-identity.md`). Each source is enabled in `platform/.env` with its provider key; subscriptions (tenant, data source, area) live in `platform/config/ingestion-polling.json`, mounted as `appsettings.Polling.json`. Polled readings skip the data source's collection frequency and are deduplicated by the provider's event id. It writes through a transactional **outbox** (`OutboxHostedService`) and publishes `SensorEventDetected` (with `TenantId`) to `disaster-event-detected` and `climatic-event-detected`. `sensor-event-detected` is deprecated: nothing publishes it.
 2. **risk-catalog** manages event types, severities, IDF curves, risk matrices and regional parameters (identified by a unique `regionCode`, required in v1), and publishes `risk-catalog-published`. After each publication risk-evaluation copies that version (regional factors, severity criteria, matrix) through the paged v1 listings into its local `CatalogSnapshots`, and evaluations read only that copy.
@@ -132,3 +132,15 @@ Each service has its own copy of the `Security` classes (no shared library yet),
 - Integration tests of ingestion (`tests/.../Stack`) and risk-catalog (`tests/.../Stack`) run the real `2-schema.sql` sections on Testcontainers and replace only calls to other services.
 - The public MinIO images are no longer published; compose and the tests use `cgr.dev/chainguard/minio` pinned by digest (runs as uid 65532).
 - Database bootstrap scripts are in `platform/init-db/{postgres,mongodb}`. The `risk_catalog`, `alert_orchestrator`, `channels` and `tenants_billing` sections of `postgres/2-schema.sql` are the idempotent scripts generated from each service's EF migrations (`dotnet ef migrations script --idempotent`); regenerate them after adding a migration instead of editing the SQL by hand. Migrations are never applied at application startup.
+
+## Claude Code automation
+
+`.claude/` holds the project's Claude Code setup, documented in `docs/claude-code/README.md`:
+
+- Hooks in `.claude/hooks/`, registered in `.claude/settings.json`:
+  - `protect-files` asks before changing this file, the constitution, the RFC, `global.json`, `.claude/rules/`, the hooks or CI;
+  - `validate-secrets` denies secrets in versioned files;
+  - `validate-architecture` checks `.csproj` layer direction and cross-service references;
+  - `validate-build` builds, format-checks and unit-tests the changed projects when a turn ends.
+- Subagents in `.claude/agents/`: `architecture-reviewer`, `code-reviewer`, `security-auditor` and `test-engineer`.
+- Skills in `.claude/skills/`: `create-microservice`, `create-entity`, `create-api-endpoint`, `cqrs-implementation`, `implement-multitenancy`, `create-kafka-consumer`, `test-generation` and `code-review`. The `code-review` skill replaces the bundled `/code-review` in this repository.

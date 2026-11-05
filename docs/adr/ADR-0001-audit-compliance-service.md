@@ -114,3 +114,10 @@ A rota base é `/api/v1/audit-compliance`, conforme `.claude/rules/api-design.md
 6. Acesso a registros sem tenant (eventos de plataforma).
 7. Requisitos de disponibilidade e atraso máximo de ingestão, que devem orientar os limiares de alerta.
 8. Rota versionada versus não versionada (decisão 10).
+
+## Atualizações posteriores
+
+Esta seção registra o que mudou depois da decisão, sem reescrever o texto original.
+
+- **Produtores de `audit-events` (2026-11-02, ADR-0011).** A consequência "nenhum serviço de origem publica em `audit-events` ainda" deixou de valer. O tenants-billing publica `TenantCreated` e `TenantUpdated`, com o `sub` do token como ator, direto no Kafka depois de gravar e sem outbox. Os demais serviços de origem ainda não publicam (`docs/audit-compliance-service-status.md`).
+- **Versionamento da rota (2026-10-29, ADR-0007).** A decisão 10 e o item 8 das decisões pendentes foram resolvidos pelo ADR-0007, que adotou `/api/v1/<serviço>` para todos os serviços. A rota base do audit-compliance continua `/api/v1/audit-compliance`. `docs/constitution.md` §7.1 ainda cita `/api/<nome-servico>` e precisa ser atualizada pelo responsável pela arquitetura.

@@ -30,12 +30,13 @@ A estrutura principal do repositório deve seguir este padrão:
 
 - `Sentinel.sln`: única solution de todo o monorepo.
 - `global.json`: define a versão do SDK .NET utilizada.
-- `Directory.Build.props`: configurações compartilhadas de build.
+- `Directory.Build.props`: configurações compartilhadas de build, quando forem necessárias (o repositório ainda não possui esse arquivo).
 - `Directory.Packages.props`: gerenciamento centralizado de versões de pacotes NuGet, quando aplicável.
 - `services/`: diretório contendo todos os microsserviços.
 - `platform/`: infraestrutura local e componentes de suporte à plataforma.
 - `docs/`: documentação do projeto.
-- `.claude/`: regras, skills e configurações utilizadas pelo Claude Code.
+- `.claude/`: regras, hooks, subagents, skills e configurações utilizadas pelo Claude Code (`docs/claude-code/README.md`).
+- `.github/workflows/`: pipeline de CI.
 
 Cada microsserviço deve manter seus próprios projetos de código-fonte e testes dentro de seu diretório.
 
@@ -346,7 +347,7 @@ As APIs devem seguir princípios RESTful.
 
 - Utilizar métodos HTTP de acordo com a semântica da operação.
 - Utilizar nomes de recursos em kebab-case.
-- Utilizar o prefixo `/api/<nome-servico>`.
+- Utilizar o prefixo versionado `/api/v1/<nome-servico>` (versionamento pelo caminho, `docs/adr/ADR-0007-api-versioning-and-deprecation.md`). As rotas sem versão existentes estão congeladas e depreciadas.
 - Utilizar JSON como formato padrão de comunicação, exceto quando a operação exigir outro formato ou não retornar conteúdo.
 - Utilizar códigos HTTP apropriados.
 - Manter contratos claros, explícitos e documentados.

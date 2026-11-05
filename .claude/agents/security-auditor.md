@@ -22,7 +22,9 @@ Não escreva exploits funcionais; descreva a classe do problema e o cenário.
 
 - **Autenticação**: validação de emissor, audiência, assinatura e expiração; política de fallback que rejeita
   anônimos; `AllowAnonymous` só em health, `/metrics` e OpenAPI/Scalar de desenvolvimento.
-- **Autorização**: papéis `<Serviço>.Admin/.Read/.Write` aplicados em cada ação; serviços confiáveis
+- **Autorização**: papéis `<Serviço>.Admin/.Read/.Write` aplicados em cada ação (o audit-compliance usa
+  `Audit.Read`, `Audit.Export`, `Audit.Sensitive` e `Audit.Admin`, e recebe o tenant em `X-Tenant-Id` validado
+  contra as claims); serviços confiáveis
   (`Jwt:TrustedServices`) limitados a `AllowedRoles`; nenhuma ação privilegiada sem política.
 - **Isolamento de tenant**: o tenant vem da claim `tenant_id` validada por `TenantAccessEvaluator`, nunca do
   corpo ou da query por si só; filtros de tenant aplicados antes da paginação, em repositórios, caches (chaves com
